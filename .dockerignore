@@ -4,7 +4,7 @@
 # belirler: bağlamdaki bir dosya değişince katman önbelleği düşer.
 
 .git
-# Çalışan sürüm için yalnız HEAD ve ref'ler (docker/surum-oku.sh); nesneler girmez.
+# Çalışan sürüm için yalnız HEAD ve ref'ler (docker/version-read.sh); nesneler girmez.
 !.git/HEAD
 !.git/packed-refs
 !.git/refs/heads/
@@ -21,9 +21,9 @@ storage/framework/sessions/*
 storage/framework/views/*
 storage/logs/*
 bootstrap/cache/*
-konsol-ajan/dagitim
-konsol-ajan/*.log
-konsol-ajan/ajan.json
+console-agent/dist
+console-agent/*.log
+console-agent/ajan.json
 
 # Gizli değerler imaja ASLA girmez; çalışma anında env ile verilir.
 #

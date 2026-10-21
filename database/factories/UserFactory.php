@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\Rol;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -31,7 +31,7 @@ class UserFactory extends Factory
     public function admin(): static
     {
         return $this->state(fn (array $attributes): array => [
-            'rol_id' => Rol::firstOrCreate(
+            'rol_id' => Role::firstOrCreate(
                 ['slug' => 'admin'],
                 ['label' => 'Yönetici', 'badge' => 'purple', 'yonetici' => true, 'yerlesik' => true, 'sira' => 1],
             )->id,
@@ -42,7 +42,7 @@ class UserFactory extends Factory
     public function rol(string $slug): static
     {
         return $this->state(fn (array $attributes): array => [
-            'rol_id' => Rol::where('slug', $slug)->value('id'),
+            'rol_id' => Role::where('slug', $slug)->value('id'),
         ]);
     }
 

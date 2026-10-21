@@ -1,0 +1,65 @@
+/*
+ * Konsol kurulumunun canlı ekranı (app/ConsoleModule). Terminal her temada koyu
+ * kalır: cihazın çıktısı böyle okunur.
+ */
+.konsol-ekrani {
+    height: min(60vh, 640px);
+    margin: 0;
+    padding: 12px 14px;
+    overflow: auto;
+    border-radius: 8px;
+    background: #0b0f12;
+    color: #d7e0e5;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.konsol-girdi {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.konsol-girdi .input {
+    flex: 1 1 260px;
+    min-width: 0;
+}
+
+.konsol-ilerleme {
+    display: grid;
+    gap: 6px;
+}
+
+.konsol-ilerleme__satir {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px 16px;
+}
+
+.konsol-ilerleme progress {
+    width: 100%;
+    height: 12px;
+    accent-color: var(--color-primary, currentColor);
+}
+
+.konsol-uyari {
+    font-weight: 600;
+}
+
+/* Telefonda ekran sayfayı doldurmasın; girdi ve adımlar görünür kalsın. */
+@media (max-width: 720px) {
+    .konsol-ekrani {
+        height: 45vh;
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+
+    .konsol-girdi .input {
+        flex-basis: 100%;
+    }
+}

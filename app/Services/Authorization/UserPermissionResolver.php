@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Authorization;
 
-use App\Models\KullaniciIzni;
 use App\Models\User;
+use App\Models\UserPermission;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -64,7 +64,7 @@ class UserPermissionResolver
     {
         return $this->kisi[$user->getKey()] ??= $user->izinler()
             ->get(['kaynak', 'aksiyon', 'etki'])
-            ->mapWithKeys(fn (KullaniciIzni $satir): array => [$satir->kaynak.':'.$satir->aksiyon => $satir->etki])
+            ->mapWithKeys(fn (UserPermission $satir): array => [$satir->kaynak.':'.$satir->aksiyon => $satir->etki])
             ->all();
     }
 
@@ -83,7 +83,7 @@ class UserPermissionResolver
                 [$kaynak, $aksiyon] = array_pad(explode(':', (string) $cift, 2), 2, '');
 
                 if ($this->registry->supports($kaynak, $aksiyon)
-                    && in_array($etki, [KullaniciIzni::IZIN, KullaniciIzni::YASAK], true)) {
+                    && in_array($etki, [UserPermission::IZIN, UserPermission::YASAK], true)) {
                     $user->izinler()->create(['kaynak' => $kaynak, 'aksiyon' => $aksiyon, 'etki' => $etki]);
                 }
             }
@@ -124,7 +124,7 @@ class UserPermissionResolver
         $etki = $this->istisnalar($user)[$resource.':'.$action] ?? null;
 
         if ($etki !== null) {
-            return $etki === KullaniciIzni::IZIN;
+            return $etki === UserPermission::IZIN;
         }
 
         return $user->rol?->verir($resource, $action) === true;

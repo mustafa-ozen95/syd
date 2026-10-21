@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * Yetki talebi: kullanıcı kendi profilinden yedekleri görmek ister, admin
  * panelden onaylar/reddeder. Onay kişiye yedek istisnası yazar (bkz.
- * KullaniciController::onaylaYetkiTalebi).
+ * UserController::onaylaYetkiTalebi).
  */
 class PermissionRequest extends Model
 {

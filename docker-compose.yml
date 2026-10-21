@@ -82,9 +82,9 @@ services:
       # Switch yedekleri SALT OKUNUR: çoğu zaman cihaz yedeklerinin tek kopyası. Panelin
       # yazma ucu yok; kod bir gün yanlışlıkla yazmaya kalksa bile dosya
       # sistemi izin vermesin. Yazan yalnız swbck-cek (ya da sunucudaki FTP).
-      - yedekler:/yedekler:ro
+      - backups:/yedekler:ro
       # TFTP sunucusunun ilerleme dosyası (konsol işi sayfası gösterir).
-      - tftp-durum:/durum:ro
+      - tftp-state:/durum:ro
     depends_on:
       db:
         condition: service_healthy
@@ -113,7 +113,7 @@ services:
       MARIADB_RANDOM_ROOT_PASSWORD: "1"
       MARIADB_AUTO_UPGRADE: "1"
     volumes:
-      - veritabani:/var/lib/mysql
+      - database:/var/lib/mysql
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -152,7 +152,7 @@ services:
       - "${TFTP_PORT:-69}:69/udp"
     volumes:
       - junos:/junos:ro
-      - tftp-durum:/durum
+      - tftp-state:/durum
     # İmajın VOLUME'ları burada kullanılmaz; adsız hacim bırakmasınlar diye.
     tmpfs:
       - /uygulama/storage/app:size=1m
@@ -182,7 +182,7 @@ services:
     deploy:
       replicas: ${SWBCK_CEK_KOPYA:-0}
     user: "1000:1000"
-    entrypoint: ["/usr/local/bin/syd-swbck-cek"]
+    entrypoint: ["/usr/local/bin/syd-swbck-pull"]
     environment:
       - SWBCK_FTP_ADRES
       - SWBCK_FTP_KULLANICI
@@ -190,7 +190,7 @@ services:
       - SWBCK_ARALIK
       - HOME=/tmp
     volumes:
-      - yedekler:/yedekler
+      - backups:/yedekler
     tmpfs:
       - /tmp:size=16m
       - /uygulama/storage/app:size=1m
@@ -216,11 +216,11 @@ volumes:
     name: ${ONEK:-syd}_storage
   logs:
     name: ${ONEK:-syd}_logs
-  veritabani:
-    name: ${ONEK:-syd}_veritabani
-  yedekler:
+  database:
+    name: ${ONEK:-syd}_database
+  backups:
     name: ${ONEK:-syd}_swbck
   junos:
     name: ${ONEK:-syd}_junos
-  tftp-durum:
-    name: ${ONEK:-syd}_tftp-durum
+  tftp-state:
+    name: ${ONEK:-syd}_tftp-state

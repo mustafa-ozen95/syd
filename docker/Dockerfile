@@ -35,24 +35,24 @@ COPY resources ./resources
 RUN npm run build
 
 # -----------------------------------------------------------------------------
-#  1b. Konsol ajanı — sahadaki PC'de çalışan tek dosyalık program (bkz. konsol-ajan/)
+#  1b. Konsol ajanı — sahadaki PC'de çalışan tek dosyalık program (bkz. console-agent/)
 # -----------------------------------------------------------------------------
 #  Panel derlenmiş dosyayı PC'ye kendisi kurar; çalışma anında Go gerekmez.
 #  Testler derlemede koşar: kırık ajan imaja girmez. Sürüm kaynağın özetidir.
-FROM golang:1.24-bookworm AS konsol-ajan
+FROM golang:1.24-bookworm AS console-agent
 
 WORKDIR /src
-COPY konsol-ajan/go.mod konsol-ajan/go.sum ./
+COPY console-agent/go.mod console-agent/go.sum ./
 RUN go mod download
-COPY konsol-ajan/ ./
+COPY console-agent/ ./
 RUN go vet ./... \
  && GOOS=windows go vet ./... \
  && go test ./... \
  && SURUM=$(cat go.mod go.sum *.go | sha256sum | cut -c1-12) \
  && BAYRAK="-s -w -X main.surum=${SURUM}" \
- && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$BAYRAK" -o /dagitim/konsol-ajan-linux-amd64 . \
- && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$BAYRAK" -o /dagitim/konsol-ajan-windows-amd64.exe . \
- && (cd /dagitim && sha256sum * > SHA256SUMS)
+ && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$BAYRAK" -o /dist/console-agent-linux-amd64 . \
+ && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$BAYRAK" -o /dist/console-agent-windows-amd64.exe . \
+ && (cd /dist && sha256sum * > SHA256SUMS)
 
 # -----------------------------------------------------------------------------
 #  1c. Junos TFTP sunucusu — görüntüleri switch'e verir (bkz. junos-tftp/)
@@ -153,10 +153,10 @@ RUN apt-get update \
       gosu \
       openssl \
       curl \
-      # Konsol PC'leri: WinRM (Windows) ve SSH (Linux) yardımcıları (bkz. app/Konsol/bin).
+      # Konsol PC'leri: WinRM (Windows) ve SSH (Linux) yardımcıları (bkz. app/ConsoleModule/bin).
       python3-winrm \
       python3-paramiko \
-      # Switch yedeklerini FTP'den çeken servis (bkz. syd-swbck-cek).
+      # Switch yedeklerini FTP'den çeken servis (bkz. syd-swbck-pull).
       lftp \
  && rm -rf /var/lib/apt/lists/* \
  && ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime
@@ -169,7 +169,7 @@ WORKDIR /uygulama
 COPY --chown=syd:syd . .
 COPY --from=saticilar --chown=syd:syd /uygulama/vendor ./vendor
 COPY --from=varliklar --chown=syd:syd /uygulama/public/build ./public/build
-COPY --from=konsol-ajan --chown=syd:syd /dagitim ./konsol-ajan/dagitim
+COPY --from=console-agent --chown=syd:syd /dist ./console-agent/dist
 COPY --from=junos-tftp /junos-tftp /usr/local/bin/junos-tftp
 
 # Yapılandırmalar ve başlatıcı
@@ -202,7 +202,7 @@ ENV UYGULAMA_SURUMU=${SURUM}
 # SURUM verilmezse (bazı platformlar derlemeye commit vermez)
 # bağlamdaki .git'ten okunur ve /uygulama/SURUM'a yazılır; config önce
 # ortama, sonra bu dosyaya bakar. .git yoksa (zip) dosya boş kalır.
-RUN --mount=type=bind,target=/tmp/baglam sh /tmp/baglam/docker/surum-oku.sh > /uygulama/SURUM
+RUN --mount=type=bind,target=/tmp/baglam sh /tmp/baglam/docker/version-read.sh > /uygulama/SURUM
 
 ENTRYPOINT ["/usr/local/bin/syd-entrypoint"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]

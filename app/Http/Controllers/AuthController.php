@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\Auth\GirisRequest;
+use App\Http\Requests\Auth\LoginRequest;
 use App\Models\User;
 use App\Services\ActivityRecorder;
-use App\Services\Kimlik\MerkezIstemcisi;
-use App\Services\Kimlik\OrtakCikis;
+use App\Services\Identity\CenterClient;
+use App\Services\Identity\SharedLogout;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -32,7 +32,7 @@ use Illuminate\View\View;
  */
 class AuthController extends Controller
 {
-    public function showLogin(MerkezIstemcisi $merkez): View|RedirectResponse
+    public function showLogin(CenterClient $merkez): View|RedirectResponse
     {
         if (Auth::check()) {
             return redirect()->route('yedek.index');
@@ -41,7 +41,7 @@ class AuthController extends Controller
         /* Görünüm kardeş panellerle BİREBİR AYNI dosya; beklediği iki değer bunlar. */
         return view('auth.login', [
             'merkezAcik' => $merkez->acikMi(),
-            'merkezAd' => config('kimlik.ad'),
+            'merkezAd' => config('identity.ad'),
         ]);
     }
 
@@ -52,7 +52,7 @@ class AuthController extends Controller
      * ekranda tek bir mesaj var; iki farklı mesaj, hangi adreslerin kayıtlı
      * olduğunu deneyerek öğrenmenin yolu olurdu.
      */
-    public function login(GirisRequest $request, ActivityRecorder $kayit): RedirectResponse
+    public function login(LoginRequest $request, ActivityRecorder $kayit): RedirectResponse
     {
         $bilgiler = $request->validated();
 
@@ -81,18 +81,18 @@ class AuthController extends Controller
 
     /**
      * ORTAK ÇIKIŞ: merkezden giren kişinin çıkışı merkeze bildirilir; merkez
-     * kendi oturumunu ve öteki panelleri kapatır (bkz. OrtakCikis). Bu
+     * kendi oturumunu ve öteki panelleri kapatır (bkz. SharedLogout). Bu
      * paneldeki öteki oturumları da (başka cihaz) aynı an kapatır.
      *
      * ZAMAN AŞIMI ORTAK DEĞİL: ekran kilidinin çıkışı (süre doldu) yalnız bu
      * oturumu kapatır; bir sekmede süresi dolan kişi öteki panellerden atılmaz.
      */
-    public function logout(Request $request, ActivityRecorder $kayit, MerkezIstemcisi $merkez): RedirectResponse
+    public function logout(Request $request, ActivityRecorder $kayit, CenterClient $merkez): RedirectResponse
     {
-        $bag = $request->user() !== null && ! OrtakCikis::zamanAsimiMi($request) ? OrtakCikis::bag($request->user()) : null;
+        $bag = $request->user() !== null && ! SharedLogout::zamanAsimiMi($request) ? SharedLogout::bag($request->user()) : null;
 
         if ($bag !== null) {
-            OrtakCikis::isle($bag, OrtakCikis::simdiMs());
+            SharedLogout::isle($bag, SharedLogout::simdiMs());
 
             if ($merkez->acikMi()) {
                 rescue(fn () => $merkez->oturumKapandi($bag->subject));
@@ -113,6 +113,6 @@ class AuthController extends Controller
 
     public function yetkisiz(): View
     {
-        return view('auth.yetkisiz');
+        return view('auth.unauthorized');
     }
 }

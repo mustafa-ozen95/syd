@@ -47,7 +47,7 @@ return [
             'actions' => ['view', 'download'],
         ],
 
-        /* Kurulum sayfasındaki Junos görüntüleri (bkz. JunosGoruntusu). */
+        /* Kurulum sayfasındaki Junos görüntüleri (bkz. JunosImage). */
         'junos' => [
             'label' => 'Junos görüntüleri',
             'actions' => ['view', 'create', 'update', 'delete'],

@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\Rol;
+use App\Models\Role;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -17,6 +17,6 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->command?->info('Roller: '.Rol::count().' kayıt. Kullanıcılar merkezden gelir.');
+        $this->command?->info('Roller: '.Role::count().' kayıt. Kullanıcılar merkezden gelir.');
     }
 }

@@ -23,16 +23,16 @@
 @import './components/empty.css';
 @import './components/tabs.css';
 @import './components/toast.css';
-@import './components/kullanici-menu.css';
+@import './components/user-menu.css';
 @import './components/pagination.css';
-@import './components/ipucu.css';
+@import './components/hint.css';
 
 /*
  * Bu panele özel bileşenler: pencere gövdesi içi düzen, panele özel küçük
  * ekler ve konsol ekranı. Şablonda karşılıkları yok.
  */
-@import './components/modal-govde-ici.css';
-@import './components/panel-ozel.css';
-@import './components/konsol.css';
+@import './components/modal-body-inner.css';
+@import './components/panel-custom.css';
+@import './components/console.css';
 
 @import './utilities.css';

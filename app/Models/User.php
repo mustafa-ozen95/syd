@@ -41,10 +41,10 @@ class User extends Authenticatable
         return $this->hasMany(UserIdentity::class);
     }
 
-    /** @return BelongsTo<Rol, $this> */
+    /** @return BelongsTo<Role, $this> */
     public function rol(): BelongsTo
     {
-        return $this->belongsTo(Rol::class, 'rol_id');
+        return $this->belongsTo(Role::class, 'rol_id');
     }
 
     /**
@@ -67,11 +67,11 @@ class User extends Authenticatable
     /**
      * Kişiye özel yetki istisnaları (bkz. UserPermissionResolver).
      *
-     * @return HasMany<KullaniciIzni, $this>
+     * @return HasMany<UserPermission, $this>
      */
     public function izinler(): HasMany
     {
-        return $this->hasMany(KullaniciIzni::class);
+        return $this->hasMany(UserPermission::class);
     }
 
     /** @return HasMany<ApiToken, $this> */

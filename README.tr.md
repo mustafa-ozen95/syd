@@ -15,7 +15,7 @@ Yedek dizini çoğu zaman cihaz yapılandırmalarının **tek kopyasıdır** ve 
 anında elde kalan yegâne kayıttır. Bu yüzden:
 
 - Panelin **yazma ucu yoktur.** Silme, taşıma, yükleme yok; bir sınama bunu
-  bağlıyor (`YedekEkraniTest::test_yazma_ucu_yoktur`).
+  bağlıyor (`BackupScreenTest::test_yazma_ucu_yoktur`).
 - Dizin konteynere `:ro` ile bağlanır: kod bir gün yanlışlıkla yazmaya
   kalksa bile dosya sistemi izin vermez.
 - Yedekleri cihazlar panelin dışındaki bir yoldan (örn. FTP) bırakır. Panel o
@@ -45,12 +45,12 @@ Standart Compose kurulumunda TLS'i panelin önündeki ters vekil bitirir;
 sertifika orada yönetilir ve Ayarlar → Sertifika "bilinmiyor" der (bkz.
 `docker/README.md` → Sertifika sekmesi).
 
-Sertifika ajanını (`sertifika-ajan.sh`) çalıştıran bir kurulum, panelin istek ve
+Sertifika ajanını (`certificate-agent.sh`) çalıştıran bir kurulum, panelin istek ve
 durum dosyalarını konteynere bağlar ve turu Ayarlar → Sertifika ekranından
 yönetir, kardeş panellerdeki gibi:
 
 1. **Yeni tur başlat** → panel bir istek dosyası bırakır, ajan
-   (`sertifika-ajan.sh`, istek dosyası belirince tetiklenir) koşar ve
+   (`certificate-agent.sh`, istek dosyası belirince tetiklenir) koşar ve
    eklenecek TXT kaydını ekrana yazar.
 2. Kaydı DNS'e elle eklersiniz; ekran yayılıp yayılmadığını kendisi sorgular.
 3. **Onayla** → ajan sertifikayı alır ve konteynere kurar.

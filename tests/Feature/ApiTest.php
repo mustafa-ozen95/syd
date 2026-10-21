@@ -8,7 +8,7 @@ use App\Models\ActivityLog;
 use App\Models\ApiToken;
 use App\Models\User;
 use App\Services\Api\ApiDocumentation;
-use App\Services\Yedek\YedekDeposu;
+use App\Services\Backup\BackupStore;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
@@ -32,8 +32,8 @@ final class ApiTest extends TestCase
         mkdir($this->kok.'/SW-A', 0755, true);
         file_put_contents($this->kok.'/SW-A/sw-a_juniper.conf.gz_20260115_090000', 'yapilandirma');
         file_put_contents($this->kok.'/gizli.txt', 'kok');
-        config(['yedek.kok' => $this->kok]);
-        $this->app->forgetInstance(YedekDeposu::class);
+        config(['backup.kok' => $this->kok]);
+        $this->app->forgetInstance(BackupStore::class);
     }
 
     protected function tearDown(): void

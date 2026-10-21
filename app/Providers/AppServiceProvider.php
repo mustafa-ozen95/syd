@@ -2,18 +2,27 @@
 
 namespace App\Providers;
 
-use App\Listeners\OturumAcilisiniYaz;
+use App\ConsoleModule\Models\ConsoleEvent;
+use App\ConsoleModule\Models\ConsoleInput;
+use App\ConsoleModule\Models\ConsoleJob;
+use App\ConsoleModule\Models\ConsoleOutput;
+use App\ConsoleModule\Models\ConsolePc;
+use App\Listeners\WriteLogin;
+use App\Models\JunosImage;
+use App\Models\Role;
 use App\Models\User;
+use App\Models\UserPermission;
 use App\Services\Api\ApiTokenContext;
 use App\Services\Api\ApiTokenGuard;
 use App\Services\Api\TokenAbilityGate;
 use App\Services\Authorization\PermissionRegistry;
 use App\Services\Authorization\UserPermissionResolver;
+use App\Services\Backup\BackupStore;
 use App\Services\Settings\SettingsRepository;
-use App\Services\Yedek\YedekDeposu;
-use App\View\UstCubuk;
+use App\View\TopBar;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Auth;
@@ -33,7 +42,7 @@ class AppServiceProvider extends ServiceProvider
          * kandırmak gerekirdi — bağımlılık burada çözülünce sınama kendi
          * geçici dizinini verebiliyor.
          */
-        $this->app->singleton(YedekDeposu::class, fn (): YedekDeposu => YedekDeposu::yapilandirmadan());
+        $this->app->singleton(BackupStore::class, fn (): BackupStore => BackupStore::yapilandirmadan());
 
         /* İstek başına tek: jeton bağlamı ve kişi istisnalarının önbelleği. */
         $this->app->singleton(ApiTokenContext::class);
@@ -42,6 +51,19 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Eski sınıf adları etkinlik kaydında (subject_type/konu_type) yazılı; zincir özeti de bu
+        // dizgiye bağlı. Takma ad eski adı korur, yeni adlı model eski satırları çözer.
+        Relation::morphMap([
+            'App\Konsol\Models\KonsolOlayi' => ConsoleEvent::class,
+            'App\Konsol\Models\KonsolGirdisi' => ConsoleInput::class,
+            'App\Konsol\Models\KonsolIsi' => ConsoleJob::class,
+            'App\Konsol\Models\KonsolCiktisi' => ConsoleOutput::class,
+            'App\Konsol\Models\KonsolPc' => ConsolePc::class,
+            'App\Models\JunosGoruntusu' => JunosImage::class,
+            'App\Models\Rol' => Role::class,
+            'App\Models\KullaniciIzni' => UserPermission::class,
+        ]);
+
         /*
          * Panelden değiştirilen ayarları config'in ÜZERİNE BİNDİR.
          *
@@ -52,8 +74,8 @@ class AppServiceProvider extends ServiceProvider
          */
         $this->app->make(SettingsRepository::class)->apply();
 
-        /* Ortak çıkış için oturumun açılış anı (bkz. OturumAcilisiniYaz). */
-        Event::listen(Login::class, OturumAcilisiniYaz::class);
+        /* Ortak çıkış için oturumun açılış anı (bkz. WriteLogin). */
+        Event::listen(Login::class, WriteLogin::class);
 
         /*
          * SAYFALAMA PANELİN KENDİ ŞERİDİYLE ÇİZİLİR.
@@ -61,7 +83,7 @@ class AppServiceProvider extends ServiceProvider
          * Laravel'in varsayılanı `pagination::tailwind`; bu panelde Tailwind
          * yok ve şeridin içindeki SVG oklar hiçbir sınırı olmadan sayfa
          * boyunda çiziliyordu. Şerit ve biçemi EYS'den birebir geldi
-         * (bkz. TASARIM.md).
+         * (bkz. DESIGN.md).
          */
         Paginator::defaultView('vendor.pagination.default');
         Paginator::defaultSimpleView('vendor.pagination.default');
@@ -97,8 +119,8 @@ class AppServiceProvider extends ServiceProvider
             }
         }
 
-        /* Üst çubuğun bölüm listesi (bkz. UstCubuk). */
-        View::composer('components.nav.topbar', UstCubuk::class);
+        /* Üst çubuğun bölüm listesi (bkz. TopBar). */
+        View::composer('components.nav.topbar', TopBar::class);
 
         /*
          * Her görünümde kullanılabilen ortak değişkenler. İstek başına tek

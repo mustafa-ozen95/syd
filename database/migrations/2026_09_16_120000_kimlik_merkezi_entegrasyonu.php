@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Schema;
  *             ve kayıt için saklanır.
  *
  * YEREL GİRİŞ KAPANMIYOR. Merkez erişilemez olduğunda panel kilitlenmemeli;
- * parolayla giriş yerinde duruyor (bkz. MerkezGirisController).
+ * parolayla giriş yerinde duruyor (bkz. CenterLoginController).
  */
 return new class extends Migration
 {

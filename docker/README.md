@@ -41,11 +41,11 @@ Adlar `ONEK` ile başlar (varsayılan `syd`); aynı sunucuda ikinci kurulum onu 
 
 | Hacim | İçerik |
 |---|---|
-| `syd_storage` | `storage/app`: APP_KEY (verilmediyse), Ayarlar → Veritabanı'nın bağlantı dosyası (`veritabani/`) |
-| `syd_veritabani` | db servisinin veri dizini |
+| `syd_storage` | `storage/app`: APP_KEY (verilmediyse), Ayarlar → Veritabanı'nın bağlantı dosyası (`database/`) |
+| `syd_database` | db servisinin veri dizini |
 | `syd_swbck` | switch yedekleri; panele **salt okunur** bağlanır |
 | `syd_junos` | Junos görüntüleri; TFTP'ye salt okunur |
-| `syd_tftp-durum` | TFTP'nin ilerleme dosyası (konsol işi sayfası okur) |
+| `syd_tftp-state` | TFTP'nin ilerleme dosyası (konsol işi sayfası okur) |
 | `syd_logs` | `storage/logs` |
 
 Switch yedeklerinin dizini çoğu zaman cihaz yedeklerinin **tek kopyası**dır. Panelin yazma ucu
@@ -82,14 +82,14 @@ Açılışta panel kapalıyken şu anki veritabanı hedefe kopyalanır ve her ta
 sayısı iki tarafta karşılaştırılır. Bir adım tutmazsa panel şu anki veritabanıyla açılır
 ve sebep sekmede görünür.
 
-Panelden tanımlanan bağlantı `storage/app/veritabani/baglanti.json` dosyasında APP_KEY ile
-şifreli durur ve ortamdaki `DB_*` değerlerinin yerine geçer. `durum.json` taşımanın
-aşamasını tutar ve sır içermez. Yeniden başlatmayı konteyner içindeki `dc-yeniden-baslat`
+Panelden tanımlanan bağlantı `storage/app/database/connection.json` dosyasında APP_KEY ile
+şifreli durur ve ortamdaki `DB_*` değerlerinin yerine geçer. `state.json` taşımanın
+aşamasını tutar ve sır içermez. Yeniden başlatmayı konteyner içindeki `dc-restart`
 yapar; bunun için yeniden başlatma politikası **`unless-stopped`** olmalı (compose'ta öyle).
 
 Taşıma bittikten sonra eski veritabanına **kendiliğinden dönülmez**; taşıma anındaki
 hâliyle durur. Bilerek dönmek için: uzak veritabanının dökümünü eskisine yükleyin,
-sonra `storage/app/veritabani` altındaki `baglanti.json` ve `durum.json`'u silip
+sonra `storage/app/database` altındaki `connection.json` ve `state.json`'u silip
 konteyneri yeniden başlatın. Dökümü yüklemezseniz taşımadan sonraki her şey kaybolur.
 
 APP_KEY değişirse bağlantı dosyası çözülemez ve panel açılmaz.
@@ -108,7 +108,7 @@ Bir platformda: yeniden dağıtın (platform depoyu çekip derler). Göçler her
 `--isolated` ile koşar; iki örnek aynı anda kalksa bile bir kez çalışır.
 
 GitHub Actions her main'de imajı derleyip `ghcr.io/mustafa-ozen95/syd` altına da
-yükler (`.github/workflows/imaj.yml`): hazır imaj isteyen kurulum `docker/Dockerfile`'ı
+yükler (`.github/workflows/image.yml`): hazır imaj isteyen kurulum `docker/Dockerfile`'ı
 derlemek yerine onu kullanabilir.
 
 ### Güncelleme kontrolü
@@ -124,7 +124,7 @@ Ekran **yalnızca bakar**.
   özelse `GUNCELLEME_JETONU` salt okunur bir jeton olmalı (fine-grained, yalnız panel depoları,
   Contents ve Actions: read). Erişilemezse kontrol "hata" der, panelin başka yeri etkilenmez.
 - Çalışan sürüm derlemede imaja yazılır (`ARG SURUM`, iş akışı commit'i verir). Derlemeye commit
-  vermeyen platformlarda bağlamdaki `.git`'ten okunur (`docker/surum-oku.sh`;
+  vermeyen platformlarda bağlamdaki `.git`'ten okunur (`docker/version-read.sh`;
   `.dockerignore` yalnız `HEAD` ve ref'leri alır).
 - Panel GitHub'a çıkamıyorsa (kapalı ağ) kontrol "erişilemedi" der.
 

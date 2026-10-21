@@ -1,9 +1,9 @@
 <?php
 
 use App\Http\Middleware\EnsureUserIsActive;
-use App\Http\Middleware\KimlikDurumunuDogrula;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\ThrottleApiClients;
+use App\Http\Middleware\VerifyIdentityStatus;
 use App\Services\ErrorLogger;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -60,7 +60,7 @@ return Application::configure(basePath: dirname(__DIR__))
          * dışarı atmak için merkeze gitmeye gerek yok ve merkez kapalıyken de
          * çalışmalı.
          */
-        $middleware->web(append: [EnsureUserIsActive::class, KimlikDurumunuDogrula::class]);
+        $middleware->web(append: [EnsureUserIsActive::class, VerifyIdentityStatus::class]);
 
         /*
          * Güvenlik başlıkları GENEL yığına eklenir, "web" grubuna DEĞİL.

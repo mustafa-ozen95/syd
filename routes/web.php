@@ -1,19 +1,19 @@
 <?php
 
 use App\Http\Controllers\Admin\ApiTokenController;
-use App\Http\Controllers\Admin\AyarController;
-use App\Http\Controllers\Admin\GuncellemeController;
-use App\Http\Controllers\Admin\KayitController;
-use App\Http\Controllers\Admin\KullaniciController;
-use App\Http\Controllers\Admin\RolController;
-use App\Http\Controllers\Admin\SertifikaController;
-use App\Http\Controllers\Admin\VeritabaniController;
-use App\Http\Controllers\Auth\MerkezGirisController;
+use App\Http\Controllers\Admin\CertificateController;
+use App\Http\Controllers\Admin\DatabaseController;
+use App\Http\Controllers\Admin\LogController;
+use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\Admin\SettingController;
+use App\Http\Controllers\Admin\UpdateController;
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Auth\CenterLoginController;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\JunosGoruntusuController;
-use App\Http\Controllers\KurulumController;
-use App\Http\Controllers\ProfilController;
-use App\Http\Controllers\YedekController;
+use App\Http\Controllers\BackupController;
+use App\Http\Controllers\JunosImageController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SetupController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Route;
  */
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-/* GET menü bağlantısı; POST ekran kilidinin çıkışı (bkz. oturum-kilidi.js). */
+/* GET menü bağlantısı; POST ekran kilidinin çıkışı (bkz. session-lock.js). */
 Route::match(['get', 'post'], '/logout', [AuthController::class, 'logout'])->name('logout');
 
 /*
@@ -45,15 +45,15 @@ Route::post('/login', [AuthController::class, 'login'])
  * karar verir ve hesap orada açılır. Kişiye özel hesap sayesinde kimin ne
  * indirdiği kayda geçer; paylaşılan tek bir parola bunu sağlayamazdı.
  */
-Route::get('/giris/merkez', [MerkezGirisController::class, 'baslat'])->name('kimlik.giris');
-Route::get('/giris/merkez/geri', [MerkezGirisController::class, 'geri'])->name('kimlik.donus');
+Route::get('/giris/merkez', [CenterLoginController::class, 'baslat'])->name('kimlik.giris');
+Route::get('/giris/merkez/geri', [CenterLoginController::class, 'geri'])->name('kimlik.donus');
 
 Route::middleware('auth')->group(function () {
     Route::get('/yetkisiz', [AuthController::class, 'yetkisiz'])->name('yetkisiz');
 
-    Route::get('/profilim', [ProfilController::class, 'show'])->name('profil.show');
-    Route::post('/profilim/ad', [ProfilController::class, 'adGuncelle'])->name('profil.ad');
-    Route::post('/profilim/yetki-talebi', [ProfilController::class, 'yetkiTalebiGonder'])->name('profil.yetki-talebi');
+    Route::get('/profilim', [ProfileController::class, 'show'])->name('profil.show');
+    Route::post('/profilim/ad', [ProfileController::class, 'adGuncelle'])->name('profil.ad');
+    Route::post('/profilim/yetki-talebi', [ProfileController::class, 'yetkiTalebiGonder'])->name('profil.yetki-talebi');
 
     /*
      * YEDEKLER. Panelin tamamı bu ekran: cihaz klasörleri, içlerindeki
@@ -61,38 +61,38 @@ Route::middleware('auth')->group(function () {
      * FTP ile bırakıyor, panel yalnızca okur.
      *
      * Ana sayfa kapıya bağlı DEĞİL: yedek göremeyen kişi 403 yerine
-     * görebildiği bölüme yönlenir (bkz. YedekController::index).
+     * görebildiği bölüme yönlenir (bkz. BackupController::index).
      */
-    Route::get('/', [YedekController::class, 'index'])->name('yedek.index');
-    Route::get('/klasor/{yol?}', [YedekController::class, 'klasor'])
+    Route::get('/', [BackupController::class, 'index'])->name('yedek.index');
+    Route::get('/klasor/{yol?}', [BackupController::class, 'klasor'])
         ->where('yol', '.*')
         ->middleware('can:yedek:view')
         ->name('yedek.klasor');
-    Route::get('/indir/{yol}', [YedekController::class, 'indir'])
+    Route::get('/indir/{yol}', [BackupController::class, 'indir'])
         ->where('yol', '.*')
         ->middleware('can:yedek:download')
         ->name('yedek.indir');
 
     /* Junos TFTP yerel kurulum komutları; liste panelden yönetilir. */
-    Route::get('/kurulum', [KurulumController::class, 'index'])
+    Route::get('/kurulum', [SetupController::class, 'index'])
         ->middleware('can:junos:view')
         ->name('kurulum.index');
-    Route::post('/kurulum/goruntu', [JunosGoruntusuController::class, 'store'])
+    Route::post('/kurulum/goruntu', [JunosImageController::class, 'store'])
         ->middleware('can:junos:create')
         ->name('kurulum.goruntu.store');
-    Route::put('/kurulum/goruntu/{goruntu}', [JunosGoruntusuController::class, 'update'])
+    Route::put('/kurulum/goruntu/{goruntu}', [JunosImageController::class, 'update'])
         ->middleware('can:junos:update')
         ->name('kurulum.goruntu.update');
-    Route::delete('/kurulum/goruntu/{goruntu}', [JunosGoruntusuController::class, 'destroy'])
+    Route::delete('/kurulum/goruntu/{goruntu}', [JunosImageController::class, 'destroy'])
         ->middleware('can:junos:delete')
         ->name('kurulum.goruntu.destroy');
 
     Route::prefix('admin')->name('admin.')->group(function () {
-        Route::get('/kullanicilar', [KullaniciController::class, 'index'])->name('kullanicilar.index');
-        Route::post('/kullanicilar/{kullanici}/guncelle', [KullaniciController::class, 'update'])->name('kullanicilar.update');
-        Route::post('/kullanicilar/{kullanici}/sil', [KullaniciController::class, 'destroy'])->name('kullanicilar.destroy');
-        Route::post('/yetki-talepleri/{yetkiTalebi}/onayla', [KullaniciController::class, 'onaylaYetkiTalebi'])->name('yetki-talepleri.onayla');
-        Route::post('/yetki-talepleri/{yetkiTalebi}/reddet', [KullaniciController::class, 'reddetYetkiTalebi'])->name('yetki-talepleri.reddet');
+        Route::get('/kullanicilar', [UserController::class, 'index'])->name('kullanicilar.index');
+        Route::post('/kullanicilar/{kullanici}/guncelle', [UserController::class, 'update'])->name('kullanicilar.update');
+        Route::post('/kullanicilar/{kullanici}/sil', [UserController::class, 'destroy'])->name('kullanicilar.destroy');
+        Route::post('/yetki-talepleri/{yetkiTalebi}/onayla', [UserController::class, 'onaylaYetkiTalebi'])->name('yetki-talepleri.onayla');
+        Route::post('/yetki-talepleri/{yetkiTalebi}/reddet', [UserController::class, 'reddetYetkiTalebi'])->name('yetki-talepleri.reddet');
 
         /*
          * AYARLAR. Panelin davranışı koddan değil buradan değişir; değer
@@ -105,12 +105,12 @@ Route::middleware('auth')->group(function () {
          * ÖNCE: "/ayarlar/{...}" onları yutmasın.
          */
         Route::middleware('can:admin')->group(function (): void {
-            Route::get('/ayarlar/roller', [RolController::class, 'index'])->name('roller.index');
-            Route::get('/ayarlar/roller/yeni', [RolController::class, 'create'])->name('roller.create');
-            Route::post('/ayarlar/roller', [RolController::class, 'store'])->name('roller.store');
-            Route::get('/ayarlar/roller/{rol}', [RolController::class, 'edit'])->name('roller.edit');
-            Route::put('/ayarlar/roller/{rol}', [RolController::class, 'update'])->name('roller.update');
-            Route::delete('/ayarlar/roller/{rol}', [RolController::class, 'destroy'])->name('roller.destroy');
+            Route::get('/ayarlar/roller', [RoleController::class, 'index'])->name('roller.index');
+            Route::get('/ayarlar/roller/yeni', [RoleController::class, 'create'])->name('roller.create');
+            Route::post('/ayarlar/roller', [RoleController::class, 'store'])->name('roller.store');
+            Route::get('/ayarlar/roller/{rol}', [RoleController::class, 'edit'])->name('roller.edit');
+            Route::put('/ayarlar/roller/{rol}', [RoleController::class, 'update'])->name('roller.update');
+            Route::delete('/ayarlar/roller/{rol}', [RoleController::class, 'destroy'])->name('roller.destroy');
 
             Route::get('/ayarlar/api', [ApiTokenController::class, 'index'])->name('api.index');
             Route::post('/ayarlar/api', [ApiTokenController::class, 'store'])->name('api.store');
@@ -123,40 +123,40 @@ Route::middleware('auth')->group(function () {
             Route::delete('/ayarlar/api/{apiToken}', [ApiTokenController::class, 'destroy'])->name('api.destroy');
         });
 
-        Route::get('/ayarlar', [AyarController::class, 'index'])->name('ayarlar.index');
-        Route::put('/ayarlar', [AyarController::class, 'update'])->name('ayarlar.update');
+        Route::get('/ayarlar', [SettingController::class, 'index'])->name('ayarlar.index');
+        Route::put('/ayarlar', [SettingController::class, 'update'])->name('ayarlar.update');
 
         /*
          * SERTİFİKA. Tur sunucuda koşar; panel isteği bırakır ve sonucu okur
-         * (bkz. SertifikaController ve sertifika-ajan.sh).
+         * (bkz. CertificateController ve certificate-agent.sh).
          */
-        Route::get('/sertifika', [SertifikaController::class, 'index'])->name('sertifika.index');
-        Route::post('/sertifika/tur', [SertifikaController::class, 'baslat'])->name('sertifika.baslat');
-        Route::post('/sertifika/onayla', [SertifikaController::class, 'tamamla'])->name('sertifika.tamamla');
+        Route::get('/sertifika', [CertificateController::class, 'index'])->name('sertifika.index');
+        Route::post('/sertifika/tur', [CertificateController::class, 'baslat'])->name('sertifika.baslat');
+        Route::post('/sertifika/onayla', [CertificateController::class, 'tamamla'])->name('sertifika.tamamla');
 
         /*
          * VERİTABANI. Panel bağlantıyı sınar ve taşıma isteğini bırakır;
          * kopya yeniden başlatmada, panel kapalıyken yapılır
-         * (bkz. VeritabaniController ve BaglantiDosyasi).
+         * (bkz. DatabaseController ve ConnectionFile).
          */
-        Route::get('/veritabani', [VeritabaniController::class, 'index'])->name('veritabani.index');
-        Route::post('/veritabani/sina', [VeritabaniController::class, 'sina'])->name('veritabani.sina');
-        Route::post('/veritabani/tasi', [VeritabaniController::class, 'tasi'])->name('veritabani.tasi');
+        Route::get('/veritabani', [DatabaseController::class, 'index'])->name('veritabani.index');
+        Route::post('/veritabani/sina', [DatabaseController::class, 'sina'])->name('veritabani.sina');
+        Route::post('/veritabani/tasi', [DatabaseController::class, 'tasi'])->name('veritabani.tasi');
 
         /*
          * GÜNCELLEME. Yalnızca bakar: çalışan sürüm GitHub'daki son başarılı
-         * derlemeyle karşılaştırılır (bkz. GuncellemeDenetimi).
+         * derlemeyle karşılaştırılır (bkz. UpdateCheck).
          */
-        Route::get('/guncelleme', [GuncellemeController::class, 'index'])->name('guncelleme.index');
-        Route::post('/guncelleme', [GuncellemeController::class, 'denetle'])->name('guncelleme.denetle');
+        Route::get('/guncelleme', [UpdateController::class, 'index'])->name('guncelleme.index');
+        Route::post('/guncelleme', [UpdateController::class, 'denetle'])->name('guncelleme.denetle');
 
         /*
          * KAYITLAR. Kayıt tutmak tek başına yetmiyor: kimse bakamıyorsa
          * kayıt yok sayılır. Denetim kaydı "kim ne yaptı"yı, hata kaydı
          * "ne patladı"yı söyler; ikisi ayrı sorudur, ayrı ekrandır.
          */
-        Route::get('/kayitlar', [KayitController::class, 'denetim'])->name('kayitlar.denetim');
-        Route::post('/kayitlar/dogrula', [KayitController::class, 'dogrula'])->name('kayitlar.dogrula');
-        Route::get('/kayitlar/hatalar', [KayitController::class, 'hatalar'])->name('kayitlar.hatalar');
+        Route::get('/kayitlar', [LogController::class, 'denetim'])->name('kayitlar.denetim');
+        Route::post('/kayitlar/dogrula', [LogController::class, 'dogrula'])->name('kayitlar.dogrula');
+        Route::get('/kayitlar/hatalar', [LogController::class, 'hatalar'])->name('kayitlar.hatalar');
     });
 });

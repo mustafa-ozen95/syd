@@ -7,7 +7,7 @@ declare(strict_types=1);
 | JUNOS TFTP YEREL KURULUM
 |--------------------------------------------------------------------------
 |
-| Kurulum sayfası (bkz. KurulumController). Görüntüler bu kurulumun TFTP'sinden (compose: tftp)
+| Kurulum sayfası (bkz. SetupController). Görüntüler bu kurulumun TFTP'sinden (compose: tftp)
 | sunucusundan çekilir; komut switch'in CLI'ında (operational mode)
 | çalıştırılır.
 |

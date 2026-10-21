@@ -2,7 +2,7 @@
     Üst çubuk — kardeş panellerdekiyle aynı yapı: marka, bölümler, boşluk,
     tema düğmesi, hesap menüsü.
 
-    Bölüm listesi TEK YERDE (App\View\UstCubuk) ve görünürlük yetkiye bağlı;
+    Bölüm listesi TEK YERDE (App\View\TopBar) ve görünürlük yetkiye bağlı;
     şablon yalnızca hazır listeyi çizer.
 --}}
 
@@ -37,7 +37,7 @@
         <div class="kullanici-menu" data-menu>
             <button type="button" class="kullanici-menu__dugme" data-menu-ac
                     aria-haspopup="true" aria-expanded="false" aria-label="Hesap menüsü">
-                <span class="topbar__avatar" aria-hidden="true">{{ \App\Support\BasHarfler::al($kullanici->name) }}</span>
+                <span class="topbar__avatar" aria-hidden="true">{{ \App\Support\Initials::al($kullanici->name) }}</span>
                 <span class="topbar__name">{{ $kullanici->name }}</span>
                 <svg class="kullanici-menu__ok" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
                     <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6"

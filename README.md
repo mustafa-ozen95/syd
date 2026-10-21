@@ -15,7 +15,7 @@ The backup directory is often **the only copy** of the device configurations and
 the sole record left in case of a failure. Therefore:
 
 - The panel **has no write endpoint.** No delete, move or upload; a test locks
-  this in (`YedekEkraniTest::test_yazma_ucu_yoktur`).
+  this in (`BackupScreenTest::test_yazma_ucu_yoktur`).
 - The directory is mounted into the container with `:ro`: even if the code ever
   tried to write by mistake, the file system would not allow it.
 - Devices drop their backups through a path outside the panel (e.g. FTP). The
@@ -45,12 +45,12 @@ In the standard Compose installation TLS is terminated by the reverse proxy in
 front of the panel, so the certificate is managed there and Settings → Certificate
 shows "unknown" (see `docker/README.md` → Certificate tab).
 
-An installation that runs the certificate agent (`sertifika-ajan.sh`) mounts the
+An installation that runs the certificate agent (`certificate-agent.sh`) mounts the
 panel's request and status files into the container and manages the round from
 Settings → Certificate, as in the sibling panels:
 
 1. **Start a new round** → the panel leaves a request file, the agent runs
-   (`sertifika-ajan.sh`, triggered when the request file appears) and writes the
+   (`certificate-agent.sh`, triggered when the request file appears) and writes the
    TXT record to add on screen.
 2. You add the record to DNS by hand; the screen checks by itself whether it has
    propagated.

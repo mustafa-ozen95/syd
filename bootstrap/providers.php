@@ -1,9 +1,9 @@
 <?php
 
-use App\Konsol\KonsolServiceProvider;
+use App\ConsoleModule\ConsoleServiceProvider;
 use App\Providers\AppServiceProvider;
 
 return [
     AppServiceProvider::class,
-    KonsolServiceProvider::class,
+    ConsoleServiceProvider::class,
 ];
