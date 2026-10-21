@@ -1,0 +1,226 @@
+# =============================================================================
+#  syd — SYD (Switch Yedek Deposu) — Compose (compose-spec.io)
+# =============================================================================
+#  Her ortamda aynı dosya: `docker compose up -d --build`, Coolify, Dokploy,
+#  Portainer... Ayarların hepsi ortamdan gelir (.env ya da platformun
+#  değişken ekranı); liste ve açıklamalar .env.example'da.
+#
+#      cp .env.example .env      # en az APP_URL ve DB_PASSWORD
+#      docker compose up -d --build
+#
+#  HTTP portu dışarı AÇILMAZ: alan adını ve TLS'i önündeki vekil (platformun
+#  kendisi ya da Caddy/nginx) verir, panele konteyner ağından 80'den ulaşır.
+#  Vekilsiz deneme için docker-compose.override.example.yml.
+#
+#  Servisler: panel (nginx + php-fpm + zamanlayıcı), db (MariaDB), redis
+#  (önbellek, oturum, kuyruk; kalıcılık kapalı), tftp (Junos görüntüleri,
+#  69/udp), swbck-cek (switch yedeklerini FTP'den çeker; varsayılan kapalı).
+#
+#  Dışarıdaki ya da platformun yönettiği bir veritabanı: DB_HOST ve
+#  kimlik bilgilerini verin, VT_KOPYA=0 ile db servisi hiç kalkmaz.
+#
+#  Adlar: konteyner ve hacimler ONEK ile başlar (varsayılan syd). Aynı
+#  sunucuda ikinci kurulum ONEK'i değiştirir.
+# =============================================================================
+
+services:
+  panel:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: ${ONEK:-syd}:yerel
+    container_name: ${ONEK:-syd}
+    restart: unless-stopped
+    stop_grace_period: 2m
+    expose: ["80"]
+    # Tanımsız değişken konteynere GEÇMEZ (boş değer de değil): varsayılanlar
+    # başlatıcıda ve config/ altında.
+    environment:
+      - APP_NAME
+      - APP_ENV
+      - APP_DEBUG
+      - APP_KEY
+      - APP_URL
+      - APP_LOCALE
+      - APP_TIMEZONE
+      - TRUSTED_PROXIES
+      - DB_HOST
+      - DB_PORT
+      - DB_DATABASE
+      - DB_USERNAME
+      - DB_PASSWORD
+      - REDIS_HOST
+      - REDIS_PORT
+      - REDIS_PASSWORD
+      - YEDEK_KOK
+      - JUNOS_TFTP
+      - KIMLIK_ACIK
+      - KIMLIK_ADRES
+      - KIMLIK_ISTEMCI
+      - KIMLIK_ISTEMCI_SIR
+      - KIMLIK_DONUS
+      - KIMLIK_BILDIRIM_SIR
+      - KIMLIK_AD
+      - KIMLIK_KOK
+      - TEMA_ALANI
+      - DENETIM_ANAHTARI
+      - GUNCELLEME_JETONU
+      - PANEL_AD
+      - MAIL_MAILER
+      - MAIL_HOST
+      - MAIL_PORT
+      - MAIL_USERNAME
+      - MAIL_PASSWORD
+      - MAIL_SCHEME
+      - MAIL_FROM_ADDRESS
+      - MAIL_FROM_NAME
+    volumes:
+      # ⚠ APP_KEY ile BİRLİKTE yedeklenir: anahtar, uzak veritabanı bağlantısı
+      # ve şifreli alanlar ona bağlı.
+      - storage:/uygulama/storage/app
+      - logs:/uygulama/storage/logs
+      # Switch yedekleri SALT OKUNUR: çoğu zaman cihaz yedeklerinin tek kopyası. Panelin
+      # yazma ucu yok; kod bir gün yanlışlıkla yazmaya kalksa bile dosya
+      # sistemi izin vermesin. Yazan yalnız swbck-cek (ya da sunucudaki FTP).
+      - yedekler:/yedekler:ro
+      # TFTP sunucusunun ilerleme dosyası (konsol işi sayfası gösterir).
+      - tftp-durum:/durum:ro
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/up"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+
+  db:
+    image: mariadb:11.4
+    container_name: ${ONEK:-syd}-db
+    restart: unless-stopped
+    # 0: dışarıdaki ya da platformun veritabanı kullanılıyor (DB_HOST).
+    deploy:
+      replicas: ${VT_KOPYA:-1}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    environment:
+      MARIADB_DATABASE: ${DB_DATABASE:-syd}
+      MARIADB_USER: ${DB_USERNAME:-syd}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD gerekli (.env.example)}
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - veritabani:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 6
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: ${ONEK:-syd}-redis
+    restart: unless-stopped
+    # Kalıcılık KAPALI: burada yalnız önbellek, oturum ve kuyruk durur.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  # ---------------------------------------------------------------------------
+  #  JUNOS TFTP — görüntüleri switch'lere verir (konsoldan loader kurulumu)
+  # ---------------------------------------------------------------------------
+  #  Panelin imajı, başka giriş. Görüntüler `junos` hacminde, salt okunur.
+  #  Cevabı 69'dan verir: sıradan TFTP'nin yeni porttan cevabını switch ile
+  #  sunucu arasındaki NAT geri çeviriyordu (bkz. junos-tftp/).
+  tftp:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: ${ONEK:-syd}:yerel
+    container_name: ${ONEK:-syd}-tftp
+    restart: unless-stopped
+    entrypoint: ["/usr/local/bin/junos-tftp"]
+    command: ["-kok", "/junos", "-adres", ":69", "-durum", "/durum/tftp.json"]
+    ports:
+      - "${TFTP_PORT:-69}:69/udp"
+    volumes:
+      - junos:/junos:ro
+      - tftp-durum:/durum
+    # İmajın VOLUME'ları burada kullanılmaz; adsız hacim bırakmasınlar diye.
+    tmpfs:
+      - /uygulama/storage/app:size=1m
+      - /uygulama/storage/logs:size=1m
+    read_only: true
+    cap_drop: ["ALL"]
+    cap_add: ["NET_BIND_SERVICE"]
+    security_opt: ["no-new-privileges:true"]
+    # İmajın sağlık denetimi panelin /up'ı; bu serviste anlamsız.
+    healthcheck:
+      disable: true
+
+  # ---------------------------------------------------------------------------
+  #  SWBCK-CEK — switch yedeklerini FTP'den çeker (varsayılan KAPALI)
+  # ---------------------------------------------------------------------------
+  #  Yedekler bu sunucuya FTP ile gelmiyorsa (cihazlar başka bir FTP'ye
+  #  yazıyorsa) SWBCK_CEK_KOPYA=1 ve SWBCK_FTP_*. Yalnız yeni ya da değişmiş
+  #  dosya iner, yerelde hiçbir dosya silinmez. Dosyalar 1000:1000'e ait.
+  #  FTP bilgisi yalnız bu serviste; panel görmez.
+  swbck-cek:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: ${ONEK:-syd}:yerel
+    container_name: ${ONEK:-syd}-swbck-cek
+    restart: unless-stopped
+    deploy:
+      replicas: ${SWBCK_CEK_KOPYA:-0}
+    user: "1000:1000"
+    entrypoint: ["/usr/local/bin/syd-swbck-cek"]
+    environment:
+      - SWBCK_FTP_ADRES
+      - SWBCK_FTP_KULLANICI
+      - SWBCK_FTP_PAROLA
+      - SWBCK_ARALIK
+      - HOME=/tmp
+    volumes:
+      - yedekler:/yedekler
+    tmpfs:
+      - /tmp:size=16m
+      - /uygulama/storage/app:size=1m
+      - /uygulama/storage/logs:size=1m
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      disable: true
+    # Ağ yalıtımı açıkken de FTP'ye çıkabilsin: yalnız bu servis dis ağında.
+    networks: [dis]
+
+networks:
+  default:
+    # Ağ yalıtımı: true iken konteynerler switchlere, PC'lere, kimlik merkezine ve
+    # dışarıya bağlanamaz (taşıma ya da deneme kurulumunda canlıya dokunmamak
+    # için). Port yayınları da o zaman dışarıdan erişilmez.
+    internal: ${AG_YALITIMI:-false}
+  dis: {}
+
+volumes:
+  storage:
+    name: ${ONEK:-syd}_storage
+  logs:
+    name: ${ONEK:-syd}_logs
+  veritabani:
+    name: ${ONEK:-syd}_veritabani
+  yedekler:
+    name: ${ONEK:-syd}_swbck
+  junos:
+    name: ${ONEK:-syd}_junos
+  tftp-durum:
+    name: ${ONEK:-syd}_tftp-durum

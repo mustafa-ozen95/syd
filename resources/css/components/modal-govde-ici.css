@@ -1,0 +1,21 @@
+/*
+ * `.page__inner > * + *` (layout.css) direkt çocuklar arasına dikey boşluk
+ * koyar. Modallar artık `.page__inner`in İÇİNDE duruyor (bkz. aşağıdaki not)
+ * ve sırayla ikinci/üçüncü çocuk olabiliyorlar - o kuralla eşleşip
+ * `margin-top` alırlarsa `position:fixed; inset:0` olan modal kutusu
+ * viewport'un üstünden o kadar aşağı kayar. Bu kural, hangi sırada olursa
+ * olsun modalı o boşluktan bilerek muaf tutar.
+ *
+ * NEDEN MODAL GÖVDENİN İÇİNDE: `navigation.js` yenilemesiz geçişte SADECE
+ * `.page__inner`/`.columns` öğesinin kendisini değiştirir; o öğenin
+ * DIŞINDAKİ kardeşler (fetch edilen belgeden hiç çıkarılmadığı için)
+ * sessizce kaybolur. Modal `.page__inner`in dışına (kardeş olarak)
+ * konursa, o sayfaya yenilemesiz geçişle varıldığında modal DOM'da hiç
+ * yoktur — "Kullanıcı ekle" gibi düğmeler tıklanır ama hiçbir şey açılmaz.
+ * Bu yüzden her modal ilgili `.page__inner`/`.columns` öğesinin SON ÇOCUĞU
+ * olarak basılıyor.
+ */
+.page__inner > .modal,
+.columns > .modal {
+    margin-top: 0;
+}

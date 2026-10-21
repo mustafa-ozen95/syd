@@ -1,0 +1,38 @@
+/*
+ * Tasarım sistemi — SIRA ÖNEMLİ.
+ *
+ * Kardeş panellerin şablonundaki sırayla birebir aynı: tema → jetonlar → taban →
+ * düzen → bileşenler → yardımcılar. Bileşen listesi panelden panele değişir,
+ * geri kalanı değişmez.
+ */
+@import './themes/default.css';
+@import './tokens.css';
+@import './base.css';
+@import './layout.css';
+
+@import './components/row.css';
+@import './components/panel.css';
+@import './components/button.css';
+@import './components/badge.css';
+@import './components/bulk.css';
+@import './components/table.css';
+@import './components/form.css';
+@import './components/field-row.css';
+@import './components/modal.css';
+@import './components/alert.css';
+@import './components/empty.css';
+@import './components/tabs.css';
+@import './components/toast.css';
+@import './components/kullanici-menu.css';
+@import './components/pagination.css';
+@import './components/ipucu.css';
+
+/*
+ * Bu panele özel bileşenler: pencere gövdesi içi düzen, panele özel küçük
+ * ekler ve konsol ekranı. Şablonda karşılıkları yok.
+ */
+@import './components/modal-govde-ici.css';
+@import './components/panel-ozel.css';
+@import './components/konsol.css';
+
+@import './utilities.css';

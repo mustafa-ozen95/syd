@@ -1,0 +1,172 @@
+/*
+ * BU PANELE ÖZEL KÜÇÜK EKLER.
+ *
+ * Tasarım sisteminin kendisi şablondan gelir (kardeş panellerle aynı
+ * dosyalar). Burada yalnızca bu panelin ekranlarının kullandığı ve şablonda
+ * karşılığı olmayan birkaç sınıf durur. Şablondaki bir dosyayı düzenlemek
+ * yerine buraya yazılır: yoksa bir sonraki eşitlemede kaybolur.
+ */
+
+/* Tablolarda satırın ana başlığı (cihaz adı, dosya adı…). */
+.satir-baslik {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--color-text);
+    text-decoration: none;
+}
+
+/*
+ * Satır başlığı BİR BAĞLANTI OLABİLİR ve o zaman da başlık gibi görünür.
+ *
+ * Bağlantıya ayrıca bir sınıf verilince (ör. `.kod`) yazı küçülüp soluyor ve
+ * kartın adı, altındaki değerlerden daha sönük kalıyordu — özellikle dar
+ * ekranda, ad kartın tek başlığıyken.
+ */
+.satir-baslik a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.satir-baslik a:hover,
+.satir-baslik a:focus-visible {
+    text-decoration: underline;
+}
+
+/* Tek satırlık kod/kimlik gösterimi. */
+.kod {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+}
+
+.kod--kir {
+    word-break: break-all;
+    white-space: normal;
+}
+
+/* x-icon bileşeninin çizdiği simgeler. */
+.ikon {
+    width: 1em;
+    height: 1em;
+}
+
+/*
+ * Tema düğmesindeki iki simge: hangisinin görüneceğini tema belirler.
+ * Şablon bunun yerine tek bir SVG kullanıyor; burada x-icon bileşeni var.
+ */
+.icon-moon,
+.icon-sun {
+    display: none;
+}
+
+:root[data-theme='dark'] .icon-sun,
+:root:not([data-theme='dark']) .icon-moon {
+    display: inline-block;
+}
+
+
+/*
+ * SAYI KARTLARI (yedek özeti).
+ *
+ * Şablonda karşılığı yok: şablonun panel.css'i yalnız anahtar/değer
+ * listesi (.facts) tanımlıyor. Kart ızgarası burada durur ki şablonun
+ * panel.css'i olduğu gibi kalsın.
+ */
+.figure__value {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-medium);
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+.figure__value--green  { color: var(--color-green-fg); }
+.figure__value--red    { color: var(--color-red-fg); }
+.figure__value--yellow { color: var(--color-yellow-fg); }
+.figure__value--blue   { color: var(--color-blue-fg); }
+.figure__value--gray   { color: var(--color-gray-fg); }
+
+.figure__label {
+    margin-top: var(--space-2);
+    font-size: var(--text-sm);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+.figures {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: var(--space-5);
+}
+
+.figures--tight {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+}
+
+.figures--tight .figure__value {
+    font-size: var(--text-xl);
+}
+
+
+/* =============================================================================
+   DAR EKRAN — bu panele özel iki düzeltme
+   ============================================================================= */
+
+/*
+ * BAŞLIK BLOĞU ARAMA KUTUSUYLA YARIŞMAZ.
+ *
+ * `.page-head` yatay bir şerit: solda başlık, sağda eylemler. Eylem tek bir
+ * düğmeyse sorun çıkmaz; burada bir ARAMA FORMU var ve o küçülmez. Telefon
+ * genişliğinde başlık sütunu birkaç piksele düşer ve başlık harf harf alt
+ * alta iner.
+ *
+ * Dar ekranda şerit alt alta diziliyor ve arama tam genişlik alıyor.
+ * Kırılma noktası 720px: tablonun kart kipine geçtiği yer (bkz. table.css),
+ * böylece ekran tek seferde biçim değiştiriyor.
+ */
+@media (max-width: 720px) {
+    .page-head {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-3);
+    }
+
+    .page-head__actions,
+    .page-head__actions > form {
+        width: 100%;
+    }
+
+    .page-head__actions .input {
+        flex: 1;
+        min-width: 0;
+    }
+
+    /*
+     * KART KİPİNDE SATIRIN BAŞLIĞI ÜSTTE DURUR.
+     *
+     * Kart kipinde her hücre "etiket solda, değer sağda" oluyor; satırın
+     * ADI da öyle olunca (sağda, küçük) kartın neye ait olduğu bir bakışta
+     * okunmaz. Ad bu yüzden tam genişlikte, kendi satırında ve etiketsiz —
+     * zaten "Cihaz" ya da "Dosya" yazması bilgi katmıyor.
+     */
+    .table td.satir-baslik {
+        display: block;
+        padding-bottom: var(--space-2);
+
+        /*
+         * Ad NEREDEN OLURSA KIRILIR. Yedek dosyasının adı tek parça ve uzun
+         * (`sw-01.ornek.test_juniper.conf.gz_20260206_182602`);
+         * kırılmazsa telefon genişliğinde kartın sağından taşar ve
+         * kesilir.
+         */
+        overflow-wrap: anywhere;
+    }
+
+    .table td.satir-baslik::before {
+        display: none;
+    }
+}
