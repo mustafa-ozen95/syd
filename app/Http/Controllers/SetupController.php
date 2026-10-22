@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\JunosImage;
+use App\Services\JunosImageService;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Number;
 use Illuminate\View\View;
 
 /**
@@ -16,7 +18,7 @@ use Illuminate\View\View;
  */
 class SetupController extends Controller
 {
-    public function index(): View
+    public function index(JunosImageService $goruntuler): View
     {
         $yetki = [
             'ekle' => Gate::allows('junos:create'),
@@ -32,11 +34,14 @@ class SetupController extends Controller
                 'goruntu' => $g,
                 'kimlik' => 'kurulum-'.$g->id,
                 'komut' => $g->komut(),
+                /* null: dosya TFTP dizininde yok, switch "dosya bulunamadı" alır. */
+                'boyut' => $goruntuler->boyut($g->dosya),
                 /* Doğrulama hatasından sonra pencere eski girdiyle açık gelir. */
                 'acik' => $acik = $hataliForm === 'duzenle-'.$g->id,
                 'deger' => $acik ? $eskiGirdi() : $g->only(['model', 'surum', 'dosya', 'sira']),
             ]),
             'tftp' => rtrim((string) config('junos.tftp'), '/'),
+            'yuklemeSiniri' => Number::fileSize(config('junos.upload_max_mb') * 1024 * 1024),
             'yetki' => $yetki,
             'eylemVar' => $yetki['duzenle'] || $yetki['sil'],
             'konsolGorur' => Gate::allows('konsol:view'),

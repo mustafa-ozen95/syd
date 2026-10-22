@@ -48,6 +48,15 @@ if [ -d /etc/dc/sertifika-panel ]; then
         || warn "/etc/dc/sertifika-panel yazılabilir değil (salt okunur bağlanmış olabilir); Sertifika sekmesi istek bırakamaz."
 fi
 
+# Junos görüntü dizini: panel yükler (Kurulum sayfası), TFTP servisi okur.
+# TFTP yetkisiz root olarak çalışır (cap_drop ALL): sahibi olmadığı dosyayı
+# ancak herkese açık izinle okuyabilir. Dizin panelin, kendisi 0755; eski
+# hacimden root'a ait 0700 gelebilir. Bağlı değilse dokunulmaz.
+if [ -d /junos ]; then
+    chown syd:syd /junos && chmod 0755 /junos \
+        || warn "/junos yazılabilir değil (salt okunur bağlanmış olabilir); görüntü dosyası panelden yüklenemez."
+fi
+
 # -----------------------------------------------------------------------------
 #  2. Varsayılanlar
 # -----------------------------------------------------------------------------

@@ -24,6 +24,7 @@
           <tr>
             <th>Model</th>
             <th>Sürüm</th>
+            <th>Dosya</th>
             <th>Komut</th>
             @if ($eylemVar)
               <th></th>
@@ -35,6 +36,13 @@
             <tr>
               <td data-label="Model"><strong>{{ $satir['goruntu']->model }}</strong></td>
               <td data-label="Sürüm">{{ $satir['goruntu']->surum }}</td>
+              <td data-label="Dosya">
+                @if ($satir['boyut'])
+                  <x-ui.badge variant="green">{{ $satir['boyut'] }}</x-ui.badge>
+                @else
+                  <x-ui.badge variant="red" title="{{ $satir['goruntu']->dosya }} TFTP dizininde yok; dosyayı Düzenle'den yükleyin.">TFTP'de yok</x-ui.badge>
+                @endif
+              </td>
               <td data-label="Komut">
                 <div class="row">
                   <input id="{{ $satir['kimlik'] }}" class="input input--mono" type="text" readonly
@@ -50,7 +58,7 @@
                     @endif
                     @if ($yetki['sil'])
                       <x-ui.delete-form :action="route('setup.image.destroy', $satir['goruntu'])"
-                                        confirm="{{ $satir['goruntu']->model }} ({{ $satir['goruntu']->dosya }}) listeden kaldırılacak. TFTP sunucusundaki dosyaya dokunulmaz."
+                                        confirm="{{ $satir['goruntu']->model }} ({{ $satir['goruntu']->dosya }}) listeden kaldırılacak; dosyayı başka satır kullanmıyorsa TFTP sunucusundan da silinir."
                                         title="Görüntüyü sil"
                                         verify="{{ $satir['goruntu']->model }}"
                                         reasonless />
@@ -61,7 +69,7 @@
             </tr>
           @empty
             <tr>
-              <td colspan="4" class="text-muted">Henüz görüntü yok.</td>
+              <td colspan="5" class="text-muted">Henüz görüntü yok.</td>
             </tr>
           @endforelse
         </tbody>
@@ -71,15 +79,15 @@
     {{--
       Pencereler `.page__inner`in İÇİNDE: yenilemesiz geçiş yalnız bu öğeyi
       değiştiriyor, dışarıdaki pencere hiç gelmezdi (bkz. kullanicilar).
-      Dosya adı yalnız TFTP sunucusundaki adı söyler; panel dosya yüklemez.
+      Dosya isteğe bağlı: yüklenirse TFTP dizinine "Dosya adı"yla yazılır.
     --}}
     @if ($yetki['ekle'])
       <x-ui.modal id="image-add" title="Yeni Junos görüntüsü" :open="$ekleAcik">
-        <form method="POST" action="{{ route('setup.image.store') }}">
+        <form method="POST" action="{{ route('setup.image.store') }}" enctype="multipart/form-data">
           @csrf
           <input type="hidden" name="_form" value="ekle">
           <div class="modal__body stack">
-            <x-setup.image-fields onek="yeni" :deger="$ekleDeger" :hatali="$ekleAcik" :tftp="$tftp" />
+            <x-setup.image-fields onek="yeni" :deger="$ekleDeger" :hatali="$ekleAcik" :tftp="$tftp" :sinir="$yuklemeSiniri" />
           </div>
           <x-ui.modal-actions submit="Ekle" />
         </form>
@@ -89,12 +97,12 @@
     @if ($yetki['duzenle'])
       @foreach ($satirlar as $satir)
         <x-ui.modal id="image-edit-{{ $satir['goruntu']->id }}" :title="$satir['goruntu']->model.' — düzenle'" :open="$satir['acik']">
-          <form method="POST" action="{{ route('setup.image.update', $satir['goruntu']) }}">
+          <form method="POST" action="{{ route('setup.image.update', $satir['goruntu']) }}" enctype="multipart/form-data">
             @csrf
             @method('PUT')
             <input type="hidden" name="_form" value="duzenle-{{ $satir['goruntu']->id }}">
             <div class="modal__body stack">
-              <x-setup.image-fields :onek="'goruntu-'.$satir['goruntu']->id" :deger="$satir['deger']" :hatali="$satir['acik']" :tftp="$tftp" />
+              <x-setup.image-fields :onek="'goruntu-'.$satir['goruntu']->id" :deger="$satir['deger']" :hatali="$satir['acik']" :tftp="$tftp" :sinir="$yuklemeSiniri" duzenle />
             </div>
             <x-ui.modal-actions submit="Güncelle" />
           </form>

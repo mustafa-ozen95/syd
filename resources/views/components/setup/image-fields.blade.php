@@ -1,4 +1,4 @@
-@props(['onek', 'deger' => [], 'hatali' => false, 'tftp' => ''])
+@props(['onek', 'deger' => [], 'hatali' => false, 'tftp' => '', 'sinir' => '', 'duzenle' => false])
 
 {{--
     Junos görüntüsü pencere alanları.
@@ -25,10 +25,30 @@
 </div>
 
 <div class="field">
+    <label class="field__label" for="{{ $onek }}-goruntu">Görüntü dosyası</label>
+    <input class="input" type="file" id="{{ $onek }}-goruntu" name="goruntu">
+    <span class="field__hint">
+        @if ($duzenle)
+            Boş bırakılırsa TFTP'deki dosya kalır. Seçilirse onun yerine geçer.
+        @else
+            İsteğe bağlı; seçilmezse dosyanın TFTP dizinine başka yoldan konması gerekir.
+        @endif
+        En çok {{ $sinir }}. Büyük dosyada yükleme dakikalar sürebilir, sayfayı kapatmayın.
+    </span>
+</div>
+
+<div class="field">
     <label class="field__label" for="{{ $onek }}-dosya">Dosya adı</label>
     <input class="input input--mono" type="text" id="{{ $onek }}-dosya" name="dosya" value="{{ $deger['dosya'] ?? '' }}"
-           required maxlength="200" placeholder="jinstall-ex-4300-21.4R3.15-signed.tgz">
-    <span class="field__hint">TFTP sunucusundaki adıyla; komut {{ $tftp }}/&lt;dosya&gt; olarak kurulur. Panel dosya yüklemez.</span>
+           @if ($duzenle) required @endif maxlength="200" placeholder="jinstall-ex-4300-21.4R3.15-signed.tgz">
+    <span class="field__hint">
+        TFTP sunucusundaki adı; komut {{ $tftp }}/&lt;dosya&gt; olarak kurulur.
+        @if ($duzenle)
+            Değiştirilirse TFTP'deki dosyanın adı da değişir.
+        @else
+            Boş bırakılırsa yüklenen dosyanın adı alınır.
+        @endif
+    </span>
 </div>
 
 <div class="field">

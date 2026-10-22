@@ -44,7 +44,7 @@ Adlar `STACK_PREFIX` ile başlar (varsayılan `syd`); aynı sunucuda ikinci kuru
 | `syd_storage` | `storage/app`: APP_KEY (verilmediyse), Ayarlar → Veritabanı'nın bağlantı dosyası (`database/`) |
 | `syd_database` | db servisinin veri dizini |
 | `syd_swbck` | switch yedekleri; panele **salt okunur** bağlanır |
-| `syd_junos` | Junos görüntüleri; TFTP'ye salt okunur |
+| `syd_junos` | Junos görüntüleri; panel yazar (Kurulum sayfasından yükleme, ad değiştirme, silme), TFTP salt okunur görür |
 | `syd_tftp-state` | TFTP'nin ilerleme dosyası (konsol işi sayfası okur) |
 | `syd_logs` | `storage/logs` |
 

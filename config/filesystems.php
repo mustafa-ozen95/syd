@@ -47,6 +47,26 @@ return [
             'report' => false,
         ],
 
+        /*
+         * Junos görüntüleri: TFTP servisinin (compose: tftp) verdiği dizin,
+         * panel aynı hacmi yazılabilir bağlar (bkz. JunosImageFiles). TFTP
+         * süreci yetkisiz root olarak okur; dosya 0644, dizin 0755 olmalı.
+         */
+        'junos' => [
+            'driver' => 'local',
+            'root' => env('JUNOS_DIR', '/junos'),
+            'visibility' => 'public',
+            'permissions' => [
+                'file' => ['public' => 0644, 'private' => 0644],
+                'dir' => ['public' => 0755, 'private' => 0755],
+            ],
+            // Hacim bağlı değilse (yerel geliştirme, eski compose) Kurulum
+            // sayfası açılsın: dizin yalnız ilk yazmada istenir.
+            'lazy_root_creation' => true,
+            'throw' => true,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

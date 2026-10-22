@@ -85,6 +85,9 @@ services:
       - backups:/yedekler:ro
       # TFTP sunucusunun ilerleme dosyası (konsol işi sayfası gösterir).
       - tftp-state:/durum:ro
+      # Junos görüntüleri YAZILABİLİR: yönetici Kurulum sayfasından dosya
+      # yükler, adını değiştirir, siler. TFTP aynı hacmi salt okunur görür.
+      - junos:/junos
     depends_on:
       db:
         condition: service_healthy
