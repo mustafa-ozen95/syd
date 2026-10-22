@@ -59,7 +59,7 @@ class SecurityHeadersTest extends TestCase
 
     public function test_oturumlu_sayfa_diske_yazilmaz(): void
     {
-        $yanit = $this->actingAs(User::factory()->yedekci()->create())->get(route('yedek.index'));
+        $yanit = $this->actingAs(User::factory()->yedekci()->create())->get(route('backup.index'));
 
         $yanit->assertOk();
         $this->assertStringContainsString(

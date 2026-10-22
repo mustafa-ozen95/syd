@@ -26,7 +26,7 @@ use Illuminate\Console\Command;
  */
 class SyncAgentsCommand extends Command
 {
-    protected $signature = 'konsol:ajanlar';
+    protected $signature = 'console:agents';
 
     protected $description = 'Konsol PC\'lerinde ajanı açık işlere göre kurar ya da kaldırır';
 

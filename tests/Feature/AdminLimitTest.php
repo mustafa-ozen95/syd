@@ -24,14 +24,14 @@ class AdminLimitTest extends TestCase
         $hedef = User::factory()->create();
 
         $this->actingAs(User::factory()->create())
-            ->post(route('admin.kullanicilar.update', $hedef), [
+            ->post(route('admin.users.update', $hedef), [
                 'ad' => $hedef->name,
                 'eposta' => $hedef->email,
                 'rol' => 'admin',
                 'aktif' => '1',
                 'istisna' => ['yedek:view' => 'izin'],
             ])
-            ->assertRedirect(route('yetkisiz'));
+            ->assertRedirect(route('forbidden'));
 
         $this->assertSame(0, $hedef->izinler()->count(), 'istisna yazılmamalı');
         $this->assertNull($hedef->fresh()->rol_id, 'rol değişmemeli');

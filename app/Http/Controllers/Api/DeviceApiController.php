@@ -25,7 +25,7 @@ class DeviceApiController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $arama = mb_strtolower(trim((string) $request->query('ara', '')));
+        $arama = mb_strtolower(trim((string) $request->query('search', '')));
 
         $cihazlar = $this->depo->klasorler()
             ->filter(fn (array $k): bool => $arama === '' || str_contains(mb_strtolower($k['ad']), $arama))
@@ -40,11 +40,11 @@ class DeviceApiController extends Controller
         return response()->json(['data' => $cihazlar]);
     }
 
-    public function yedekler(Request $request, string $cihaz): JsonResponse
+    public function backups(Request $request, string $device): JsonResponse
     {
-        $this->klasorOlmali($cihaz);
+        $this->klasorOlmali($device);
 
-        $yedekler = $this->depo->dosyalar($cihaz, trim((string) $request->query('ara', '')))
+        $yedekler = $this->depo->dosyalar($device, trim((string) $request->query('search', '')))
             ->map(fn (array $d): array => [
                 'ad' => $d['ad'],
                 'boyut' => $d['boyut'],
@@ -53,26 +53,26 @@ class DeviceApiController extends Controller
             ])
             ->values();
 
-        return response()->json(['cihaz' => $cihaz, 'data' => $yedekler]);
+        return response()->json(['cihaz' => $device, 'data' => $yedekler]);
     }
 
     /** Her indirme kayda geçer; jetonla gelindiyse jetonun adıyla. */
-    public function indir(string $cihaz, string $dosya, ActivityRecorder $kayit, ApiTokenContext $jeton): BinaryFileResponse
+    public function download(string $device, string $file, ActivityRecorder $kayit, ApiTokenContext $jeton): BinaryFileResponse
     {
-        $this->klasorOlmali($cihaz);
-        abort_if(str_contains($dosya, '/'), 404);
+        $this->klasorOlmali($device);
+        abort_if(str_contains($file, '/'), 404);
 
-        $bulunan = $this->depo->dosya($cihaz.'/'.$dosya);
+        $bulunan = $this->depo->dosya($device.'/'.$file);
         abort_if($bulunan === null, 404);
 
-        $kayit->kaydet('yedek_indirildi', 'Yedek indirildi (API · '.($jeton->get()?->name ?? '—').'): '.$cihaz.'/'.$dosya);
+        $kayit->kaydet('yedek_indirildi', 'Yedek indirildi (API · '.($jeton->get()?->name ?? '—').'): '.$device.'/'.$file);
 
         return response()->download($bulunan->getPathname(), $bulunan->getFilename(), ['Content-Type' => 'application/octet-stream']);
     }
 
-    private function klasorOlmali(string $cihaz): void
+    private function klasorOlmali(string $device): void
     {
-        $tam = str_contains($cihaz, '/') ? null : $this->depo->coz($cihaz);
+        $tam = str_contains($device, '/') ? null : $this->depo->coz($device);
 
         abort_if($tam === null || ! is_dir($tam), 404);
     }

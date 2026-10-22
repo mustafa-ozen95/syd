@@ -27,7 +27,7 @@ return [
     |
     */
 
-    'aciklama' => env('APP_ACIKLAMA', 'Switch Yedek Deposu'),
+    'description' => env('APP_DESCRIPTION', 'Switch Yedek Deposu'),
 
     /*
     |--------------------------------------------------------------------------

@@ -35,13 +35,13 @@ class AuthController extends Controller
     public function showLogin(CenterClient $merkez): View|RedirectResponse
     {
         if (Auth::check()) {
-            return redirect()->route('yedek.index');
+            return redirect()->route('backup.index');
         }
 
         /* Görünüm kardeş panellerle BİREBİR AYNI dosya; beklediği iki değer bunlar. */
         return view('auth.login', [
             'merkezAcik' => $merkez->acikMi(),
-            'merkezAd' => config('identity.ad'),
+            'merkezAd' => config('identity.name'),
         ]);
     }
 
@@ -76,7 +76,7 @@ class AuthController extends Controller
 
         $kayit->kaydet('giris', "Panele giriş (parola): {$kullanici->email}", $kullanici, $kullanici);
 
-        return redirect()->intended(route('yedek.index'));
+        return redirect()->intended(route('backup.index'));
     }
 
     /**
@@ -111,7 +111,7 @@ class AuthController extends Controller
         return redirect()->route('login');
     }
 
-    public function yetkisiz(): View
+    public function forbidden(): View
     {
         return view('auth.unauthorized');
     }

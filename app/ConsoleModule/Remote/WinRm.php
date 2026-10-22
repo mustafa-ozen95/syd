@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Process;
  */
 class WinRm
 {
-    private const ORTAM = 'KONSOL_ORTAM';
+    private const ORTAM = 'CONSOLE_ENV';
 
     /**
      * @param  array{adres: string, port: int, kullanici: string, parola: string}  $hedef
@@ -35,12 +35,12 @@ class WinRm
          *    gönderiyor (her biri öncekinin üzerine yazılıyor); jeton PC'ye hiç
          *    ulaşmıyordu.
          */
-        $paket = ['KONSOL_BETIK' => 'try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}'."\n"
+        $paket = ['CONSOLE_SCRIPT' => 'try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}'."\n"
             .'$ProgressPreference = "SilentlyContinue"; $ErrorActionPreference = "Stop"'."\n".$betik] + $ortam;
         $baslatici = base64_encode(mb_convert_encoding(
             '$o = $env:'.self::ORTAM.' | ConvertFrom-Json; Remove-Item env:'.self::ORTAM.'; '
             .'$o.PSObject.Properties | ForEach-Object { Set-Item -Path ("env:" + $_.Name) -Value $_.Value }; '
-            .'& ([scriptblock]::Create($env:KONSOL_BETIK))',
+            .'& ([scriptblock]::Create($env:CONSOLE_SCRIPT))',
             'UTF-16LE',
             'UTF-8',
         ));
@@ -72,7 +72,7 @@ class WinRm
      */
     private function cagir(array $hedef, array $istek, ?int $sure): array
     {
-        $ayar = (array) config('konsol.winrm');
+        $ayar = (array) config('console.winrm');
         $sure ??= (int) $ayar['timeout'];
 
         $sonuc = Process::timeout($sure + 10)

@@ -31,10 +31,10 @@ class LogController extends Controller implements HasMiddleware
         return [new Middleware('can:admin')];
     }
 
-    public function denetim(Request $request, ActivityChain $zincir): View
+    public function audit(Request $request, ActivityChain $zincir): View
     {
-        $tur = (string) $request->query('tur', '');
-        $ara = trim((string) $request->query('ara', ''));
+        $tur = (string) $request->query('type', '');
+        $ara = trim((string) $request->query('search', ''));
 
         return view('logs.audit', [
             'kayitlar' => ActivityLog::query()
@@ -60,7 +60,7 @@ class LogController extends Controller implements HasMiddleware
             /*
              * Bütünlük rozeti SON doğrulamanın sonucundan basılır; ekran her
              * açılışta bütün kaydı yeniden özetlemez. Doğrulamayı zamanlayıcı
-             * koşturuyor (denetim:dogrula, her gece 03:30).
+             * koşturuyor (audit:verify, her gece 03:30).
              */
             'butunluk' => $zincir->sonDogrulama(),
         ]);
@@ -72,11 +72,11 @@ class LogController extends Controller implements HasMiddleware
      * Rozet gecelik turdan geliyor; bir şeyden şüphelenen kişi beklemek
      * zorunda kalmamalı. İş ağır olabilir, bu yüzden ayrı bir düğme.
      */
-    public function dogrula(ActivityChain $zincir): RedirectResponse
+    public function verify(ActivityChain $zincir): RedirectResponse
     {
         $sonuc = $zincir->dogrula();
 
-        return redirect()->route('admin.kayitlar.denetim')->with(
+        return redirect()->route('admin.logs.audit')->with(
             $sonuc['saglam'] ? 'status' : 'error',
             $sonuc['saglam']
                 ? "Zincir sağlam: {$sonuc['bakilan']} kayıt doğrulandı."
@@ -84,7 +84,7 @@ class LogController extends Controller implements HasMiddleware
         );
     }
 
-    public function hatalar(): View
+    public function errors(): View
     {
         return view('logs.errors', [
             'hatalar' => ErrorLog::query()

@@ -19,11 +19,11 @@ use Illuminate\Support\ServiceProvider;
  *
  * Başka bir panele taşımak için:
  *   1. app/ConsoleModule, console-agent/ ve resources/js/components/console-watch.js
- *      kopyalanır (app.js'te herCizimde'ye konsolIzle.init() eklenir),
+ *      kopyalanır (app.js'te onEveryRender'a consoleWatch.init() eklenir),
  *   2. bootstrap/providers.php'ye bu sınıf eklenir,
  *   3. config konsol.goruntu_kaynagi ve konsol.yapilandirma_kaynagi o
  *      panelin görüntü listesine ve yedeklerine çevrilir,
- *   4. üst çubuğa "konsol.index" bağlantısı (konsol:view) eklenir,
+ *   4. üst çubuğa "console.index" bağlantısı (konsol:view) eklenir,
  *   5. Dockerfile'a ajan derleme aşaması ve python3-winrm/paramiko eklenir.
  *
  * Panelden beklenenler: yetki sözlüğü (config/permissions.php, kaynak:aksiyon
@@ -34,7 +34,7 @@ class ConsoleServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__.'/config.php', 'konsol');
+        $this->mergeConfigFrom(__DIR__.'/config.php', 'console');
 
         config([
             'permissions.actions.ajan' => 'Ajan olarak bağlan',
@@ -43,12 +43,12 @@ class ConsoleServiceProvider extends ServiceProvider
                 'actions' => ['view', 'create', 'update', 'delete', 'ajan'],
             ],
             'api.endpoints' => (array) config('api.endpoints', []) + [
-                'konsol.isler' => [
+                'console.jobs' => [
                     'summary' => 'Konsol: açık işler',
                     'ability' => 'konsol:ajan',
                     'description' => 'Ajanın PC\'sine atanmış açık işler, eskisi önce.',
                 ],
-                'konsol.olay' => [
+                'console.event' => [
                     'summary' => 'Konsol: adım bildir',
                     'ability' => 'konsol:ajan',
                     'description' => 'Ajanın ilerleme bildirimi; "tamam" ya da "hata" işi kapatır.',
@@ -57,17 +57,17 @@ class ConsoleServiceProvider extends ServiceProvider
                         'mesaj' => 'serbest metin (en çok 2000)',
                     ],
                 ],
-                'konsol.cikti' => [
+                'console.output' => [
                     'summary' => 'Konsol: çıktı aktar',
                     'ability' => 'konsol:ajan',
                     'description' => 'Konsolda görülenler; yanıtta panelden konsola elle yazılanlar döner.',
                 ],
-                'konsol.yapilandirma' => [
+                'console.configuration' => [
                     'summary' => 'Konsol: yapılandırma',
                     'ability' => 'konsol:ajan',
                     'description' => 'Yüklenecek yedeğin metni (text/plain). Her verilişi denetim kaydına yazılır.',
                 ],
-                'konsol.ajan' => [
+                'console.agent' => [
                     'summary' => 'Konsol: ajanı indir',
                     'ability' => 'konsol:ajan',
                     'description' => 'Derlenmiş ajan (linux | windows). PC kurulurken kendi jetonuyla çeker.',
@@ -75,15 +75,15 @@ class ConsoleServiceProvider extends ServiceProvider
             ],
         ]);
 
-        $this->app->bind(ImageSource::class, fn ($app) => $app->make(config('konsol.goruntu_kaynagi')));
-        $this->app->bind(ConfigurationSource::class, fn ($app) => $app->make(config('konsol.yapilandirma_kaynagi')));
+        $this->app->bind(ImageSource::class, fn ($app) => $app->make(config('console.image_source')));
+        $this->app->bind(ConfigurationSource::class, fn ($app) => $app->make(config('console.configuration_source')));
     }
 
     public function boot(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/migrations');
-        $this->loadViewsFrom(__DIR__.'/views', 'konsol');
-        Blade::anonymousComponentPath(__DIR__.'/views/components', 'konsol');
+        $this->loadViewsFrom(__DIR__.'/views', 'console');
+        Blade::anonymousComponentPath(__DIR__.'/views/components', 'console');
         $this->loadRoutesFrom(__DIR__.'/routes/web.php');
         $this->loadRoutesFrom(__DIR__.'/routes/api.php');
 
@@ -92,14 +92,14 @@ class ConsoleServiceProvider extends ServiceProvider
          * sonu istemin parçasıdır ("login: "), elle yazılan tek boşluk da
          * loader'a girmenin yoludur.
          */
-        $hamMetin = fn (Request $istek): bool => $istek->is('api/v1/konsol/*') || $istek->routeIs('konsol.girdi');
+        $hamMetin = fn (Request $istek): bool => $istek->is('api/v1/console/*') || $istek->routeIs('console.input');
         TrimStrings::skipWhen($hamMetin);
         ConvertEmptyStringsToNull::skipWhen($hamMetin);
 
         /* ANLIK AJAN: PC'de yalnız açık iş varken durur (bkz. SyncAgentsCommand). */
         $this->commands([SyncAgentsCommand::class]);
         $this->callAfterResolving(Schedule::class, function (Schedule $zaman): void {
-            $zaman->command('konsol:ajanlar')->everyMinute()->withoutOverlapping(15)->runInBackground();
+            $zaman->command('console:agents')->everyMinute()->withoutOverlapping(15)->runInBackground();
         });
     }
 }

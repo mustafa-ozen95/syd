@@ -33,7 +33,7 @@ class SettingsTabs
         foreach ($this->catalog->groups() as $key => $group) {
             $tabs[] = [
                 'label' => $group['label'],
-                'url' => route('admin.ayarlar.index', ['grup' => $key]),
+                'url' => route('admin.settings.index', ['group' => $key]),
                 'active' => $key === $current,
             ];
         }
@@ -47,7 +47,7 @@ class SettingsTabs
             /* Roller ve API jetonları da bu şeritte. */
             $tabs[] = [
                 'label' => 'Roller',
-                'url' => route('admin.roller.index'),
+                'url' => route('admin.roles.index'),
                 'active' => $current === 'roller',
             ];
             $tabs[] = [
@@ -57,17 +57,17 @@ class SettingsTabs
             ];
             $tabs[] = [
                 'label' => 'Sertifika',
-                'url' => route('admin.sertifika.index'),
+                'url' => route('admin.certificate.index'),
                 'active' => $current === 'sertifika',
             ];
             $tabs[] = [
                 'label' => 'Veritabanı',
-                'url' => route('admin.veritabani.index'),
+                'url' => route('admin.database.index'),
                 'active' => $current === 'veritabani',
             ];
             $tabs[] = [
                 'label' => 'Güncelleme',
-                'url' => route('admin.guncelleme.index'),
+                'url' => route('admin.update.index'),
                 'active' => $current === 'guncelleme',
             ];
         }

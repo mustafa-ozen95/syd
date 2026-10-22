@@ -26,7 +26,7 @@ class SitePc
 {
     private const GOREV = 'Konsol Ajani';
 
-    private const SERVIS = 'konsol-ajan';
+    private const SERVIS = 'console-agent';
 
     public function __construct(
         private WinRm $winrm,
@@ -43,7 +43,7 @@ class SitePc
 
     /**
      * Ajanı kurar ya da günceller: PC dosyayı panelden yeni jetonla indirir,
-     * sağlamayı doğrular, ajan.json'ı yazar, açılışta başlayan bir görev/servis
+     * sağlamayı doğrular, agent.json'ı yazar, açılışta başlayan bir görev/servis
      * kurar ve başlatır.
      */
     public function kur(ConsolePc $pc, User $kim): string
@@ -71,14 +71,14 @@ class SitePc
 
         $ajanAyari = (string) json_encode([
             'panel' => $panel,
-            'jeton' => $sir['plain'],
-            'seri_port' => (string) $pc->seri_port,
-        ] + ($pem !== null ? ['ca_dosyasi' => 'panel.pem'] : []), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        $adres = "{$panel}/api/v1/konsol/ajan/{$platform}";
+            'token' => $sir['plain'],
+            'serial_port' => (string) $pc->seri_port,
+        ] + ($pem !== null ? ['ca_file' => 'panel.pem'] : []), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        $adres = "{$panel}/api/v1/console/agent/{$platform}";
 
         try {
             $sonuc = $pc->windowsMu()
-                ? $this->calistir($pc, $this->windowsKur($pc, $adres, $sha, $pem), ['KONSOL_JETON' => $sir['plain'], 'KONSOL_AYAR' => $ajanAyari], 100)
+                ? $this->calistir($pc, $this->windowsKur($pc, $adres, $sha, $pem), ['CONSOLE_TOKEN' => $sir['plain'], 'CONSOLE_CONFIG' => $ajanAyari], 100)
                 : $this->calistir($pc, $this->linuxKur($pc, $adres, $sha, $sir['plain'], $ajanAyari, $pem), [$sir['plain']], 100);
         } catch (RemoteError $e) {
             $jeton->revoke();
@@ -97,7 +97,7 @@ class SitePc
 
     /**
      * Ajanı PC'den TAMAMEN kaldırır: görev/servis, güvenlik duvarı kuralları,
-     * dizin (ajan.json, panel.pem, görüntü önbelleği, kayıt) ve jeton. PC
+     * dizin (agent.json, panel.pem, görüntü önbelleği, kayıt) ve jeton. PC
      * işten önceki hâline döner.
      */
     public function kaldir(ConsolePc $pc): string
@@ -108,7 +108,7 @@ class SitePc
                     Stop-ScheduledTask -TaskName $gorev -ErrorAction SilentlyContinue
                     Unregister-ScheduledTask -TaskName $gorev -Confirm:$false
                 }
-                Get-Process -Name 'konsol-ajan' -ErrorAction SilentlyContinue | Stop-Process -Force
+                Get-Process -Name 'console-agent' -ErrorAction SilentlyContinue | Stop-Process -Force
                 Start-Sleep -Seconds 1
                 if (Test-Path $d) { Remove-Item -Recurse -Force $d }
                 "Kaldırıldı: görev ve $d silindi."
@@ -116,8 +116,8 @@ class SitePc
             : $this->calistir($pc, 'd='.$this->kabukTirnak($pc->dizin).'
 '.<<<'SH'
                 case "$d" in /|/opt|/usr|/etc|/var|/home|/root|"") echo "Dizin kaldırılamaz: $d" >&2; exit 1 ;; esac
-                systemctl disable --now konsol-ajan 2>/dev/null || true
-                rm -f /etc/systemd/system/konsol-ajan.service
+                systemctl disable --now console-agent 2>/dev/null || true
+                rm -f /etc/systemd/system/console-agent.service
                 systemctl daemon-reload
                 rm -rf "$d"
                 echo "Kaldırıldı: servis ve $d silindi."
@@ -140,7 +140,7 @@ class SitePc
     {
         return $pc->windowsMu()
             ? $this->calistir($pc, $this->onEk($pc).'Stop-ScheduledTask -TaskName $gorev -ErrorAction SilentlyContinue; '
-                .'Get-Process -Name "konsol-ajan" -ErrorAction SilentlyContinue | Stop-Process -Force; "Durduruldu."')
+                .'Get-Process -Name "console-agent" -ErrorAction SilentlyContinue | Stop-Process -Force; "Durduruldu."')
             : $this->calistir($pc, 'systemctl stop '.self::SERVIS.' || true; echo "Durduruldu."');
     }
 
@@ -154,17 +154,17 @@ class SitePc
         $metin = $pc->windowsMu()
             ? $this->calistir($pc, $this->onEk($pc).<<<'PS'
                 $t = Get-ScheduledTask -TaskName $gorev -ErrorAction SilentlyContinue
-                $log = Join-Path $d 'ajan.log'
+                $log = Join-Path $d 'agent.log'
                 "@@GOREV"; if ($t) { [string]$t.State } else { 'kurulu değil' }
-                "@@SURUM"; if (Test-Path $exe) { [string](& $exe -surum) }
+                "@@SURUM"; if (Test-Path $exe) { [string](& $exe -version) }
                 "@@PORTLAR"; Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match '\(COM\d+\)' } | ForEach-Object { $_.Name }
                 "@@KAYIT"; if (Test-Path $log) { Get-Content -Encoding UTF8 -Tail 40 $log }
                 PS)
             : $this->calistir($pc, 'd='.$this->kabukTirnak($pc->dizin)."\n".<<<'SH'
-                echo @@GOREV; systemctl is-active konsol-ajan 2>/dev/null || true
-                echo @@SURUM; [ -x "$d/konsol-ajan" ] && "$d/konsol-ajan" -surum || true
+                echo @@GOREV; systemctl is-active console-agent 2>/dev/null || true
+                echo @@SURUM; [ -x "$d/console-agent" ] && "$d/console-agent" -version || true
                 echo @@PORTLAR; for p in /dev/serial/by-id/*; do [ -e "$p" ] && echo "$(readlink -f "$p") · $(basename "$p")"; done; ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null || true
-                echo @@KAYIT; [ -f "$d/ajan.log" ] && tail -n 40 "$d/ajan.log" || true
+                echo @@KAYIT; [ -f "$d/agent.log" ] && tail -n 40 "$d/agent.log" || true
                 SH);
 
         $bolum = ['GOREV' => [], 'SURUM' => [], 'PORTLAR' => [], 'KAYIT' => []];
@@ -189,8 +189,8 @@ class SitePc
     /** Panelin dağıttığı ajanın sağlaması (imaj derlenirken üretilir). */
     public function ajanOzeti(string $platform): string
     {
-        $dosya = rtrim((string) config('konsol.ajan_dizini'), '/').'/SHA256SUMS';
-        $ad = (string) config("konsol.ajan_dosyalari.{$platform}.dosya");
+        $dosya = rtrim((string) config('console.agent_dir'), '/').'/SHA256SUMS';
+        $ad = (string) config("console.agent_files.{$platform}.dosya");
 
         foreach (is_file($dosya) ? (array) file($dosya, FILE_IGNORE_NEW_LINES) : [] as $satir) {
             if (preg_match('/^([0-9a-f]{64})\s+\*?(\S+)$/', trim((string) $satir), $m) && $m[2] === $ad) {
@@ -233,18 +233,18 @@ class SitePc
         return $this->onEk($pc).<<<PS
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
             New-Item -ItemType Directory -Force -Path \$d | Out-Null
-            # Dizini yalnız SYSTEM ve Yöneticiler okusun: ajan.json jeton taşır (SID: dil bağımsız).
+            # Dizini yalnız SYSTEM ve Yöneticiler okusun: agent.json jeton taşır (SID: dil bağımsız).
             icacls \$d /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
-            {$sabitle}\$yeni = Join-Path \$d 'konsol-ajan.exe.yeni'
-            Invoke-WebRequest -UseBasicParsing -Uri '{$adres}' -Headers @{ Authorization = 'Bearer ' + \$env:KONSOL_JETON } -OutFile \$yeni
+            {$sabitle}\$yeni = Join-Path \$d 'console-agent.exe.new'
+            Invoke-WebRequest -UseBasicParsing -Uri '{$adres}' -Headers @{ Authorization = 'Bearer ' + \$env:CONSOLE_TOKEN } -OutFile \$yeni
             [Net.ServicePointManager]::ServerCertificateValidationCallback = \$null
             \$h = (Get-FileHash -Algorithm SHA256 \$yeni).Hash.ToLower()
             if (\$h -ne '{$sha}') { Remove-Item -Force \$yeni; throw "İndirilen dosyanın sağlaması tutmadı: \$h" }
             if (Get-ScheduledTask -TaskName \$gorev -ErrorAction SilentlyContinue) { Stop-ScheduledTask -TaskName \$gorev -ErrorAction SilentlyContinue }
-            Get-Process -Name 'konsol-ajan' -ErrorAction SilentlyContinue | Stop-Process -Force
+            Get-Process -Name 'console-agent' -ErrorAction SilentlyContinue | Stop-Process -Force
             Start-Sleep -Seconds 1
             Move-Item -Force \$yeni \$exe
-            [IO.File]::WriteAllText((Join-Path \$d 'ajan.json'), \$env:KONSOL_AYAR, (New-Object Text.UTF8Encoding \$false))
+            [IO.File]::WriteAllText((Join-Path \$d 'agent.json'), \$env:CONSOLE_CONFIG, (New-Object Text.UTF8Encoding \$false))
             \$eylem = New-ScheduledTaskAction -Execute \$exe -WorkingDirectory \$d
             \$tetik = New-ScheduledTaskTrigger -AtStartup
             \$secenek = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
@@ -252,7 +252,7 @@ class SitePc
             Register-ScheduledTask -TaskName \$gorev -Action \$eylem -Trigger \$tetik -Settings \$secenek -Principal \$kim -Force | Out-Null
             Start-ScheduledTask -TaskName \$gorev
             Start-Sleep -Seconds 3
-            "Kuruldu: " + (& \$exe -surum) + " · görev " + (Get-ScheduledTask -TaskName \$gorev).State
+            "Kuruldu: " + (& \$exe -version) + " · görev " + (Get-ScheduledTask -TaskName \$gorev).State
             PS;
     }
 
@@ -262,7 +262,7 @@ class SitePc
      */
     private function linuxKur(ConsolePc $pc, string $adres, string $sha, string $jeton, string $ajanAyari, ?string $pem): string
     {
-        $sabitle = $pem === null ? '' : "cat > \"\$d/panel.pem\" <<'KONSOL_PANEL_PEM'\n{$pem}\nKONSOL_PANEL_PEM\n";
+        $sabitle = $pem === null ? '' : "cat > \"\$d/panel.pem\" <<'CONSOLE_PANEL_PEM'\n{$pem}\nCONSOLE_PANEL_PEM\n";
         $cacert = $pem === null ? '' : '--cacert "$d/panel.pem" ';
 
         $d = $this->kabukTirnak($pc->dizin);
@@ -274,42 +274,42 @@ class SitePc
             d={$d}
             JETON={$j}
             install -d -m 700 "\$d"
-            {$sabitle}curl -fsS --proto =https {$cacert}-H @<(printf 'Authorization: Bearer %s' "\$JETON") -o "\$d/konsol-ajan.yeni" {$u}
-            echo "{$sha}  \$d/konsol-ajan.yeni" | sha256sum -c --quiet || { rm -f "\$d/konsol-ajan.yeni"; echo "İndirilen dosyanın sağlaması tutmadı" >&2; exit 1; }
-            chmod 755 "\$d/konsol-ajan.yeni"
+            {$sabitle}curl -fsS --proto =https {$cacert}-H @<(printf 'Authorization: Bearer %s' "\$JETON") -o "\$d/console-agent.new" {$u}
+            echo "{$sha}  \$d/console-agent.new" | sha256sum -c --quiet || { rm -f "\$d/console-agent.new"; echo "İndirilen dosyanın sağlaması tutmadı" >&2; exit 1; }
+            chmod 755 "\$d/console-agent.new"
             systemctl stop {$servis} 2>/dev/null || true
-            mv -f "\$d/konsol-ajan.yeni" "\$d/konsol-ajan"
+            mv -f "\$d/console-agent.new" "\$d/console-agent"
             umask 077
-            cat > "\$d/ajan.json" <<'KONSOL_AJAN_JSON'
+            cat > "\$d/agent.json" <<'CONSOLE_AGENT_JSON'
             {$ajanAyari}
-            KONSOL_AJAN_JSON
-            cat > /etc/systemd/system/{$servis}.service <<KONSOL_BIRIM
+            CONSOLE_AGENT_JSON
+            cat > /etc/systemd/system/{$servis}.service <<CONSOLE_UNIT
             [Unit]
             Description=Konsol kurulum ajani (SYD)
             After=network-online.target
             Wants=network-online.target
 
             [Service]
-            ExecStart=\$d/konsol-ajan
+            ExecStart=\$d/console-agent
             WorkingDirectory=\$d
             Restart=always
             RestartSec=30
 
             [Install]
             WantedBy=multi-user.target
-            KONSOL_BIRIM
+            CONSOLE_UNIT
             systemctl daemon-reload
             systemctl enable -q {$servis}
             systemctl restart {$servis}
             sleep 3
-            echo "Kuruldu: \$("\$d/konsol-ajan" -surum) · servis \$(systemctl is-active {$servis} || true)"
+            echo "Kuruldu: \$("\$d/console-agent" -version) · servis \$(systemctl is-active {$servis} || true)"
             SH;
     }
 
     /** Panelin sertifikası, YALNIZ kendinden imzalıysa (PEM). */
     public function kendindenImzaliSertifika(): ?string
     {
-        $yol = (string) config('konsol.panel_sertifikasi');
+        $yol = (string) config('console.panel_certificate');
         $pem = is_file($yol) ? (string) file_get_contents($yol) : '';
         $bilgi = $pem !== '' ? openssl_x509_parse($pem) : false;
 
@@ -332,7 +332,7 @@ class SitePc
     {
         $d = str_replace("'", "''", $pc->dizin);
 
-        return "\$d = '{$d}'\n\$gorev = '".self::GOREV."'\n\$exe = Join-Path \$d 'konsol-ajan.exe'\n";
+        return "\$d = '{$d}'\n\$gorev = '".self::GOREV."'\n\$exe = Join-Path \$d 'console-agent.exe'\n";
     }
 
     private function kabukTirnak(string $deger): string

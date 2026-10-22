@@ -25,43 +25,43 @@ import { on } from '../lib/dom.js';
 const COOKIE = 'dc-tema';
 
 /** Çerez ömrü: bir yıl. Tema tercihidir, oturumla birlikte unutulmamalı. */
-const OMUR = 60 * 60 * 24 * 365;
+const MAX_AGE = 60 * 60 * 24 * 365;
 
-const isik = () => window.matchMedia('(prefers-color-scheme: light)');
+const lightQuery = () => window.matchMedia('(prefers-color-scheme: light)');
 
-function alanAdi() {
-    return document.querySelector('meta[name="tema-alan"]')?.content?.trim() ?? '';
+function domainName() {
+    return document.querySelector('meta[name="theme-domain"]')?.content?.trim() ?? '';
 }
 
-function oku() {
-    const eslesme = document.cookie.match(/(?:^|;\s*)dc-tema=(light|dark)(?:;|$)/);
+function read() {
+    const match = document.cookie.match(/(?:^|;\s*)dc-tema=(light|dark)(?:;|$)/);
 
-    return eslesme ? eslesme[1] : null;
+    return match ? match[1] : null;
 }
 
-function yaz(tema) {
-    const alan = alanAdi();
-    const guvenli = window.location.protocol === 'https:' ? '; Secure' : '';
+function write(theme) {
+    const domain = domainName();
+    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
 
-    document.cookie = `${COOKIE}=${tema}; Path=/; Max-Age=${OMUR}; SameSite=Lax${guvenli}`
-        + (alan === '' ? '' : `; Domain=${alan}`);
+    document.cookie = `${COOKIE}=${theme}; Path=/; Max-Age=${MAX_AGE}; SameSite=Lax${secure}`
+        + (domain === '' ? '' : `; Domain=${domain}`);
 }
 
-function uygula(tema) {
-    document.documentElement.dataset.theme = tema;
+function apply(theme) {
+    document.documentElement.dataset.theme = theme;
 }
 
 /** Seçim yoksa tarayıcının tercihi. */
-function tarayicininTercihi() {
-    return isik().matches ? 'light' : 'dark';
+function browserPreference() {
+    return lightQuery().matches ? 'light' : 'dark';
 }
 
 export function preferred() {
-    return oku() ?? tarayicininTercihi();
+    return read() ?? browserPreference();
 }
 
 export function init() {
-    uygula(preferred());
+    apply(preferred());
 
     /*
      * Tarayıcı tercihi değişirse ANINDA takip edilir — ama yalnızca kullanıcı
@@ -69,9 +69,9 @@ export function init() {
      * karanlık moda geçti diye kullanıcının açık tema tercihini ezmek, seçimi
      * anlamsız kılardı.
      */
-    isik().addEventListener('change', () => {
-        if (oku() === null) {
-            uygula(tarayicininTercihi());
+    lightQuery().addEventListener('change', () => {
+        if (read() === null) {
+            apply(browserPreference());
         }
     });
 
@@ -80,9 +80,9 @@ export function init() {
      * Doğrudan bağlansaydı ilk geçişten sonra tema düğmesi ölürdü.
      */
     on('click', '[data-theme-toggle]', () => {
-        const yeni = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
 
-        yaz(yeni);
-        uygula(yeni);
+        write(next);
+        apply(next);
     });
 }

@@ -26,7 +26,7 @@ final class SetupPageTest extends TestCase
     #[Test]
     public function oturumsuz_giremez(): void
     {
-        $this->get(route('kurulum.index'))->assertRedirect(route('login'));
+        $this->get(route('setup.index'))->assertRedirect(route('login'));
     }
 
     #[Test]
@@ -35,20 +35,20 @@ final class SetupPageTest extends TestCase
         $this->assertSame(10, JunosImage::count());
 
         $this->actingAs($this->rolu('network'))
-            ->get(route('kurulum.index'))
+            ->get(route('setup.index'))
             ->assertOk()
             ->assertSee('install --format tftp://192.0.2.5/jinstall-ex-2200-12.3R12.4-domestic-signed.tgz', false)
             ->assertSee('install --format tftp://192.0.2.5/junos-vmhost-install-mx-x86-64-23.4R2-S8.7.tgz', false)
             ->assertSee('Jloader-ex-3242')
             /* network görür ama yönetemez. */
-            ->assertDontSee('data-modal-open="goruntu-ekle"', false)
+            ->assertDontSee('data-modal-open="image-add"', false)
             ->assertDontSee('Görüntüyü sil');
     }
 
     #[Test]
     public function yetkisi_olmayan_rol_sayfayi_goremez(): void
     {
-        $this->actingAs($this->rolu('teknik'))->get(route('kurulum.index'))->assertRedirect(route('yetkisiz'));
+        $this->actingAs($this->rolu('teknik'))->get(route('setup.index'))->assertRedirect(route('forbidden'));
     }
 
     #[Test]
@@ -56,27 +56,27 @@ final class SetupPageTest extends TestCase
     {
         $yonetici = User::factory()->admin()->create();
 
-        $this->actingAs($yonetici)->get(route('kurulum.index'))
-            ->assertSee('data-modal-open="goruntu-ekle"', false);
+        $this->actingAs($yonetici)->get(route('setup.index'))
+            ->assertSee('data-modal-open="image-add"', false);
 
-        $this->actingAs($yonetici)->post(route('kurulum.goruntu.store'), [
+        $this->actingAs($yonetici)->post(route('setup.image.store'), [
             'model' => 'EX-4300', 'surum' => '21.4', 'dosya' => 'jinstall-ex-4300-21.4R3.15-signed.tgz',
-        ])->assertRedirect(route('kurulum.index'));
+        ])->assertRedirect(route('setup.index'));
 
         $yeni = JunosImage::where('model', 'EX-4300')->sole();
         $this->assertGreaterThan(JunosImage::where('model', 'MX')->value('sira'), $yeni->sira, 'sıra boşsa sona eklenir');
 
-        $this->actingAs($yonetici)->get(route('kurulum.index'))
+        $this->actingAs($yonetici)->get(route('setup.index'))
             ->assertSee('install --format tftp://192.0.2.5/jinstall-ex-4300-21.4R3.15-signed.tgz', false);
 
-        $this->actingAs($yonetici)->put(route('kurulum.goruntu.update', $yeni), [
+        $this->actingAs($yonetici)->put(route('setup.image.update', $yeni), [
             'model' => 'EX-4300', 'surum' => '22.4', 'dosya' => 'jinstall-ex-4300-22.4R3.25-signed.tgz', 'sira' => 5,
-        ])->assertRedirect(route('kurulum.index'));
+        ])->assertRedirect(route('setup.index'));
 
         $this->assertSame('22.4', $yeni->fresh()->surum);
         $this->assertSame(5, $yeni->fresh()->sira);
 
-        $this->actingAs($yonetici)->delete(route('kurulum.goruntu.destroy', $yeni))->assertRedirect(route('kurulum.index'));
+        $this->actingAs($yonetici)->delete(route('setup.image.destroy', $yeni))->assertRedirect(route('setup.index'));
         $this->assertModelMissing($yeni);
 
         $this->assertSame(
@@ -92,7 +92,7 @@ final class SetupPageTest extends TestCase
         $yonetici = User::factory()->admin()->create();
 
         foreach (['a.tgz; request system zeroize', '../etc/passwd', 'a b.tgz', 'x.tgz`id`'] as $kotu) {
-            $this->actingAs($yonetici)->from(route('kurulum.index'))->post(route('kurulum.goruntu.store'), [
+            $this->actingAs($yonetici)->from(route('setup.index'))->post(route('setup.image.store'), [
                 'model' => 'EX', 'surum' => '1', 'dosya' => $kotu, '_form' => 'ekle',
             ])->assertSessionHasErrors('dosya');
         }
@@ -106,9 +106,9 @@ final class SetupPageTest extends TestCase
         $goruntu = JunosImage::first();
 
         $this->actingAs($this->rolu('network'))
-            ->post(route('kurulum.goruntu.store'), ['model' => 'X', 'surum' => '1', 'dosya' => 'x.tgz'])
-            ->assertRedirect(route('yetkisiz'));
-        $this->actingAs($this->rolu('network'))->delete(route('kurulum.goruntu.destroy', $goruntu))->assertRedirect(route('yetkisiz'));
+            ->post(route('setup.image.store'), ['model' => 'X', 'surum' => '1', 'dosya' => 'x.tgz'])
+            ->assertRedirect(route('forbidden'));
+        $this->actingAs($this->rolu('network'))->delete(route('setup.image.destroy', $goruntu))->assertRedirect(route('forbidden'));
 
         $this->assertModelExists($goruntu);
     }
@@ -120,8 +120,8 @@ final class SetupPageTest extends TestCase
         $yonetici = User::factory()->admin()->create();
         [$ilk, $ikinci] = JunosImage::query()->sirali()->take(2)->get()->all();
 
-        $this->actingAs($yonetici)->from(route('kurulum.index'))->followingRedirects()
-            ->put(route('kurulum.goruntu.update', $ilk), [
+        $this->actingAs($yonetici)->from(route('setup.index'))->followingRedirects()
+            ->put(route('setup.image.update', $ilk), [
                 'model' => 'EX-2200', 'surum' => '12', 'dosya' => 'kotu ad.tgz', '_form' => 'duzenle-'.$ilk->id,
             ])
             ->assertOk()

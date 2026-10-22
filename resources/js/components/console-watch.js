@@ -1,9 +1,9 @@
 /**
  * Konsol kurulumunun canlı ekranı (app/ConsoleModule, is.blade.php).
  *
- * `#konsol-izle` üzerindeki `data-akis` adresi yoklanır: yeni çıktı ekrana
+ * `#console-watch` üzerindeki `data-stream` adresi yoklanır: yeni çıktı ekrana
  * eklenir, durum ve adımlar yenilenir. İş kapanınca son bir kez okunup
- * durulur. Panelden yazılanlar `data-girdi` adresine gider; ajan bir sonraki
+ * durulur. Panelden yazılanlar `data-input` adresine gider; ajan bir sonraki
  * aktarımda alır.
  *
  * Yenilemesiz geçişte satır içi betik çalışmadığı için her çizimde
@@ -11,14 +11,14 @@
  * ikinci döngü kurulmaz.
  */
 
-const YOKLAMA_MS = 1500;
-const EKRAN_SINIRI = 400_000;
+const POLL_MS = 1500;
+const SCREEN_LIMIT = 400_000;
 
-let aktif = null;
+let active = null;
 
 /* Terminal kaçış dizileri ve satır başı ekranda görünmesin. */
-function temizle(metin) {
-    return metin
+function clean(text) {
+    return text
         // eslint-disable-next-line no-control-regex
         .replace(/\x1b\[[0-9;?]*[A-Za-z]|\x1b[()][0-9A-Za-z]|\x00|\x07/g, '')
         .replace(/\r\n/g, '\n')
@@ -29,252 +29,252 @@ function temizle(metin) {
  * Geri silme (\b): EX2300 açılışta "/-\|" döndürüyor, her karakterden sonra
  * bir \b. Ekranda kutu olarak görünüyordu; önceki karakteri siler.
  */
-function geriSil(metin) {
-    if (!metin.includes('\x08')) {
-        return metin;
+function eraseBackspaces(text) {
+    if (!text.includes('\x08')) {
+        return text;
     }
 
-    let onceki;
+    let previous;
 
     do {
-        onceki = metin;
+        previous = text;
         /* \x08 yazılmalı: düz `\b` sınıf dışında "kelime sınırı" demek. */
-        metin = metin.replace(/[^\n\x08]\x08/g, '');
-    } while (metin !== onceki);
+        text = text.replace(/[^\n\x08]\x08/g, '');
+    } while (text !== previous);
 
-    return metin.replace(/\x08/g, '');
+    return text.replace(/\x08/g, '');
 }
 
-function adimlariYaz(govde, olaylar) {
-    govde.replaceChildren(...olaylar.map((o) => {
-        const satir = document.createElement('tr');
+function writeSteps(tableBody, events) {
+    tableBody.replaceChildren(...events.map((o) => {
+        const row = document.createElement('tr');
 
-        [o.zaman, o.asama, o.mesaj, o.kaynak].forEach((deger, i) => {
-            const hucre = document.createElement('td');
-            hucre.dataset.label = ['Zaman', 'Adım', 'Açıklama', 'Kaynak'][i];
-            hucre.textContent = deger ?? '';
+        [o.zaman, o.asama, o.mesaj, o.kaynak].forEach((value, i) => {
+            const cell = document.createElement('td');
+            cell.dataset.label = ['Zaman', 'Adım', 'Açıklama', 'Kaynak'][i];
+            cell.textContent = value ?? '';
 
             if (i === 0) {
-                hucre.className = 'table__cell--mono text-sm';
+                cell.className = 'table__cell--mono text-sm';
             } else if (i > 1) {
-                hucre.className = 'text-sm';
+                cell.className = 'text-sm';
             }
 
             if (i === 1 && (o.uyari || o.hata)) {
-                hucre.className = 'konsol-uyari';
+                cell.className = 'console-warning';
             }
 
-            satir.append(hucre);
+            row.append(cell);
         });
 
-        return satir;
+        return row;
     }));
 }
 
-function durumuYaz(kok, veri) {
-    const rozet = kok.querySelector('[data-konsol-durum]');
+function writeStatus(root, data) {
+    const badge = root.querySelector('[data-console-status]');
 
-    if (rozet) {
-        rozet.className = `badge badge--${veri.renk}`;
-        rozet.textContent = veri.durum;
+    if (badge) {
+        badge.className = `badge badge--${data.renk}`;
+        badge.textContent = data.durum;
     }
 
-    const mesaj = kok.querySelector('[data-konsol-mesaj]');
+    const message = root.querySelector('[data-console-message]');
 
-    if (mesaj) {
-        mesaj.textContent = veri.bekliyor ? `Sizden bekleniyor: ${veri.sonMesaj}` : veri.sonMesaj;
-        mesaj.classList.toggle('konsol-uyari', veri.bekliyor);
+    if (message) {
+        message.textContent = data.bekliyor ? `Sizden bekleniyor: ${data.sonMesaj}` : data.sonMesaj;
+        message.classList.toggle('console-warning', data.bekliyor);
     }
 
-    ilerlemeyiYaz(kok, veri.ilerleme);
+    writeProgress(root, data.ilerleme);
 
-    if (!veri.acik) {
-        kok.querySelector('[data-konsol-girdi]')?.remove();
+    if (!data.acik) {
+        root.querySelector('[data-console-input]')?.remove();
     }
 }
 
-function mb(bayt) {
-    return (bayt / 1048576).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
+function mb(bytes) {
+    return (bytes / 1048576).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 }
 
 /* TFTP'den inen görüntü: yüzde, hız, kalan süre. */
-function ilerlemeyiYaz(kok, i) {
-    const alan = kok.querySelector('[data-konsol-ilerleme]');
+function writeProgress(root, i) {
+    const field = root.querySelector('[data-console-progress]');
 
-    if (!alan) {
+    if (!field) {
         return;
     }
 
-    alan.classList.toggle('is-hidden', !i);
+    field.classList.toggle('is-hidden', !i);
 
     if (!i) {
         return;
     }
 
-    alan.querySelector('[data-konsol-ilerleme-cubuk]').value = i.yuzde;
+    field.querySelector('[data-console-progress-bar]').value = i.yuzde;
 
-    let durum = 'Görüntü indiriliyor (TFTP)';
-    let hiz = `${mb(i.hiz)} MB/sn`;
+    let status = 'Görüntü indiriliyor (TFTP)';
+    let speed = `${mb(i.hiz)} MB/sn`;
 
     if (i.hata) {
-        durum = 'Görüntü aktarımı kesildi';
-        hiz = i.hata;
+        status = 'Görüntü aktarımı kesildi';
+        speed = i.hata;
     } else if (i.bitti) {
-        durum = 'Görüntü indi; cihaz kuruyor';
-        hiz = '';
+        status = 'Görüntü indi; cihaz kuruyor';
+        speed = '';
     } else if (i.kalan !== null) {
-        hiz += ` · kalan ~${Math.max(1, Math.round(i.kalan / 60))} dk`;
+        speed += ` · kalan ~${Math.max(1, Math.round(i.kalan / 60))} dk`;
     }
 
-    alan.querySelector('[data-konsol-ilerleme-metin]').textContent = `${durum} · ${mb(i.giden)} / ${mb(i.boyut)} MB · %${i.yuzde}`;
-    alan.querySelector('[data-konsol-ilerleme-hiz]').textContent = hiz;
+    field.querySelector('[data-console-progress-text]').textContent = `${status} · ${mb(i.giden)} / ${mb(i.boyut)} MB · %${i.yuzde}`;
+    field.querySelector('[data-console-progress-speed]').textContent = speed;
 }
 
 /*
  * Konsol boşken ne beklendiği yazar: "elektrik verin" uyarısı geldiyse o;
  * "ajan bekleniyor" demek operatöre ne yapacağını söylemez.
  */
-function bosEkran(veri) {
-    if (!veri.acik) {
+function emptyScreen(data) {
+    if (!data.acik) {
         return 'Konsolda bir şey görülmedi.';
     }
 
-    if (veri.bekliyor) {
-        return `Sizden bekleniyor:\n${veri.sonMesaj}`;
+    if (data.bekliyor) {
+        return `Sizden bekleniyor:\n${data.sonMesaj}`;
     }
 
-    return veri.ajanVar ? 'Konsol açık; cihazdan çıktı bekleniyor…' : 'Ajan PC\'ye kuruluyor…';
+    return data.ajanVar ? 'Konsol açık; cihazdan çıktı bekleniyor…' : 'Ajan PC\'ye kuruluyor…';
 }
 
-function baslat(kok) {
-    const ekran = kok.querySelector('[data-konsol-ekran]');
-    const adimlar = document.querySelector('[data-konsol-adimlar]');
-    const durum = { sonra: 0, ilk: true, bos: true, kok };
+function start(root) {
+    const output = root.querySelector('[data-console-screen]');
+    const steps = document.querySelector('[data-console-steps]');
+    const state = { after: 0, first: true, empty: true, root };
 
-    aktif = durum;
+    active = state;
 
-    async function yokla() {
-        if (aktif !== durum || !document.body.contains(kok)) {
+    async function poll() {
+        if (active !== state || !document.body.contains(root)) {
             return;
         }
 
-        let veri;
+        let data;
 
         try {
-            const yanit = await fetch(`${kok.dataset.akis}?sonra=${durum.sonra}`, { headers: { Accept: 'application/json' } });
+            const response = await fetch(`${root.dataset.stream}?after=${state.after}`, { headers: { Accept: 'application/json' } });
 
-            if (!yanit.ok) {
-                throw new Error(String(yanit.status));
+            if (!response.ok) {
+                throw new Error(String(response.status));
             }
 
-            veri = await yanit.json();
+            data = await response.json();
         } catch {
-            setTimeout(yokla, YOKLAMA_MS * 3);
+            setTimeout(poll, POLL_MS * 3);
 
             return;
         }
 
-        if (aktif !== durum) {
+        if (active !== state) {
             return;
         }
 
-        const gelen = temizle(veri.metin);
+        const incoming = clean(data.metin);
 
         /* Boş ekranın yazısı her yoklamada tazelenir ("elektrik verin" sonradan gelir). */
-        if (durum.bos && gelen === '' && !durum.ilk) {
-            ekran.textContent = bosEkran(veri);
+        if (state.empty && incoming === '' && !state.first) {
+            output.textContent = emptyScreen(data);
         }
 
-        if (durum.ilk || gelen !== '') {
-            const altta = ekran.scrollHeight - ekran.scrollTop - ekran.clientHeight < 40;
+        if (state.first || incoming !== '') {
+            const atBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 40;
             /* İlk çizimde ya da yer tutucu dururken ekran baştan yazılır. */
-            const onceki = durum.ilk || durum.bos ? '' : ekran.textContent;
-            const yeni = geriSil(onceki + gelen);
+            const previous = state.first || state.empty ? '' : output.textContent;
+            const next = eraseBackspaces(previous + incoming);
 
-            durum.bos = yeni === '';
-            ekran.textContent = durum.bos ? bosEkran(veri) : yeni.slice(-EKRAN_SINIRI);
+            state.empty = next === '';
+            output.textContent = state.empty ? emptyScreen(data) : next.slice(-SCREEN_LIMIT);
 
-            if (altta || durum.ilk) {
-                ekran.scrollTop = ekran.scrollHeight;
+            if (atBottom || state.first) {
+                output.scrollTop = output.scrollHeight;
             }
         }
 
-        durum.ilk = false;
-        durum.sonra = veri.son;
-        durumuYaz(kok, veri);
+        state.first = false;
+        state.after = data.son;
+        writeStatus(root, data);
 
-        if (adimlar) {
-            adimlariYaz(adimlar, veri.olaylar);
+        if (steps) {
+            writeSteps(steps, data.olaylar);
         }
 
-        if (veri.devami) {
-            setTimeout(yokla, 50);
-        } else if (veri.acik) {
-            setTimeout(yokla, YOKLAMA_MS);
-        } else if (kok.dataset.acik === '1') {
+        if (data.devami) {
+            setTimeout(poll, 50);
+        } else if (data.acik) {
+            setTimeout(poll, POLL_MS);
+        } else if (root.dataset.open === '1') {
             /* Kapanış anında gelen son çıktı için bir tur daha. */
-            kok.dataset.acik = '0';
-            setTimeout(yokla, YOKLAMA_MS);
+            root.dataset.open = '0';
+            setTimeout(poll, POLL_MS);
         }
     }
 
-    yokla();
+    poll();
 }
 
-async function gonder(kok, govde) {
-    const yanit = await fetch(kok.dataset.girdi, {
+async function send(root, payload) {
+    const response = await fetch(root.dataset.input, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json',
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
         },
-        body: JSON.stringify(govde),
+        body: JSON.stringify(payload),
     });
 
-    return yanit.ok;
+    return response.ok;
 }
 
-function girdiKur(kok) {
-    const form = kok.querySelector('[data-konsol-girdi]');
+function setupInput(root) {
+    const form = root.querySelector('[data-console-input]');
 
-    if (!form || form.dataset.kuruldu) {
+    if (!form || form.dataset.initialized) {
         return;
     }
 
-    form.dataset.kuruldu = '1';
+    form.dataset.initialized = '1';
 
-    form.addEventListener('submit', async (olay) => {
-        olay.preventDefault();
-        const alan = form.elements.namedItem('satir');
-        const satir = alan.value;
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const field = form.elements.namedItem('satir');
+        const line = field.value;
 
-        if (await gonder(kok, satir === '' ? { tus: 'enter' } : { satir })) {
-            alan.value = '';
+        if (await send(root, line === '' ? { tus: 'enter' } : { satir: line })) {
+            field.value = '';
         }
 
-        alan.focus();
+        field.focus();
     });
 
-    form.querySelectorAll('[data-konsol-tus]').forEach((dugme) => {
-        dugme.addEventListener('click', () => gonder(kok, { tus: dugme.dataset.konsolTus }));
+    form.querySelectorAll('[data-console-key]').forEach((button) => {
+        button.addEventListener('click', () => send(root, { tus: button.dataset.consoleKey }));
     });
 }
 
 export function init() {
-    const kok = document.getElementById('konsol-izle');
+    const root = document.getElementById('console-watch');
 
-    if (!kok) {
-        aktif = null;
+    if (!root) {
+        active = null;
 
         return;
     }
 
-    girdiKur(kok);
+    setupInput(root);
 
-    if (aktif?.kok === kok) {
+    if (active?.root === root) {
         return;
     }
 
-    baslat(kok);
+    start(root);
 }

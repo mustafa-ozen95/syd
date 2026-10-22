@@ -8,7 +8,7 @@
 
 <header class="topbar">
     {{-- Ad tek yerden gelir: config('app.name'). --}}
-    <a href="{{ route('yedek.index') }}" class="topbar__mark"
+    <a href="{{ route('backup.index') }}" class="topbar__mark"
        title="{{ config('app.name') }}">{{ config('app.name') }}</a>
 
     <nav class="topbar__nav" aria-label="Bölümler">
@@ -34,20 +34,20 @@
     </button>
 
     @if ($kullanici)
-        <div class="kullanici-menu" data-menu>
-            <button type="button" class="kullanici-menu__dugme" data-menu-ac
+        <div class="user-menu" data-menu>
+            <button type="button" class="user-menu__button" data-menu-open
                     aria-haspopup="true" aria-expanded="false" aria-label="Hesap menüsü">
                 <span class="topbar__avatar" aria-hidden="true">{{ \App\Support\Initials::al($kullanici->name) }}</span>
                 <span class="topbar__name">{{ $kullanici->name }}</span>
-                <svg class="kullanici-menu__ok" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                <svg class="user-menu__arrow" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
                     <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6"
                           stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
             </button>
 
-            <div class="kullanici-menu__liste" data-menu-liste hidden>
-                <a href="{{ route('profil.show') }}" class="kullanici-menu__oge">Hesabım</a>
-                <a href="{{ route('logout') }}" class="kullanici-menu__oge kullanici-menu__oge--cikis">Çıkış</a>
+            <div class="user-menu__list" data-menu-list hidden>
+                <a href="{{ route('profile.show') }}" class="user-menu__item">Hesabım</a>
+                <a href="{{ route('logout') }}" class="user-menu__item user-menu__item--logout">Çıkış</a>
             </div>
         </div>
     @endif

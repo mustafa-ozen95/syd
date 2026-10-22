@@ -12,8 +12,8 @@ import { $, $$ } from '../lib/dom.js';
  * Kural TEK ve her ekranda aynıdır: kullanıcı ADRESTE nereye kadar indiyse o
  * bölme açılır.
  *
- *   - ?kayit= → detay bölmesi
- *   - ?grup=  → liste bölmesi
+ *   - ?record= → detay bölmesi
+ *   - ?group=  → liste bölmesi
  *   - hiçbiri → gruplar bölmesi
  *
  * Çizilmiş bölmelere bakmak yetmiyordu: liste bölmesi bir grup SEÇİLMEDEN de
@@ -31,15 +31,15 @@ import { $, $$ } from '../lib/dom.js';
  * Üst menü dar ekranda taşıyor ve en soldan başlıyordu: kullanıcı hangi
  * bölümde olduğunu görmek için kaydırmak zorunda kalıyordu.
  */
-function seciliyeOdaklan(serit) {
-    const secili = $('[aria-current="page"]', serit);
+function focusSelected(strip) {
+    const selected = $('[aria-current="page"]', strip);
 
-    if (!secili || serit.scrollWidth <= serit.clientWidth) {
+    if (!selected || strip.scrollWidth <= strip.clientWidth) {
         return;
     }
 
     /* Seçili öğe ortalanır; iki yanındaki komşular da görünür kalır. */
-    serit.scrollLeft = secili.offsetLeft - (serit.clientWidth - secili.offsetWidth) / 2;
+    strip.scrollLeft = selected.offsetLeft - (strip.clientWidth - selected.offsetWidth) / 2;
 }
 
 /**
@@ -48,9 +48,9 @@ function seciliyeOdaklan(serit) {
  * Görünmeyen bölmeler atlanır: detay paneli yalnızca bir kayıt seçiliyken
  * çizilir.
  */
-function gorunurBolmeler(serit) {
-    return $$(':scope > .column, :scope > .detail', serit)
-        .filter((bolme) => getComputedStyle(bolme).display !== 'none');
+function visiblePanes(strip) {
+    return $$(':scope > .column, :scope > .detail', strip)
+        .filter((pane) => getComputedStyle(pane).display !== 'none');
 }
 
 /**
@@ -65,63 +65,63 @@ function gorunurBolmeler(serit) {
  * Derinlik ADRESTEN okunur, çizilmiş bölmelerden değil: kullanıcı yalnızca
  * kendi gittiği yere iner.
  *
- *   - ?kayit= → en derin bölme (detay)
- *   - ?grup=  → liste bölmesi
+ *   - ?record= → en derin bölme (detay)
+ *   - ?group=  → liste bölmesi
  *   - hiçbiri → en baştaki bölme (gruplar)
  */
-function hedefBolme(serit) {
-    const bolmeler = gorunurBolmeler(serit);
+function targetPane(strip) {
+    const panes = visiblePanes(strip);
 
-    if (bolmeler.length === 0) {
+    if (panes.length === 0) {
         return null;
     }
 
     /*
      * ŞERİT KENDİ KURALINI SÖYLEYEBİLİR.
      *
-     * Aşağıdaki adres kuralı (?kayit / ?grup) seçimi sorgu parametresinde
+     * Aşağıdaki adres kuralı (?record / ?group) seçimi sorgu parametresinde
      * taşıyan ekranlar içindir. Seçimin adresin KENDİSİNDE durduğu
      * ekranlarda (/kayit/12 gibi) bu parametreler yoktur ve telefonda
      * açılışta görünmesi gereken bölmeyi sunucu bilir; bilmediğimiz bir şeyi
      * adresten tahmin etmektense ekran söylesin.
      *
-     *     <div class="columns" data-acilis="son">  → en sağdaki bölme
-     *     <div class="columns" data-acilis="ilk">  → en soldaki bölme
+     *     <div class="columns" data-landing="son">  → en sağdaki bölme
+     *     <div class="columns" data-landing="ilk">  → en soldaki bölme
      *
      * Öznitelik yoksa adres kuralı geçerlidir.
      */
-    const acilis = serit.dataset.acilis;
+    const landing = strip.dataset.landing;
 
-    if (acilis === 'son') {
-        return bolmeler[bolmeler.length - 1];
+    if (landing === 'son') {
+        return panes[panes.length - 1];
     }
 
-    if (acilis === 'ilk') {
-        return bolmeler[0];
+    if (landing === 'ilk') {
+        return panes[0];
     }
 
-    const adres = new URLSearchParams(window.location.search);
+    const url = new URLSearchParams(window.location.search);
 
-    if (adres.has('kayit')) {
-        return bolmeler[bolmeler.length - 1];
+    if (url.has('record')) {
+        return panes[panes.length - 1];
     }
 
-    if (adres.has('grup')) {
-        return bolmeler[Math.min(1, bolmeler.length - 1)];
+    if (url.has('group')) {
+        return panes[Math.min(1, panes.length - 1)];
     }
 
-    return bolmeler[0];
+    return panes[0];
 }
 
-function bolmeyeIn(serit) {
-    const hedef = hedefBolme(serit);
+function scrollToPane(strip) {
+    const target = targetPane(strip);
 
     /* Taşma yoksa (masaüstü) kaydırılacak bir şey de yok. */
-    if (!hedef || serit.scrollWidth <= serit.clientWidth) {
+    if (!target || strip.scrollWidth <= strip.clientWidth) {
         return;
     }
 
-    serit.scrollTo({ left: hedef.offsetLeft - serit.offsetLeft, behavior: 'auto' });
+    strip.scrollTo({ left: target.offsetLeft - strip.offsetLeft, behavior: 'auto' });
 }
 
 export function init() {
@@ -129,7 +129,7 @@ export function init() {
      * Yatay kayan HER şerit aynı kurala tabidir. Sekme şeridi de listede:
      * "Hatalar" sekmesindeyken seçilinin nerede olduğu görünmüyordu.
      */
-    $$('.topbar__nav, .tabs').forEach(seciliyeOdaklan);
+    $$('.topbar__nav, .tabs').forEach(focusSelected);
 
-    $$('.columns').forEach(bolmeyeIn);
+    $$('.columns').forEach(scrollToPane);
 }

@@ -16,6 +16,6 @@ return [
     |
     */
 
-    'ad' => env('PANEL_AD', 'Sistem Yöneticisi'),
+    'name' => env('PANEL_NAME', 'Sistem Yöneticisi'),
 
 ];

@@ -7,27 +7,27 @@ import { on } from '../lib/dom.js';
  * ekranda tutmak, "hangi kayıtlara uygulanacak" sorusunu tıklamadan
  * yanıtlar. Buradaki iş yalnızca seçim ve sayaç.
  */
-function tazele() {
-    const kutular = [...document.querySelectorAll('[data-bulk-item]')];
-    const secili = kutular.filter((kutu) => kutu.checked);
+function refresh() {
+    const boxes = [...document.querySelectorAll('[data-bulk-item]')];
+    const selected = boxes.filter((box) => box.checked);
 
-    const sayac = document.querySelector('[data-bulk-count]');
-    const dugme = document.querySelector('[data-bulk-submit]');
-    const hepsi = document.querySelector('[data-bulk-all]');
+    const counter = document.querySelector('[data-bulk-count]');
+    const button = document.querySelector('[data-bulk-submit]');
+    const all = document.querySelector('[data-bulk-all]');
 
-    if (sayac) {
-        sayac.textContent = String(secili.length);
+    if (counter) {
+        counter.textContent = String(selected.length);
     }
 
-    if (dugme) {
-        dugme.disabled = secili.length === 0;
+    if (button) {
+        button.disabled = selected.length === 0;
     }
 
-    if (hepsi) {
-        hepsi.checked = kutular.length > 0 && secili.length === kutular.length;
+    if (all) {
+        all.checked = boxes.length > 0 && selected.length === boxes.length;
 
         /* Kısmi seçim: ne boş ne tam. Üçüncü hâli göstermezsek yanıltır. */
-        hepsi.indeterminate = secili.length > 0 && secili.length < kutular.length;
+        all.indeterminate = selected.length > 0 && selected.length < boxes.length;
     }
 }
 
@@ -36,16 +36,16 @@ export function init() {
      * Delegasyon: satırlar sayfa geçişinde yenileniyor. Doğrudan bağlansaydı
      * ilk geçişten sonra seçim çubuğu ölürdü.
      */
-    on('change', '[data-bulk-all]', (olay) => {
-        document.querySelectorAll('[data-bulk-item]:not(:disabled)').forEach((kutu) => {
-            kutu.checked = olay.target.checked;
+    on('change', '[data-bulk-all]', (event) => {
+        document.querySelectorAll('[data-bulk-item]:not(:disabled)').forEach((box) => {
+            box.checked = event.target.checked;
         });
     });
 
-    on('change', '[data-bulk-item], [data-bulk-all]', tazele);
+    on('change', '[data-bulk-item], [data-bulk-all]', refresh);
 }
 
 /** Her çizimde: yeni gelen listede sayaç sıfırdan doğru olmalı. */
 export function prepare() {
-    tazele();
+    refresh();
 }

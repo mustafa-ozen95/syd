@@ -19,19 +19,19 @@ import (
 // Kütüphane bu hatada portu kapatıp "Invalid serial port" diyor ve gerçek
 // kodu yutuyordu. Burada hata dönerse ayar geri okunur; tutmuşsa devam
 // edilir, tutmamışsa Windows'un kendi hatası söylenir. Hızın gerçekten
-// işlediğini ayrıca hizBul doğrular (okunur metin gelmezse o hızı seçmez).
-type winHat struct {
-	h      windows.Handle
-	kapat  sync.Once
-	kapErr error
+// işlediğini ayrıca detectSpeed doğrular (okunur metin gelmezse o hızı seçmez).
+type winLine struct {
+	h         windows.Handle
+	closeOnce sync.Once
+	closeErr  error
 }
 
-func seriAc(ad string) (Hat, error) {
-	yol := ad
-	if !strings.HasPrefix(yol, `\\.\`) {
-		yol = `\\.\` + yol
+func openSerial(name string) (Line, error) {
+	path := name
+	if !strings.HasPrefix(path, `\\.\`) {
+		path = `\\.\` + path
 	}
-	p, err := windows.UTF16PtrFromString(yol)
+	p, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		return nil, err
 	}
@@ -47,56 +47,56 @@ func seriAc(ad string) (Hat, error) {
 		}
 		return nil, fmt.Errorf("port açılamadı: %w", err)
 	}
-	hat := &winHat{h: h}
-	if err := hat.HizAyarla(hizlar[0]); err != nil {
-		hat.Close()
+	line := &winLine{h: h}
+	if err := line.SetSpeed(speeds[0]); err != nil {
+		line.Close()
 		return nil, err
 	}
-	zaman := windows.CommTimeouts{
+	timeouts := windows.CommTimeouts{
 		ReadIntervalTimeout:        0xFFFFFFFF,
 		ReadTotalTimeoutMultiplier: 0xFFFFFFFF,
 		ReadTotalTimeoutConstant:   200,
 		WriteTotalTimeoutConstant:  5000,
 	}
-	if err := windows.SetCommTimeouts(h, &zaman); err != nil {
-		hat.Close()
+	if err := windows.SetCommTimeouts(h, &timeouts); err != nil {
+		line.Close()
 		return nil, fmt.Errorf("zaman aşımı ayarlanamadı: %w", err)
 	}
-	return hat, nil
+	return line, nil
 }
 
 // DCB bayrakları (winbase.h).
 const (
-	dcbIkili        = 0x0001 // fBinary
-	dcbEslik        = 0x0002 // fParity
-	dcbCtsAkis      = 0x0004 // fOutxCtsFlow
-	dcbDsrAkis      = 0x0008 // fOutxDsrFlow
-	dcbDtrMaske     = 0x0030 // fDtrControl
-	dcbDsrDuyarli   = 0x0040 // fDsrSensitivity
-	dcbXoffSurdur   = 0x0080 // fTXContinueOnXoff
-	dcbXonCikis     = 0x0100 // fOutX
-	dcbXonGiris     = 0x0200 // fInX
-	dcbHataKarakter = 0x0400 // fErrorChar
-	dcbBosAt        = 0x0800 // fNull
-	dcbRtsMaske     = 0x3000 // fRtsControl
-	dcbHataDurdur   = 0x4000 // fAbortOnError
+	dcbBinary       = 0x0001 // fBinary
+	dcbParity       = 0x0002 // fParity
+	dcbCtsFlow      = 0x0004 // fOutxCtsFlow
+	dcbDsrFlow      = 0x0008 // fOutxDsrFlow
+	dcbDtrMask      = 0x0030 // fDtrControl
+	dcbDsrSensitive = 0x0040 // fDsrSensitivity
+	dcbXoffContinue = 0x0080 // fTXContinueOnXoff
+	dcbXonOut       = 0x0100 // fOutX
+	dcbXonIn        = 0x0200 // fInX
+	dcbErrorChar    = 0x0400 // fErrorChar
+	dcbDropNull     = 0x0800 // fNull
+	dcbRtsMask      = 0x3000 // fRtsControl
+	dcbAbortOnError = 0x4000 // fAbortOnError
 )
 
-func (w *winHat) HizAyarla(hiz int) error {
+func (w *winLine) SetSpeed(speed int) error {
 	var d windows.DCB
 	d.DCBlength = uint32(unsafe.Sizeof(d))
 	if err := windows.GetCommState(w.h, &d); err != nil {
 		return fmt.Errorf("port ayarı okunamadı: %w", err)
 	}
-	d.BaudRate = uint32(hiz)
+	d.BaudRate = uint32(speed)
 	d.ByteSize = 8
 	d.Parity = windows.NOPARITY
 	d.StopBits = windows.ONESTOPBIT
 	// 8N1, akış denetimi yok; DTR/RTS açık. Xon/Xoff sınırlarına dokunulmaz:
 	// sürücünün kendi değerleri kalır.
-	d.Flags |= dcbIkili | dcbXoffSurdur
-	d.Flags &^= dcbEslik | dcbCtsAkis | dcbDsrAkis | dcbDsrDuyarli | dcbXonCikis | dcbXonGiris |
-		dcbHataKarakter | dcbBosAt | dcbHataDurdur | dcbDtrMaske | dcbRtsMaske
+	d.Flags |= dcbBinary | dcbXoffContinue
+	d.Flags &^= dcbParity | dcbCtsFlow | dcbDsrFlow | dcbDsrSensitive | dcbXonOut | dcbXonIn |
+		dcbErrorChar | dcbDropNull | dcbAbortOnError | dcbDtrMask | dcbRtsMask
 	d.Flags |= windows.DTR_CONTROL_ENABLE | windows.RTS_CONTROL_ENABLE
 
 	err := windows.SetCommState(w.h, &d)
@@ -109,10 +109,10 @@ func (w *winHat) HizAyarla(hiz int) error {
 		g.Parity == windows.NOPARITY && g.StopBits == windows.ONESTOPBIT {
 		return nil
 	}
-	return fmt.Errorf("%d baud ayarlanamadı: %w", hiz, err)
+	return fmt.Errorf("%d baud ayarlanamadı: %w", speed, err)
 }
 
-func (w *winHat) Read(b []byte) (int, error) {
+func (w *winLine) Read(b []byte) (int, error) {
 	var n uint32
 	if err := windows.ReadFile(w.h, b, &n, nil); err != nil {
 		return int(n), err
@@ -120,22 +120,22 @@ func (w *winHat) Read(b []byte) (int, error) {
 	return int(n), nil
 }
 
-func (w *winHat) Write(b []byte) (int, error) {
-	toplam := 0
-	for toplam < len(b) {
+func (w *winLine) Write(b []byte) (int, error) {
+	total := 0
+	for total < len(b) {
 		var n uint32
-		if err := windows.WriteFile(w.h, b[toplam:], &n, nil); err != nil {
-			return toplam, err
+		if err := windows.WriteFile(w.h, b[total:], &n, nil); err != nil {
+			return total, err
 		}
 		if n == 0 {
-			return toplam, errors.New("porta yazılamadı (zaman aşımı)")
+			return total, errors.New("porta yazılamadı (zaman aşımı)")
 		}
-		toplam += int(n)
+		total += int(n)
 	}
-	return toplam, nil
+	return total, nil
 }
 
-func (w *winHat) Close() error {
-	w.kapat.Do(func() { w.kapErr = windows.CloseHandle(w.h) })
-	return w.kapErr
+func (w *winLine) Close() error {
+	w.closeOnce.Do(func() { w.closeErr = windows.CloseHandle(w.h) })
+	return w.closeErr
 }

@@ -27,179 +27,179 @@ import (
 	"github.com/pin/tftp/v3"
 )
 
-// Aktarim tek bir dosya isteği.
-type Aktarim struct {
-	No          int64     `json:"no"`
-	Dosya       string    `json:"dosya"`
-	Istemci     string    `json:"istemci"`
-	Boyut       int64     `json:"boyut"`
-	Giden       int64     `json:"giden"`
-	Basladi     time.Time `json:"basladi"`
-	Guncellendi time.Time `json:"guncellendi"`
-	Bitti       bool      `json:"bitti"`
-	Hata        string    `json:"hata,omitempty"`
+// Transfer tek bir dosya isteği.
+type Transfer struct {
+	Number  int64     `json:"number"`
+	File    string    `json:"file"`
+	Client  string    `json:"client"`
+	Size    int64     `json:"size"`
+	Sent    int64     `json:"sent"`
+	Started time.Time `json:"started"`
+	Updated time.Time `json:"updated"`
+	Done    bool      `json:"done"`
+	Error   string    `json:"error,omitempty"`
 
-	giden atomic.Int64
+	sent atomic.Int64
 }
 
-// Sunucu dizini ve durum kaydı.
-type Sunucu struct {
-	kok   string
-	durum string
+// Server dizini ve durum kaydı.
+type Server struct {
+	root      string
+	stateFile string
 
-	mu       sync.Mutex
-	sayac    int64
-	aktarim  []*Aktarim
-	degisti  bool
-	sonYazim time.Time
+	mu        sync.Mutex
+	counter   int64
+	transfers []*Transfer
+	changed   bool
+	lastWrite time.Time
 }
 
-const kayitSiniri = 20
+const recordLimit = 20
 
-// blokSiniri TFTP'nin izin verdiği en büyük blok (kütüphane MTU'ya indirir).
-const blokSiniri = 65456
+// blockLimit TFTP'nin izin verdiği en büyük blok (kütüphane MTU'ya indirir).
+const blockLimit = 65456
 
-var errAd = errors.New("geçersiz dosya adı")
+var errName = errors.New("geçersiz dosya adı")
 
-// dosyaAdi yalnız dizindeki düz bir dosyaya izin verir: alt dizin, "..",
+// fileName yalnız dizindeki düz bir dosyaya izin verir: alt dizin, "..",
 // gizli dosya yok. Loader adı "/" ile başlatabilir.
-func dosyaAdi(ad string) (string, error) {
-	ad = strings.TrimLeft(ad, "/")
-	if ad == "" || strings.ContainsAny(ad, `/\`) || strings.HasPrefix(ad, ".") {
-		return "", errAd
+func fileName(name string) (string, error) {
+	name = strings.TrimLeft(name, "/")
+	if name == "" || strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, ".") {
+		return "", errName
 	}
-	return ad, nil
+	return name, nil
 }
 
-func (s *Sunucu) oku(istenen string, rf io.ReaderFrom) error {
-	ad, err := dosyaAdi(istenen)
+func (s *Server) readHandler(requested string, rf io.ReaderFrom) error {
+	name, err := fileName(requested)
 	if err != nil {
-		log.Printf("reddedildi: %q", istenen)
+		log.Printf("reddedildi: %q", requested)
 		return err
 	}
-	f, err := os.Open(filepath.Join(s.kok, ad))
+	f, err := os.Open(filepath.Join(s.root, name))
 	if err != nil {
-		log.Printf("yok: %s (%v)", ad, err)
-		return fmt.Errorf("%s bulunamadı", ad)
+		log.Printf("yok: %s (%v)", name, err)
+		return fmt.Errorf("%s bulunamadı", name)
 	}
 	defer f.Close()
-	bilgi, err := f.Stat()
-	if err != nil || !bilgi.Mode().IsRegular() {
-		return fmt.Errorf("%s düz dosya değil", ad)
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return fmt.Errorf("%s düz dosya değil", name)
 	}
 
-	istemci := ""
+	client := ""
 	if ot, ok := rf.(tftp.OutgoingTransfer); ok {
-		ot.SetSize(bilgi.Size())
-		adr := ot.RemoteAddr()
-		istemci = adr.String()
+		ot.SetSize(info.Size())
+		remote := ot.RemoteAddr()
+		client = remote.String()
 	}
-	a := s.yeni(ad, istemci, bilgi.Size())
-	log.Printf("başladı #%d: %s → %s (%d bayt)", a.No, ad, istemci, bilgi.Size())
+	a := s.newTransfer(name, client, info.Size())
+	log.Printf("başladı #%d: %s → %s (%d bayt)", a.Number, name, client, info.Size())
 
-	_, err = rf.ReadFrom(&sayanOkuyucu{r: f, a: a})
-	s.bitir(a, err)
+	_, err = rf.ReadFrom(&countingReader{r: f, a: a})
+	s.finish(a, err)
 	if err != nil {
-		log.Printf("kesildi #%d: %s · %d/%d bayt · %v", a.No, ad, a.giden.Load(), a.Boyut, err)
+		log.Printf("kesildi #%d: %s · %d/%d bayt · %v", a.Number, name, a.sent.Load(), a.Size, err)
 	} else {
-		log.Printf("bitti #%d: %s · %d bayt · %s", a.No, ad, a.giden.Load(), time.Since(a.Basladi).Round(time.Second))
+		log.Printf("bitti #%d: %s · %d bayt · %s", a.Number, name, a.sent.Load(), time.Since(a.Started).Round(time.Second))
 	}
 	return err
 }
 
-type sayanOkuyucu struct {
+type countingReader struct {
 	r io.Reader
-	a *Aktarim
+	a *Transfer
 }
 
-func (o *sayanOkuyucu) Read(p []byte) (int, error) {
+func (o *countingReader) Read(p []byte) (int, error) {
 	n, err := o.r.Read(p)
-	o.a.giden.Add(int64(n))
+	o.a.sent.Add(int64(n))
 	return n, err
 }
 
-func (s *Sunucu) yeni(ad, istemci string, boyut int64) *Aktarim {
+func (s *Server) newTransfer(name, client string, size int64) *Transfer {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.sayac++
-	simdi := time.Now()
-	a := &Aktarim{No: s.sayac, Dosya: ad, Istemci: istemci, Boyut: boyut, Basladi: simdi, Guncellendi: simdi}
-	s.aktarim = append(s.aktarim, a)
-	if len(s.aktarim) > kayitSiniri {
-		s.aktarim = s.aktarim[len(s.aktarim)-kayitSiniri:]
+	s.counter++
+	now := time.Now()
+	a := &Transfer{Number: s.counter, File: name, Client: client, Size: size, Started: now, Updated: now}
+	s.transfers = append(s.transfers, a)
+	if len(s.transfers) > recordLimit {
+		s.transfers = s.transfers[len(s.transfers)-recordLimit:]
 	}
-	s.degisti = true
+	s.changed = true
 	return a
 }
 
-func (s *Sunucu) bitir(a *Aktarim, err error) {
+func (s *Server) finish(a *Transfer, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	a.Bitti = true
+	a.Done = true
 	if err != nil {
-		a.Hata = err.Error()
+		a.Error = err.Error()
 	}
-	s.degisti = true
+	s.changed = true
 }
 
-// yaz durum dosyasını yazar (önce geçici dosya, sonra yeniden adlandırma:
+// writeState durum dosyasını yazar (önce geçici dosya, sonra yeniden adlandırma:
 // panel yarım dosya okumasın).
-func (s *Sunucu) yaz() error {
+func (s *Server) writeState() error {
 	s.mu.Lock()
-	simdi := time.Now()
-	acik := false
-	for _, a := range s.aktarim {
-		g := a.giden.Load()
-		if g != a.Giden {
-			a.Giden, a.Guncellendi = g, simdi
-			s.degisti = true
+	now := time.Now()
+	active := false
+	for _, a := range s.transfers {
+		g := a.sent.Load()
+		if g != a.Sent {
+			a.Sent, a.Updated = g, now
+			s.changed = true
 		}
-		acik = acik || !a.Bitti
+		active = active || !a.Done
 	}
 	// Açık aktarım yokken dosya yalnız değişince yazılır.
-	if !s.degisti && !acik {
+	if !s.changed && !active {
 		s.mu.Unlock()
 		return nil
 	}
-	s.degisti = false
-	b, err := json.Marshal(map[string]any{"guncellendi": simdi, "aktarimlar": s.aktarim})
+	s.changed = false
+	b, err := json.Marshal(map[string]any{"updated": now, "transfers": s.transfers})
 	s.mu.Unlock()
 	if err != nil {
 		return err
 	}
-	gecici := s.durum + ".yeni"
-	if err := os.WriteFile(gecici, b, 0o644); err != nil {
+	tmp := s.stateFile + ".yeni"
+	if err := os.WriteFile(tmp, b, 0o644); err != nil {
 		return err
 	}
-	return os.Rename(gecici, s.durum)
+	return os.Rename(tmp, s.stateFile)
 }
 
 func main() {
-	kok := flag.String("kok", "/junos", "görüntülerin durduğu dizin (yalnız okunur)")
-	adres := flag.String("adres", ":69", "dinlenecek adres")
-	durum := flag.String("durum", "/durum/tftp.json", "ilerleme dosyası")
+	root := flag.String("root", "/junos", "görüntülerin durduğu dizin (yalnız okunur)")
+	addr := flag.String("addr", ":69", "dinlenecek adres")
+	stateFile := flag.String("state", "/durum/tftp.json", "ilerleme dosyası")
 	flag.Parse()
 
-	s := &Sunucu{kok: *kok, durum: *durum}
-	if err := os.MkdirAll(filepath.Dir(*durum), 0o755); err != nil {
+	s := &Server{root: *root, stateFile: *stateFile}
+	if err := os.MkdirAll(filepath.Dir(*stateFile), 0o755); err != nil {
 		log.Fatal(err)
 	}
 	go func() {
 		for range time.Tick(time.Second) {
-			if err := s.yaz(); err != nil {
+			if err := s.writeState(); err != nil {
 				log.Printf("durum yazılamadı: %v", err)
 			}
 		}
 	}()
 
-	srv := tftp.NewServer(s.oku, nil) // yazma yok
+	srv := tftp.NewServer(s.readHandler, nil) // yazma yok
 	srv.EnableSinglePort()
 	// Tek port kipi blok boyunu 512'ye sabitliyor; istenen blksize'a OACK'te
 	// 512 denir. Junos kurucusu (EX2300, 24.4) OACK'i dikkate almıyor: 512
 	// baytlık ilk bloğu "son blok" sanıp "truncated gzip input" ile düşer.
 	// İstenen boy verilir; üst sınır arayüzün MTU'su.
-	srv.SetBlockSize(blokSiniri)
+	srv.SetBlockSize(blockLimit)
 	srv.SetTimeout(5 * time.Second)
-	log.Printf("junos-tftp: %s · dizin %s · tek port", *adres, *kok)
-	log.Fatal(srv.ListenAndServe(*adres))
+	log.Printf("junos-tftp: %s · dizin %s · tek port", *addr, *root)
+	log.Fatal(srv.ListenAndServe(*addr))
 }

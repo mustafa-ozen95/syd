@@ -23,7 +23,7 @@ storage/logs/*
 bootstrap/cache/*
 console-agent/dist
 console-agent/*.log
-console-agent/ajan.json
+console-agent/agent.json
 
 # Gizli değerler imaja ASLA girmez; çalışma anında env ile verilir.
 #

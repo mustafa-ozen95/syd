@@ -25,11 +25,11 @@ return [
     | görünür.
     |
     | BOŞ DEĞER = VERİLMEMİŞ: compose değişkeni listeden geçirir; .env'de
-    | boş kalan "DENETIM_ANAHTARI=" satırı konteynere boş dize olarak
+    | boş kalan "AUDIT_KEY=" satırı konteynere boş dize olarak
     | gelir. env()'in varsayılanı yalnız değişken HİÇ yokken devreye girdiği
     | için zincir boş anahtarla imzalanırdı. ?: boşu da APP_KEY'e düşürür.
     */
-    'chain_key' => env('DENETIM_ANAHTARI') ?: env('APP_KEY'),
+    'chain_key' => env('AUDIT_KEY') ?: env('APP_KEY'),
 
     /*
     | Zincirin başlangıç noktası. Budama eski satırları sildiğinde en son
@@ -42,5 +42,5 @@ return [
     | Doğrulama sonucu bu anahtarla önbelleğe yazılır; ekran her açılışta
     | bütün satırları yeniden özetlemek yerine buradan okur.
     */
-    'verification_key' => 'denetim:dogrulama',
+    'verification_key' => 'audit:verification',
 ];

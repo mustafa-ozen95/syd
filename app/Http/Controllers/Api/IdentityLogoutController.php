@@ -24,12 +24,12 @@ class IdentityLogoutController extends Controller
     public function __invoke(Request $request, CenterClient $merkez): JsonResponse
     {
         $subject = trim((string) $request->input('subject'));
-        $an = filter_var($request->input('an'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-        $sir = (string) config('identity.bildirim_sirri');
+        $time = filter_var($request->input('time'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $sir = (string) config('identity.notify_secret');
 
-        $imzali = $sir !== '' && $subject !== '' && $an !== false && hash_equals(
-            hash_hmac('sha256', 'cikis|'.$subject.'|'.$an, $sir),
-            (string) $request->header('X-Kimlik-Imza'),
+        $imzali = $sir !== '' && $subject !== '' && $time !== false && hash_equals(
+            hash_hmac('sha256', 'logout|'.$subject.'|'.$time, $sir),
+            (string) $request->header('X-Identity-Signature'),
         );
 
         if ($imzali && $merkez->acikMi()) {
@@ -39,10 +39,10 @@ class IdentityLogoutController extends Controller
                 ->first();
 
             if ($bag !== null) {
-                SharedLogout::isle($bag, $an);
+                SharedLogout::isle($bag, $time);
             }
         }
 
-        return response()->json(['sonuc' => 'alındı']);
+        return response()->json(['result' => 'received']);
     }
 }

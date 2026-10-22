@@ -14,7 +14,7 @@ use Tests\TestCase;
  */
 class AuditKeyTest extends TestCase
 {
-    private const AD = 'DENETIM_ANAHTARI';
+    private const AD = 'AUDIT_KEY';
 
     /** @return array<string, mixed> */
     private function ayarlarIle(?string $deger): array

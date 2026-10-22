@@ -56,8 +56,8 @@ class ConsolePage
             'pcYeniAcik' => $form === 'pc-yeni',
             'pcYeniDeger' => $this->pcGirdisi(null, $form === 'pc-yeni'),
             'pcSonuc' => session('pcSonuc'),
-            'loaderKomutlari' => (array) config('konsol.loader_komutlari'),
-            'kurulumKomutu' => (string) config('konsol.kurulum_komutu'),
+            'loaderKomutlari' => (array) config('console.loader_commands'),
+            'kurulumKomutu' => (string) config('console.install_command'),
             'tftp' => rtrim((string) config('junos.tftp'), '/'),
         ];
     }

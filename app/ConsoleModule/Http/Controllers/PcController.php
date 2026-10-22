@@ -20,10 +20,10 @@ use Illuminate\Support\Facades\Auth;
 class PcController extends Controller
 {
     private const ISLEMLER = [
-        'sina' => 'Bağlantı sınandı',
-        'kur' => 'Ajan kuruldu/güncellendi',
-        'kaldir' => 'Ajan kaldırıldı',
-        'durum' => 'Durum okundu',
+        'test' => 'Bağlantı sınandı',
+        'install' => 'Ajan kuruldu/güncellendi',
+        'uninstall' => 'Ajan kaldırıldı',
+        'status' => 'Durum okundu',
     ];
 
     public function __construct(private ActivityRecorder $kayit) {}
@@ -33,7 +33,7 @@ class PcController extends Controller
         $pc = ConsolePc::create($request->payload());
         $this->kayit->kaydet('konsol_pc_ekle', "Konsol PC'si eklendi: {$pc->ad} ({$pc->platform}, {$pc->adres}:{$pc->port})", $pc);
 
-        return redirect()->route('konsol.index')->with('status', "{$pc->ad} eklendi. \"Sına\" ile bağlantıyı deneyin.");
+        return redirect()->route('console.index')->with('status', "{$pc->ad} eklendi. \"Sına\" ile bağlantıyı deneyin.");
     }
 
     public function update(PcRequest $request, ConsolePc $pc): RedirectResponse
@@ -49,17 +49,17 @@ class PcController extends Controller
         $this->kayit->kaydet('konsol_pc_duzenle', "Konsol PC'si güncellendi: {$pc->ad} ({$pc->adres}:{$pc->port})"
             .(isset($veri['parola']) ? ' · parola değişti' : ''), $pc);
 
-        return redirect()->route('konsol.index')->with('status', "{$pc->ad} güncellendi.");
+        return redirect()->route('console.index')->with('status', "{$pc->ad} güncellendi.");
     }
 
     public function destroy(ConsolePc $pc): RedirectResponse
     {
         if ($pc->isler()->acik()->exists()) {
-            return redirect()->route('konsol.index')->with('error', "{$pc->ad} üzerinde açık iş var; önce kapatın.");
+            return redirect()->route('console.index')->with('error', "{$pc->ad} üzerinde açık iş var; önce kapatın.");
         }
 
         if ($pc->ajanKuruluMu()) {
-            return redirect()->route('konsol.index')->with('error', "{$pc->ad} üzerinde ajan kurulu; önce \"Kaldır\" ile PC'den silin.");
+            return redirect()->route('console.index')->with('error', "{$pc->ad} üzerinde ajan kurulu; önce \"Kaldır\" ile PC'den silin.");
         }
 
         $pc->jeton?->revoke();
@@ -67,30 +67,30 @@ class PcController extends Controller
         $pc->delete();
         $this->kayit->kaydet('konsol_pc_sil', "Konsol PC'si silindi: {$ad}; ajan jetonu iptal edildi, işleri geçmişten silindi");
 
-        return redirect()->route('konsol.index')->with('status', "{$ad} silindi.");
+        return redirect()->route('console.index')->with('status', "{$ad} silindi.");
     }
 
-    public function islem(ConsolePc $pc, string $islem, SitePc $uzak): RedirectResponse
+    public function action(ConsolePc $pc, string $action, SitePc $uzak): RedirectResponse
     {
-        abort_unless(isset(self::ISLEMLER[$islem]), 404);
+        abort_unless(isset(self::ISLEMLER[$action]), 404);
 
         try {
-            $sonuc = match ($islem) {
-                'sina' => ['metin' => $uzak->sina($pc)],
-                'kur' => ['metin' => $uzak->kur($pc, Auth::user())],
-                'kaldir' => ['metin' => $uzak->kaldir($pc)],
-                'durum' => ['durum' => $uzak->durum($pc)],
+            $sonuc = match ($action) {
+                'test' => ['metin' => $uzak->sina($pc)],
+                'install' => ['metin' => $uzak->kur($pc, Auth::user())],
+                'uninstall' => ['metin' => $uzak->kaldir($pc)],
+                'status' => ['durum' => $uzak->durum($pc)],
             };
         } catch (RemoteError $e) {
-            $this->kayit->kaydet('konsol_pc_hata', "{$pc->ad}: ".self::ISLEMLER[$islem].' — başarısız: '.$e->getMessage(), $pc);
+            $this->kayit->kaydet('konsol_pc_hata', "{$pc->ad}: ".self::ISLEMLER[$action].' — başarısız: '.$e->getMessage(), $pc);
 
-            return redirect()->route('konsol.index')->with('pcSonuc', ['pc' => $pc->ad, 'hata' => true, 'metin' => $e->getMessage()]);
+            return redirect()->route('console.index')->with('pcSonuc', ['pc' => $pc->ad, 'hata' => true, 'metin' => $e->getMessage()]);
         }
 
-        if ($islem !== 'durum') {
-            $this->kayit->kaydet('konsol_pc_'.$islem, "{$pc->ad}: ".self::ISLEMLER[$islem], $pc);
+        if ($action !== 'status') {
+            $this->kayit->kaydet('konsol_pc_'.['test' => 'sina', 'install' => 'kur', 'uninstall' => 'kaldir'][$action], "{$pc->ad}: ".self::ISLEMLER[$action], $pc);
         }
 
-        return redirect()->route('konsol.index')->with('pcSonuc', ['pc' => $pc->ad, 'hata' => false] + $sonuc);
+        return redirect()->route('console.index')->with('pcSonuc', ['pc' => $pc->ad, 'hata' => false] + $sonuc);
     }
 }

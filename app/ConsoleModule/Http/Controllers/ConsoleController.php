@@ -28,91 +28,91 @@ class ConsoleController extends Controller
 
     public function index(ConsolePage $sayfa): View
     {
-        return view('konsol::index', $sayfa->liste());
+        return view('console::index', $sayfa->liste());
     }
 
-    public function show(ConsoleJob $is, ConsolePage $sayfa): View
+    public function show(ConsoleJob $job, ConsolePage $sayfa): View
     {
-        return view('konsol::is', $sayfa->is($is));
+        return view('console::is', $sayfa->is($job));
     }
 
     public function store(IsRequest $request): RedirectResponse
     {
         $pc = $request->pc();
-        $is = ConsoleJob::create($request->payload() + ['olusturan_id' => Auth::id()]);
-        $is->olaylar()->create(['asama' => 'basladi', 'mesaj' => 'İş açıldı.', 'kaynak' => Auth::user()?->name]);
+        $job = ConsoleJob::create($request->payload() + ['olusturan_id' => Auth::id()]);
+        $job->olaylar()->create(['asama' => 'basladi', 'mesaj' => 'İş açıldı.', 'kaynak' => Auth::user()?->name]);
 
-        $this->kayit->kaydet('konsol_is_ac', "Konsol işi açıldı: {$is->ad} · PC: {$pc->ad} · {$is->goruntu_etiket} · {$is->adresOzeti()} · {$is->yapilandirmaOzeti()}"
-            .($is->root_parola !== null ? ' · root parolası verildi' : ''), $is);
+        $this->kayit->kaydet('konsol_is_ac', "Konsol işi açıldı: {$job->ad} · PC: {$pc->ad} · {$job->goruntu_etiket} · {$job->adresOzeti()} · {$job->yapilandirmaOzeti()}"
+            .($job->root_parola !== null ? ' · root parolası verildi' : ''), $job);
 
-        return redirect()->route('konsol.show', $is)
+        return redirect()->route('console.show', $job)
             ->with('status', "İş açıldı; ajan en geç bir dakika içinde {$pc->ad} üzerine kurulur ve konsolu açar. İş bitince kaldırılır.");
     }
 
     /** Yeni iş formunda seçilen cihazın yedekleri (console-form.js). */
-    public function yedekler(Request $request, ConsolePage $sayfa): JsonResponse
+    public function backups(Request $request, ConsolePage $sayfa): JsonResponse
     {
-        return response()->json(['yedekler' => $sayfa->yedekSecenekleri($request->string('cihaz')->value())]);
+        return response()->json(['yedekler' => $sayfa->yedekSecenekleri($request->string('device')->value())]);
     }
 
     /** Canlı ekranın yoklaması: verilen parçadan sonraki çıktı ve işin durumu. */
-    public function akis(Request $request, ConsoleJob $is, ConsolePage $sayfa): JsonResponse
+    public function stream(Request $request, ConsoleJob $job, ConsolePage $sayfa): JsonResponse
     {
-        return response()->json($sayfa->akis($is, max(0, (int) $request->query('sonra', '0'))));
+        return response()->json($sayfa->akis($job, max(0, (int) $request->query('after', '0'))));
     }
 
     /** Konsol çıktısının tamamı, düz metin. */
-    public function kayit(ConsoleJob $is): StreamedResponse
+    public function log(ConsoleJob $job): StreamedResponse
     {
-        $ad = 'konsol-'.preg_replace('/[^A-Za-z0-9._-]+/', '-', $is->ad).'-'.$is->created_at?->format('Ymd-His').'.txt';
+        $ad = 'konsol-'.preg_replace('/[^A-Za-z0-9._-]+/', '-', $job->ad).'-'.$job->created_at?->format('Ymd-His').'.txt';
 
-        return response()->streamDownload(function () use ($is): void {
-            $is->ciktilar()->orderBy('id')->select(['id', 'metin'])->lazyById(200)->each(function ($parca): void {
+        return response()->streamDownload(function () use ($job): void {
+            $job->ciktilar()->orderBy('id')->select(['id', 'metin'])->lazyById(200)->each(function ($parca): void {
                 echo $parca->metin;
             });
         }, $ad, ['Content-Type' => 'text/plain; charset=utf-8']);
     }
 
-    public function girdi(InputRequest $request, ConsoleJob $is): JsonResponse
+    public function input(InputRequest $request, ConsoleJob $job): JsonResponse
     {
-        if (! $is->acikMi()) {
+        if (! $job->acikMi()) {
             return response()->json(['message' => 'İş kapalı.'], 409);
         }
 
         $metin = $request->metin();
-        $is->girdiler()->create(['metin' => $metin, 'kullanici_id' => Auth::id()]);
+        $job->girdiler()->create(['metin' => $metin, 'kullanici_id' => Auth::id()]);
 
         /* Tuşlar kaydı şişirmesin: yalnız yazılan satırlar denetime girer. */
         if (! $request->filled('tus')) {
-            $this->kayit->kaydet('konsol_girdi', "Konsola elle yazıldı ({$is->ad}): ".mb_substr(rtrim($metin, "\r"), 0, 200), $is);
+            $this->kayit->kaydet('konsol_girdi', "Konsola elle yazıldı ({$job->ad}): ".mb_substr(rtrim($metin, "\r"), 0, 200), $job);
         }
 
         return response()->json(['ok' => true]);
     }
 
-    public function kapat(ConsoleJob $is): RedirectResponse
+    public function close(ConsoleJob $job): RedirectResponse
     {
-        if (! $is->acikMi()) {
-            return redirect()->route('konsol.show', $is)->with('error', 'İş zaten kapalı.');
+        if (! $job->acikMi()) {
+            return redirect()->route('console.show', $job)->with('error', 'İş zaten kapalı.');
         }
 
-        $is->kapat('iptal', 'Panelden kapatıldı.');
-        $is->olaylar()->create(['asama' => 'hata', 'mesaj' => 'Panelden kapatıldı; ajan durur.', 'kaynak' => Auth::user()?->name]);
-        $this->kayit->kaydet('konsol_is_kapat', "Konsol işi kapatıldı: {$is->ad}", $is);
+        $job->kapat('iptal', 'Panelden kapatıldı.');
+        $job->olaylar()->create(['asama' => 'hata', 'mesaj' => 'Panelden kapatıldı; ajan durur.', 'kaynak' => Auth::user()?->name]);
+        $this->kayit->kaydet('konsol_is_kapat', "Konsol işi kapatıldı: {$job->ad}", $job);
 
-        return redirect()->route('konsol.show', $is)->with('status', 'İş kapatıldı. Ajan en geç birkaç saniyede durur; cihazda o ana kadar yapılanlar geri alınmaz.');
+        return redirect()->route('console.show', $job)->with('status', 'İş kapatıldı. Ajan en geç birkaç saniyede durur; cihazda o ana kadar yapılanlar geri alınmaz.');
     }
 
-    public function destroy(ConsoleJob $is): RedirectResponse
+    public function destroy(ConsoleJob $job): RedirectResponse
     {
-        if ($is->acikMi()) {
-            return redirect()->route('konsol.show', $is)->with('error', 'Açık iş silinemez; önce kapatın.');
+        if ($job->acikMi()) {
+            return redirect()->route('console.show', $job)->with('error', 'Açık iş silinemez; önce kapatın.');
         }
 
-        $ad = "{$is->ad} ({$is->durumEtiketi()})";
-        $is->delete();
+        $ad = "{$job->ad} ({$job->durumEtiketi()})";
+        $job->delete();
         $this->kayit->kaydet('konsol_is_sil', "Konsol işi silindi: {$ad}");
 
-        return redirect()->route('konsol.index')->with('status', "{$ad} geçmişten silindi.");
+        return redirect()->route('console.index')->with('status', "{$ad} geçmişten silindi.");
     }
 }

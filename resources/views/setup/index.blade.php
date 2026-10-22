@@ -6,12 +6,12 @@
         Görüntüler {{ $tftp }} üzerinden çekilir. Komutu switch'in komut satırında (operational mode) çalıştırın;
         <code>--format</code> cihazı sıfırlar, yapılandırma silinir.
         @if ($konsolGorur)
-          Konsol kablosundan kendiliğinden kurmak için <a href="{{ route('konsol.index') }}">Konsol</a>.
+          Konsol kablosundan kendiliğinden kurmak için <a href="{{ route('console.index') }}">Konsol</a>.
         @endif
       </x-slot:subtitle>
       @if ($yetki['ekle'])
         <x-slot:actions>
-          <button type="button" class="btn btn--primary btn--sm" data-modal-open="goruntu-ekle"><x-icon name="plus" />Yeni görüntü</button>
+          <button type="button" class="btn btn--primary btn--sm" data-modal-open="image-add"><x-icon name="plus" />Yeni görüntü</button>
         </x-slot:actions>
       @endif
     </x-ui.page-head>
@@ -39,17 +39,17 @@
                 <div class="row">
                   <input id="{{ $satir['kimlik'] }}" class="input input--mono" type="text" readonly
                          value="{{ $satir['komut'] }}" aria-label="{{ $satir['goruntu']->model }} kurulum komutu">
-                  <button type="button" class="btn btn--sm" data-kopyala="#{{ $satir['kimlik'] }}"><x-icon name="copy" />Kopyala</button>
+                  <button type="button" class="btn btn--sm" data-copy="#{{ $satir['kimlik'] }}"><x-icon name="copy" />Kopyala</button>
                 </div>
               </td>
               @if ($eylemVar)
                 <td>
                   <div class="table__row-actions">
                     @if ($yetki['duzenle'])
-                      <button type="button" class="btn btn--sm" data-modal-open="goruntu-duzenle-{{ $satir['goruntu']->id }}"><x-icon name="edit" />Düzenle</button>
+                      <button type="button" class="btn btn--sm" data-modal-open="image-edit-{{ $satir['goruntu']->id }}"><x-icon name="edit" />Düzenle</button>
                     @endif
                     @if ($yetki['sil'])
-                      <x-ui.delete-form :action="route('kurulum.goruntu.destroy', $satir['goruntu'])"
+                      <x-ui.delete-form :action="route('setup.image.destroy', $satir['goruntu'])"
                                         confirm="{{ $satir['goruntu']->model }} ({{ $satir['goruntu']->dosya }}) listeden kaldırılacak. TFTP sunucusundaki dosyaya dokunulmaz."
                                         title="Görüntüyü sil"
                                         verify="{{ $satir['goruntu']->model }}"
@@ -74,8 +74,8 @@
       Dosya adı yalnız TFTP sunucusundaki adı söyler; panel dosya yüklemez.
     --}}
     @if ($yetki['ekle'])
-      <x-ui.modal id="goruntu-ekle" title="Yeni Junos görüntüsü" :open="$ekleAcik">
-        <form method="POST" action="{{ route('kurulum.goruntu.store') }}">
+      <x-ui.modal id="image-add" title="Yeni Junos görüntüsü" :open="$ekleAcik">
+        <form method="POST" action="{{ route('setup.image.store') }}">
           @csrf
           <input type="hidden" name="_form" value="ekle">
           <div class="modal__body stack">
@@ -88,8 +88,8 @@
 
     @if ($yetki['duzenle'])
       @foreach ($satirlar as $satir)
-        <x-ui.modal id="goruntu-duzenle-{{ $satir['goruntu']->id }}" :title="$satir['goruntu']->model.' — düzenle'" :open="$satir['acik']">
-          <form method="POST" action="{{ route('kurulum.goruntu.update', $satir['goruntu']) }}">
+        <x-ui.modal id="image-edit-{{ $satir['goruntu']->id }}" :title="$satir['goruntu']->model.' — düzenle'" :open="$satir['acik']">
+          <form method="POST" action="{{ route('setup.image.update', $satir['goruntu']) }}">
             @csrf
             @method('PUT')
             <input type="hidden" name="_form" value="duzenle-{{ $satir['goruntu']->id }}">

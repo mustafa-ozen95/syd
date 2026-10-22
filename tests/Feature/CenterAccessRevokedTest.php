@@ -28,10 +28,10 @@ class CenterAccessRevokedTest extends TestCase
 
         config([
             'identity.acik' => true,
-            'identity.yapilandirildi' => true,
-            'identity.adres' => 'https://merkez.test',
-            'identity.istemci' => 'istemci',
-            'identity.sir' => 'sir',
+            'identity.configured' => true,
+            'identity.url' => 'https://merkez.test',
+            'identity.client_id' => 'istemci',
+            'identity.client_secret' => 'sir',
         ]);
 
         Cache::flush();
@@ -55,11 +55,11 @@ class CenterAccessRevokedTest extends TestCase
     {
         $kullanici = $this->merkeziBagliKullanici();
 
-        Http::fake(['merkez.test/api/kimlik-durumu' => Http::response([
-            'kimlikler' => ['kimlik-1' => ['durum' => 'askida', 'girebilir' => false]],
+        Http::fake(['merkez.test/api/identity-status' => Http::response([
+            'identities' => ['kimlik-1' => ['status' => 'askida', 'can_enter' => false]],
         ])]);
 
-        $this->actingAs($kullanici)->get(route('yedek.index'))->assertRedirect(route('login'));
+        $this->actingAs($kullanici)->get(route('backup.index'))->assertRedirect(route('login'));
 
         $this->assertFalse($kullanici->fresh()->aktif);
         $this->assertGuest();
@@ -70,9 +70,9 @@ class CenterAccessRevokedTest extends TestCase
         $kullanici = $this->merkeziBagliKullanici();
 
         /* Merkez düştüğü gün buraya girilebilmeli: "sorulamadı" ≠ "erişimi yok". */
-        Http::fake(['merkez.test/api/kimlik-durumu' => Http::response('', 500)]);
+        Http::fake(['merkez.test/api/identity-status' => Http::response('', 500)]);
 
-        $this->actingAs($kullanici)->get(route('yedek.index'))->assertOk();
+        $this->actingAs($kullanici)->get(route('backup.index'))->assertOk();
 
         $this->assertTrue($kullanici->fresh()->aktif);
     }
@@ -82,9 +82,9 @@ class CenterAccessRevokedTest extends TestCase
         $kullanici = $this->merkeziBagliKullanici();
 
         /* Merkez o kimliği hiç anmadıysa elimizde bilgi yok demektir. */
-        Http::fake(['merkez.test/api/kimlik-durumu' => Http::response(['kimlikler' => []])]);
+        Http::fake(['merkez.test/api/identity-status' => Http::response(['identities' => []])]);
 
-        $this->actingAs($kullanici)->get(route('yedek.index'))->assertOk();
+        $this->actingAs($kullanici)->get(route('backup.index'))->assertOk();
 
         $this->assertTrue($kullanici->fresh()->aktif);
     }
@@ -94,12 +94,12 @@ class CenterAccessRevokedTest extends TestCase
         $kullanici = $this->merkeziBagliKullanici();
         $kullanici->forceFill(['aktif' => false])->save();
 
-        Http::fake(['merkez.test/api/kimlik-durumu' => Http::response([
+        Http::fake(['merkez.test/api/identity-status' => Http::response([
             /* Rol de gerekiyor: merkez "girebilir" dese bile rolü izinli olmalı. */
-            'kimlikler' => ['kimlik-1' => ['durum' => 'etkin', 'girebilir' => true, 'rol' => 'muhasebe']],
+            'identities' => ['kimlik-1' => ['status' => 'etkin', 'can_enter' => true, 'role' => 'muhasebe']],
         ])]);
 
-        $this->artisan('kimlik:esitle')->assertSuccessful();
+        $this->artisan('identity:sync')->assertSuccessful();
 
         $this->assertTrue($kullanici->fresh()->aktif);
     }
@@ -110,7 +110,7 @@ class CenterAccessRevokedTest extends TestCase
 
         Http::fake();
 
-        $this->actingAs($kullanici)->get(route('yedek.index'))->assertOk();
+        $this->actingAs($kullanici)->get(route('backup.index'))->assertOk();
 
         /*
          * "Hiç istek gitmesin" DENMEZ: sayfanın başka istekleri buranın

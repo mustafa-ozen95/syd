@@ -15,8 +15,8 @@ class ConsolePc extends Model
     protected $table = 'konsol_pcleri';
 
     public const PLATFORMLAR = [
-        'windows' => ['etiket' => 'Windows (WinRM)', 'port' => 5985, 'dizin' => 'C:\\Konsol-Ajan'],
-        'linux' => ['etiket' => 'Linux (SSH)', 'port' => 22, 'dizin' => '/opt/konsol-ajan'],
+        'windows' => ['etiket' => 'Windows (WinRM)', 'port' => 5985, 'dizin' => 'C:\\Console-Agent'],
+        'linux' => ['etiket' => 'Linux (SSH)', 'port' => 22, 'dizin' => '/opt/console-agent'],
     ];
 
     protected $fillable = [

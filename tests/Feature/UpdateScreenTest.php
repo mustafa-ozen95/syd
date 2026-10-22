@@ -37,9 +37,9 @@ class UpdateScreenTest extends TestCase
         $this->dizin = sys_get_temp_dir().'/guncelleme-'.bin2hex(random_bytes(4));
         $this->instance(UpdateCheck::class, new UpdateCheck($this->dizin));
         config([
-            'update.depo' => 'mustafa-ozen95/ornek',
-            'update.jeton' => self::JETON,
-            'update.surum' => self::CALISAN,
+            'update.repo' => 'mustafa-ozen95/ornek',
+            'update.token' => self::JETON,
+            'update.version' => self::CALISAN,
         ]);
 
         Http::fake([
@@ -61,16 +61,16 @@ class UpdateScreenTest extends TestCase
     public function test_ekran_yalnizca_yoneticide_acilir(): void
     {
         $this->actingAs(User::factory()->rol('muhasebe')->create())
-            ->get(route('admin.guncelleme.index'))
-            ->assertRedirect(route('yetkisiz'));
+            ->get(route('admin.update.index'))
+            ->assertRedirect(route('forbidden'));
 
         $this->actingAs(User::factory()->rol('muhasebe')->create())
-            ->post(route('admin.guncelleme.denetle'))
-            ->assertRedirect(route('yetkisiz'));
+            ->post(route('admin.update.check'))
+            ->assertRedirect(route('forbidden'));
         Http::assertNothingSent();
 
         $this->actingAs(User::factory()->admin()->create())
-            ->get(route('admin.guncelleme.index'))
+            ->get(route('admin.update.index'))
             ->assertOk()
             ->assertSee('aaaaaaa')
             ->assertSee('henüz yapılmadı')
@@ -82,13 +82,13 @@ class UpdateScreenTest extends TestCase
         $yonetici = User::factory()->admin()->create();
 
         $this->actingAs($yonetici)
-            ->from(route('admin.guncelleme.index'))
-            ->post(route('admin.guncelleme.denetle'))
-            ->assertRedirect(route('admin.guncelleme.index'))
+            ->from(route('admin.update.index'))
+            ->post(route('admin.update.check'))
+            ->assertRedirect(route('admin.update.index'))
             ->assertSessionHas('status');
 
         $this->actingAs($yonetici)
-            ->get(route('admin.guncelleme.index'))
+            ->get(route('admin.update.index'))
             ->assertOk()
             ->assertSee('yeni sürüm var')
             ->assertSee('Yeni özellik: güncelleme sekmesi')
@@ -103,20 +103,20 @@ class UpdateScreenTest extends TestCase
         app(UpdateCheck::class)->denetle('günlük tur');
 
         $this->actingAs(User::factory()->admin()->create())
-            ->get(route('profil.show'))
+            ->get(route('profile.show'))
             ->assertOk()
             ->assertSee('Panelin yeni sürümü var.')
             ->assertSee('3 commit geride');
 
         $this->actingAs(User::factory()->rol('muhasebe')->create())
-            ->get(route('profil.show'))
+            ->get(route('profile.show'))
             ->assertOk()
             ->assertDontSee('Panelin yeni sürümü var.');
 
-        config(['update.surum' => self::SON]);
+        config(['update.version' => self::SON]);
 
         $this->actingAs(User::factory()->admin()->create())
-            ->get(route('profil.show'))
+            ->get(route('profile.show'))
             ->assertOk()
             ->assertDontSee('Panelin yeni sürümü var.');
     }
@@ -128,12 +128,12 @@ class UpdateScreenTest extends TestCase
         $yonetici = User::factory()->admin()->create();
 
         $this->actingAs($yonetici)
-            ->from(route('admin.guncelleme.index'))
-            ->post(route('admin.guncelleme.denetle'))
+            ->from(route('admin.update.index'))
+            ->post(route('admin.update.check'))
             ->assertSessionHas('error');
 
         $this->actingAs($yonetici)
-            ->get(route('admin.guncelleme.index'))
+            ->get(route('admin.update.index'))
             ->assertSee('kontrol edilemedi')
             ->assertSee('erişilemedi');
     }

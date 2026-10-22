@@ -7,7 +7,7 @@
 
             <x-ui.errors />
 
-            <form method="POST" action="{{ $rol ? route('admin.roller.update', $rol) : route('admin.roller.store') }}"
+            <form method="POST" action="{{ $rol ? route('admin.roles.update', $rol) : route('admin.roles.store') }}"
                   data-confirm="{{ $rol ? $rol->label.' rolünün yetkileri değişecek; roldeki herkes için hemen geçerli.' : 'Yeni rol açılacak.' }}"
                   data-confirm-title="Rolü kaydet"
                   data-confirm-reasonless>
@@ -81,7 +81,7 @@
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn--primary">{{ $rol ? 'Güncelle' : 'Ekle' }}</button>
-                    <a href="{{ route('admin.roller.index') }}" class="btn btn--secondary">Vazgeç</a>
+                    <a href="{{ route('admin.roles.index') }}" class="btn btn--secondary">Vazgeç</a>
                 </div>
             </form>
         </div>

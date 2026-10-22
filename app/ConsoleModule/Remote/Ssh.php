@@ -20,7 +20,7 @@ class Ssh
      */
     public function bash(array $hedef, string $betik, array $sirlar = [], ?int $sure = null): array
     {
-        $ayar = (array) config('konsol.ssh');
+        $ayar = (array) config('console.ssh');
         $sure ??= (int) $ayar['timeout'];
 
         $sonuc = Process::timeout($sure + 10)

@@ -16,12 +16,12 @@ declare(strict_types=1);
 
 return [
 
-    'kok' => env('YEDEK_KOK', '/yedekler'),
+    'root' => env('BACKUP_ROOT', '/yedekler'),
 
     /*
     | Bir cihazın klasöründe binlerce yedek olabiliyor; hepsini tek sayfada
     | çizmek tarayıcıyı kilitliyordu.
     */
-    'sayfa_boyu' => (int) env('YEDEK_SAYFA_BOYU', 50),
+    'page_size' => (int) env('BACKUP_PAGE_SIZE', 50),
 
 ];

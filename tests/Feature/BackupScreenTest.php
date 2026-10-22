@@ -38,7 +38,7 @@ class BackupScreenTest extends TestCase
         file_put_contents($this->kok.'/SW-A/sw-a.ornek.test_juniper.conf.gz_20260115_090000', 'yeni');
         file_put_contents($this->kok.'/SW-B/damgasiz.conf', 'damgasız');
 
-        config(['backup.kok' => $this->kok]);
+        config(['backup.root' => $this->kok]);
         $this->app->forgetInstance(BackupStore::class);
     }
 
@@ -66,7 +66,7 @@ class BackupScreenTest extends TestCase
     public function test_cihaz_klasorleri_listelenir(): void
     {
         $this->actingAs($this->kullanici())
-            ->get(route('yedek.index'))
+            ->get(route('backup.index'))
             ->assertOk()
             ->assertSee('SW-A')
             ->assertSee('SW-B');
@@ -81,7 +81,7 @@ class BackupScreenTest extends TestCase
     public function test_tarih_dosya_adindan_okunur(): void
     {
         $this->actingAs($this->kullanici())
-            ->get(route('yedek.klasor', 'SW-A'))
+            ->get(route('backup.folder', 'SW-A'))
             ->assertOk()
             ->assertSee('06.10.2018')
             ->assertSee('15.01.2026');
@@ -91,7 +91,7 @@ class BackupScreenTest extends TestCase
     public function test_en_yeni_yedek_ustte(): void
     {
         $govde = $this->actingAs($this->kullanici())
-            ->get(route('yedek.klasor', 'SW-A'))
+            ->get(route('backup.folder', 'SW-A'))
             ->assertOk()
             ->getContent();
 
@@ -111,7 +111,7 @@ class BackupScreenTest extends TestCase
     public function test_tur_rozeti_damgadan_etkilenmez(): void
     {
         $this->actingAs($this->kullanici())
-            ->get(route('yedek.klasor', 'SW-A'))
+            ->get(route('backup.folder', 'SW-A'))
             ->assertOk()
             ->assertSee('>GZ<', false)
             ->assertDontSee('GZ_2');
@@ -121,7 +121,7 @@ class BackupScreenTest extends TestCase
     public function test_damgasiz_dosya_isaretlenir(): void
     {
         $this->actingAs($this->kullanici())
-            ->get(route('yedek.klasor', 'SW-B'))
+            ->get(route('backup.folder', 'SW-B'))
             ->assertOk()
             ->assertSee('damgasiz.conf')
             ->assertSee('ad damgasız');
@@ -130,7 +130,7 @@ class BackupScreenTest extends TestCase
     public function test_dosya_indirilebilir(): void
     {
         $this->actingAs($this->kullanici())
-            ->get(route('yedek.indir', 'SW-B/damgasiz.conf'))
+            ->get(route('backup.download', 'SW-B/damgasiz.conf'))
             ->assertOk()
             ->assertHeader('content-type', 'application/octet-stream');
     }
@@ -143,7 +143,7 @@ class BackupScreenTest extends TestCase
      */
     public function test_indirme_kayda_gecer(): void
     {
-        $this->actingAs($this->kullanici())->get(route('yedek.indir', 'SW-B/damgasiz.conf'));
+        $this->actingAs($this->kullanici())->get(route('backup.download', 'SW-B/damgasiz.conf'));
 
         $this->assertTrue(
             ActivityLog::query()->where('tur', 'yedek_indirildi')->exists(),
@@ -163,7 +163,7 @@ class BackupScreenTest extends TestCase
 
         foreach (['../../etc/passwd', 'SW-A/../../../etc/passwd', '/etc/passwd'] as $kotu) {
             $this->actingAs($kullanici)
-                ->get(route('yedek.indir', $kotu))
+                ->get(route('backup.download', $kotu))
                 ->assertNotFound();
         }
     }
@@ -174,20 +174,20 @@ class BackupScreenTest extends TestCase
         file_put_contents($this->kok.'/SW-B/.gizli', 'sır');
 
         $this->actingAs($this->kullanici())
-            ->get(route('yedek.klasor', 'SW-B'))
+            ->get(route('backup.folder', 'SW-B'))
             ->assertOk()
             ->assertDontSee('.gizli');
 
         $this->actingAs($this->kullanici())
-            ->get(route('yedek.indir', 'SW-B/.gizli'))
+            ->get(route('backup.download', 'SW-B/.gizli'))
             ->assertNotFound();
     }
 
     /** Oturumsuz kimse yedek göremez. */
     public function test_oturumsuz_erisemez(): void
     {
-        $this->get(route('yedek.index'))->assertRedirect(route('login'));
-        $this->get(route('yedek.indir', 'SW-B/damgasiz.conf'))->assertRedirect(route('login'));
+        $this->get(route('backup.index'))->assertRedirect(route('login'));
+        $this->get(route('backup.download', 'SW-B/damgasiz.conf'))->assertRedirect(route('login'));
     }
 
     /**

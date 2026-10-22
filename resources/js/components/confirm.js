@@ -1,5 +1,5 @@
 import { $, on } from '../lib/dom.js';
-import { formuGonder } from './navigation.js';
+import { submitForm } from './navigation.js';
 
 /**
  * Tehlikeli işlemler için onay penceresi.
@@ -49,11 +49,11 @@ function open(trigger) {
      * varmış gibi kullanırsa `null.hidden` hatası atar, olay engellenmeden
      * kalır ve form ONAYSIZ gider. Alan yoksa gerekçe istenmez.
      */
-    const gerekcesiz = reasonless || !reasonField || !reason;
+    const skipReason = reasonless || !reasonField || !reason;
 
     verifyField.hidden = verify === '';
     if (reasonField) {
-        reasonField.hidden = gerekcesiz;
+        reasonField.hidden = skipReason;
     }
     box.querySelector('[data-confirm-expected]').textContent = verify;
     input.value = '';
@@ -63,21 +63,21 @@ function open(trigger) {
 
     accept.className = `btn btn--${trigger.dataset.confirmVariant === 'danger' ? 'danger' : 'primary'}`;
 
-    const tazele = () => {
-        const dogrulandi = verify === '' || input.value.trim() === verify;
-        const gerekceli = gerekcesiz || reason.value.trim().length >= 3;
+    const refresh = () => {
+        const verified = verify === '' || input.value.trim() === verify;
+        const hasReason = skipReason || reason.value.trim().length >= 3;
 
-        accept.disabled = !dogrulandi || !gerekceli;
+        accept.disabled = !verified || !hasReason;
     };
 
-    input.oninput = tazele;
+    input.oninput = refresh;
     if (reason) {
-        reason.oninput = tazele;
+        reason.oninput = refresh;
     }
-    tazele();
+    refresh();
 
     box.hidden = false;
-    (gerekcesiz ? (verify === '' ? accept : input) : reason).focus();
+    (skipReason ? (verify === '' ? accept : input) : reason).focus();
 
     return true;
 }
@@ -94,7 +94,7 @@ function close() {
 
 function proceed() {
     const trigger = pending;
-    const gerekce = dialog()?.querySelector('[data-confirm-reason]')?.value?.trim() ?? '';
+    const reason = dialog()?.querySelector('[data-confirm-reason]')?.value?.trim() ?? '';
 
     close();
 
@@ -107,13 +107,13 @@ function proceed() {
 
     if (trigger.tagName === 'FORM') {
         // Gerekçe forma taşınır; sunucu onu arar.
-        if (gerekce !== '') {
-            const alan = document.createElement('input');
+        if (reason !== '') {
+            const field = document.createElement('input');
 
-            alan.type = 'hidden';
-            alan.name = 'reason';
-            alan.value = gerekce;
-            trigger.appendChild(alan);
+            field.type = 'hidden';
+            field.name = 'reason';
+            field.value = reason;
+            trigger.appendChild(field);
         }
 
         /*
@@ -123,7 +123,7 @@ function proceed() {
          * varsayılan düğmesi seçim boşken kapalı durur ve gönderim sessizce
          * düşer. Bu yüzden kendi olayımız.
          */
-        trigger.dispatchEvent(new CustomEvent('sys:onaylandi', { bubbles: true }));
+        trigger.dispatchEvent(new CustomEvent('sys:confirmed', { bubbles: true }));
 
         /*
          * Uzun süren işi başlatan form YERİNDE gönderilir: tam sayfa
@@ -131,8 +131,8 @@ function proceed() {
          * ancak yeni sayfa çizilince görebiliyordu — tam da ilerlemeyi
          * izlemek istediği anda.
          */
-        if (trigger.dataset.yerinde !== undefined) {
-            formuGonder(trigger);
+        if (trigger.dataset.inPlace !== undefined) {
+            submitForm(trigger);
 
             return;
         }
@@ -147,8 +147,8 @@ function proceed() {
      * bu öznitelikle taşır: forma gizli alan eklemek gibi bir imkân yok ama
      * gerekçe yine de sunucuya gitmeli.
      */
-    if (gerekce !== '') {
-        trigger.dataset.gerekce = gerekce;
+    if (reason !== '') {
+        trigger.dataset.reason = reason;
     }
 
     trigger.click();
@@ -158,16 +158,16 @@ function proceed() {
  * ONAY AÇILAMAZSA İŞLEM GİTMEZ. Pencere yoksa ya da açarken bir hata
  * çıkarsa tarayıcının kendi onay kutusu sorulur; işlem sorusuz gitmez.
  */
-function onaySor(event, trigger) {
-    let acildi = false;
+function askConfirm(event, trigger) {
+    let opened = false;
 
     try {
-        acildi = open(trigger);
-    } catch (hata) {
-        console.error(hata);
+        opened = open(trigger);
+    } catch (error) {
+        console.error(error);
     }
 
-    if (acildi) {
+    if (opened) {
         event.preventDefault();
 
         return;
@@ -183,14 +183,14 @@ function onaySor(event, trigger) {
 }
 
 export function init() {
-    on('submit', 'form[data-confirm]', onaySor);
+    on('submit', 'form[data-confirm]', askConfirm);
 
-    on('click', 'a[data-confirm], button[data-confirm]', onaySor);
+    on('click', 'a[data-confirm], button[data-confirm]', askConfirm);
 
     /* Onay istemeyen ama yerinde gönderilmesi gereken formlar. */
-    on('submit', 'form[data-yerinde]:not([data-confirm])', (event, form) => {
+    on('submit', 'form[data-in-place]:not([data-confirm])', (event, form) => {
         event.preventDefault();
-        formuGonder(form);
+        submitForm(form);
     });
 
     on('click', '[data-confirm-accept]', proceed);

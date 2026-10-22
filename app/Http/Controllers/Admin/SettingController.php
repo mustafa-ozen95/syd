@@ -41,7 +41,7 @@ class SettingController extends Controller implements HasMiddleware
 
     public function index(Request $request): View
     {
-        $grup = (string) $request->query('grup', '');
+        $grup = (string) $request->query('group', '');
         $grup = in_array($grup, $this->katalog->groupKeys(), true)
             ? $grup
             : $this->katalog->groupKeys()[0];
@@ -80,7 +80,7 @@ class SettingController extends Controller implements HasMiddleware
         }
 
         return redirect()
-            ->route('admin.ayarlar.index', ['grup' => $request->group()])
+            ->route('admin.settings.index', ['group' => $request->group()])
             ->with('status', $degisenler === [] ? 'Değişiklik yok.' : 'Ayarlar kaydedildi.');
     }
 

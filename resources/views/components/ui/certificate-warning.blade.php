@@ -7,10 +7,10 @@
         girmeyi anlatan bir cümle, düğmeye basmakla biten bir işi gereğinden
         zor gösterirdi.
     --}}
-    <div class="alert alert--warning alert--aralikli" role="alert">
+    <div class="alert alert--warning alert--spaced" role="alert">
         <strong>TLS sertifikasının süresi doluyor.</strong>
         {{ $durum['kalan_gun'] }} gün kaldı ({{ $durum['bitis'] }}).
-        <a href="{{ route('admin.sertifika.index') }}">Ayarlar → Sertifika</a>
+        <a href="{{ route('admin.certificate.index') }}">Ayarlar → Sertifika</a>
         ekranından yeni tur başlatın: TXT kaydı orada görünür, DNS'e ekleyip
         onaylamanız yeter.
     </div>

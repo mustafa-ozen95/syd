@@ -9,13 +9,13 @@ use Illuminate\Support\Facades\Route;
  * genel API hız sınırına (throttle:api) girmez, yalnız kendi sınırına.
  */
 Route::middleware(['api', 'auth:api', 'throttle:600,1', 'can:konsol:ajan'])
-    ->prefix('api/v1/konsol')
-    ->name('api.v1.konsol.')
+    ->prefix('api/v1/console')
+    ->name('api.v1.console.')
     ->group(function (): void {
-        Route::get('isler', [AgentApiController::class, 'isler'])->name('isler');
-        Route::get('isler/{is}/yapilandirma', [AgentApiController::class, 'yapilandirma'])->name('yapilandirma');
-        Route::post('isler/{is}/olay', [AgentApiController::class, 'olay'])->name('olay');
-        Route::post('isler/{is}/cikti', [AgentApiController::class, 'cikti'])->name('cikti');
-        Route::get('ajan/{platform}', [AgentApiController::class, 'indir'])
-            ->whereIn('platform', ['linux', 'windows'])->name('ajan');
+        Route::get('jobs', [AgentApiController::class, 'jobs'])->name('jobs');
+        Route::get('jobs/{job}/configuration', [AgentApiController::class, 'configuration'])->name('configuration');
+        Route::post('jobs/{job}/event', [AgentApiController::class, 'event'])->name('event');
+        Route::post('jobs/{job}/output', [AgentApiController::class, 'output'])->name('output');
+        Route::get('agent/{platform}', [AgentApiController::class, 'download'])
+            ->whereIn('platform', ['linux', 'windows'])->name('agent');
     });

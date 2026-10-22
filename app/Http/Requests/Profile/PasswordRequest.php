@@ -25,7 +25,7 @@ class PasswordRequest extends FormRequest
     {
         return [
             'mevcut' => ['required', 'current_password'],
-            'yeni_sifre' => ['required', 'string', 'min:'.config('panel.parola_uzunluk'), 'confirmed'],
+            'yeni_sifre' => ['required', 'string', 'min:'.config('panel.password_length'), 'confirmed'],
         ];
     }
 }

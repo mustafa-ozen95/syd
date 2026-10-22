@@ -26,7 +26,7 @@ class UserUpdateRequest extends FormRequest
 
             'eposta' => [
                 'required', 'email', 'max:255',
-                Rule::unique('users', 'email')->ignore($this->route('kullanici')?->getKey()),
+                Rule::unique('users', 'email')->ignore($this->route('user')?->getKey()),
             ],
             'rol' => ['required', 'string', 'exists:roller,slug'],
             /*

@@ -17,7 +17,7 @@ class TftpProgress
     /** @return array{giden: int, boyut: int, yuzde: int, hiz: int, kalan: ?int, bitti: bool, hata: string}|null */
     public function icin(ConsoleJob $is): ?array
     {
-        $yol = (string) config('konsol.tftp_durum');
+        $yol = (string) config('console.tftp_state');
         $dosya = basename((string) parse_url((string) $is->goruntu_adres, PHP_URL_PATH));
 
         if ($dosya === '' || ! is_file($yol) || ! is_readable($yol)) {
@@ -28,10 +28,10 @@ class TftpProgress
         $bulunan = null;
 
         /* Bu işten sonra başlamış, aynı dosyanın en son aktarımı. */
-        foreach ((array) ($veri['aktarimlar'] ?? []) as $a) {
-            $basladi = strtotime((string) ($a['basladi'] ?? '')) ?: 0;
+        foreach ((array) ($veri['transfers'] ?? []) as $a) {
+            $basladi = strtotime((string) ($a['started'] ?? '')) ?: 0;
 
-            if (($a['dosya'] ?? null) === $dosya && $basladi >= ($is->created_at?->getTimestamp() ?? PHP_INT_MAX)) {
+            if (($a['file'] ?? null) === $dosya && $basladi >= ($is->created_at?->getTimestamp() ?? PHP_INT_MAX)) {
                 $bulunan = $a + ['_basladi' => $basladi];
             }
         }
@@ -40,9 +40,9 @@ class TftpProgress
             return null;
         }
 
-        $giden = (int) ($bulunan['giden'] ?? 0);
-        $boyut = (int) ($bulunan['boyut'] ?? 0);
-        $son = strtotime((string) ($bulunan['guncellendi'] ?? '')) ?: $bulunan['_basladi'];
+        $giden = (int) ($bulunan['sent'] ?? 0);
+        $boyut = (int) ($bulunan['size'] ?? 0);
+        $son = strtotime((string) ($bulunan['updated'] ?? '')) ?: $bulunan['_basladi'];
         $sure = max(1, $son - $bulunan['_basladi']);
         $hiz = intdiv($giden, $sure);
 
@@ -52,8 +52,8 @@ class TftpProgress
             'yuzde' => $boyut > 0 ? min(100, intdiv($giden * 100, $boyut)) : 0,
             'hiz' => $hiz,
             'kalan' => $hiz > 0 && $boyut > $giden ? intdiv($boyut - $giden, $hiz) : null,
-            'bitti' => (bool) ($bulunan['bitti'] ?? false),
-            'hata' => (string) ($bulunan['hata'] ?? ''),
+            'bitti' => (bool) ($bulunan['done'] ?? false),
+            'hata' => (string) ($bulunan['error'] ?? ''),
         ];
     }
 }

@@ -72,6 +72,6 @@
     </div>
     <div class="field">
         <label class="field__label" for="{{ $onek }}-dizin">Ajan dizini</label>
-        <input class="input input--mono" type="text" id="{{ $onek }}-dizin" name="dizin" value="{{ $deger['dizin'] }}" maxlength="120" placeholder="C:\Konsol-Ajan · /opt/konsol-ajan">
+        <input class="input input--mono" type="text" id="{{ $onek }}-dizin" name="dizin" value="{{ $deger['dizin'] }}" maxlength="120" placeholder="C:\Console-Agent · /opt/console-agent">
     </div>
 </div>

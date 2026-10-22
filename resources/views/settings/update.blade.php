@@ -52,7 +52,7 @@
                     @endif
                 </dl>
 
-                <form method="POST" action="{{ route('admin.guncelleme.denetle') }}" class="form-actions">
+                <form method="POST" action="{{ route('admin.update.check') }}" class="form-actions">
                     @csrf
                     <button type="submit" class="btn btn--primary">Şimdi kontrol et</button>
                 </form>

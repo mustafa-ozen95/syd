@@ -30,20 +30,20 @@ class AgentJob
 
         return [
             'uuid' => $is->uuid,
-            'seri_port' => (string) $pc->seri_port,
-            'cihaz_ip' => $ip,
+            'serial_port' => (string) $pc->seri_port,
+            'device_ip' => $ip,
             /* DHCP'de adres satırları yazılmaz; loader adresi kendisi alır. */
-            'loader_komutlari' => array_values(array_map(fn (string $s): string => strtr($s, $yerler), array_filter(
-                (array) config('konsol.loader_komutlari'),
+            'loader_commands' => array_values(array_map(fn (string $s): string => strtr($s, $yerler), array_filter(
+                (array) config('console.loader_commands'),
                 fn (string $s): bool => ! $dhcp || ! preg_match('/\{(ip|maske|gecit)\}/', $s),
             ))),
-            'kurulum_komutu' => strtr((string) config('konsol.kurulum_komutu'), $yerler),
-            'kurulum_dakika' => (int) config('konsol.kurulum_dakika'),
-            'beklenen_surum' => (string) $is->beklenen_surum,
-            'parola' => (string) $is->root_parola,
-            'yapilandirma' => $is->yapilandirma_turu !== 'yok',
-            'yukleme_komutu' => 'load override terminal',
-            'once_sil' => false,
+            'install_command' => strtr((string) config('console.install_command'), $yerler),
+            'install_minutes' => (int) config('console.install_minutes'),
+            'expected_version' => (string) $is->beklenen_surum,
+            'password' => (string) $is->root_parola,
+            'configuration' => $is->yapilandirma_turu !== 'yok',
+            'load_command' => 'load override terminal',
+            'delete_first' => false,
         ];
     }
 

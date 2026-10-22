@@ -22,7 +22,7 @@
  * Satırlar birbirine yapışmaz.
  *
  * .field kendi üst boşluğunu yalnızca başka bir .field'ın ardından alıyordu;
- * araya bir satır girdiğinde ipucu metni bir sonraki etiketin dibine
+ * araya bir satır girdiğinde hint metni bir sonraki etiketin dibine
  * oturuyordu.
  */
 .field-row + .field-row,

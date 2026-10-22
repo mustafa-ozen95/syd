@@ -27,32 +27,32 @@ class JunosImageController extends Controller
             $veri['sira'] = (int) JunosImage::query()->max('sira') + 10;
         }
 
-        $goruntu = JunosImage::create($veri);
+        $image = JunosImage::create($veri);
 
-        $this->kayit->kaydet('junos_ekle', "Junos görüntüsü eklendi: {$goruntu->model} {$goruntu->surum} · {$goruntu->dosya}", $goruntu);
+        $this->kayit->kaydet('junos_ekle', "Junos görüntüsü eklendi: {$image->model} {$image->surum} · {$image->dosya}", $image);
 
-        return redirect()->route('kurulum.index')->with('status', "{$goruntu->model} eklendi.");
+        return redirect()->route('setup.index')->with('status', "{$image->model} eklendi.");
     }
 
-    public function update(JunosImageRequest $request, JunosImage $goruntu): RedirectResponse
+    public function update(JunosImageRequest $request, JunosImage $image): RedirectResponse
     {
-        $eski = "{$goruntu->model} {$goruntu->surum} · {$goruntu->dosya}";
+        $eski = "{$image->model} {$image->surum} · {$image->dosya}";
 
-        $goruntu->update($request->payload());
+        $image->update($request->payload());
 
-        $this->kayit->kaydet('junos_duzenle', "Junos görüntüsü güncellendi: {$eski} → {$goruntu->model} {$goruntu->surum} · {$goruntu->dosya}", $goruntu);
+        $this->kayit->kaydet('junos_duzenle', "Junos görüntüsü güncellendi: {$eski} → {$image->model} {$image->surum} · {$image->dosya}", $image);
 
-        return redirect()->route('kurulum.index')->with('status', "{$goruntu->model} güncellendi.");
+        return redirect()->route('setup.index')->with('status', "{$image->model} güncellendi.");
     }
 
-    public function destroy(JunosImage $goruntu): RedirectResponse
+    public function destroy(JunosImage $image): RedirectResponse
     {
-        $ad = "{$goruntu->model} {$goruntu->surum} · {$goruntu->dosya}";
+        $ad = "{$image->model} {$image->surum} · {$image->dosya}";
 
-        $goruntu->delete();
+        $image->delete();
 
         $this->kayit->kaydet('junos_sil', "Junos görüntüsü silindi: {$ad}");
 
-        return redirect()->route('kurulum.index')->with('status', "{$goruntu->model} silindi.");
+        return redirect()->route('setup.index')->with('status', "{$image->model} silindi.");
     }
 }

@@ -22,14 +22,14 @@ class TopBar
         $kullanici = Auth::user();
 
         $bolumler = [
-            [Gate::allows('yedek:view'), 'yedek.index', 'Yedekler', ['yedek.*']],
-            [Gate::allows('junos:view'), 'kurulum.index', 'Kurulum', ['kurulum.*']],
-            [Gate::allows('konsol:view'), 'konsol.index', 'Konsol', ['konsol.*']],
-            [Gate::allows('admin'), 'admin.kullanicilar.index', 'Kullanıcılar', ['admin.kullanicilar.*']],
-            [Gate::allows('admin'), 'admin.kayitlar.denetim', 'Kayıtlar', ['admin.kayitlar.*']],
+            [Gate::allows('yedek:view'), 'backup.index', 'Yedekler', ['backup.*']],
+            [Gate::allows('junos:view'), 'setup.index', 'Kurulum', ['setup.*']],
+            [Gate::allows('konsol:view'), 'console.index', 'Konsol', ['console.*']],
+            [Gate::allows('admin'), 'admin.users.index', 'Kullanıcılar', ['admin.users.*']],
+            [Gate::allows('admin'), 'admin.logs.audit', 'Kayıtlar', ['admin.kayitlar.*']],
             /* Roller, API ve Sertifika Ayarlar'ın sekmeleri; şeritte ayrı girdileri yok. */
-            [Gate::allows('admin'), 'admin.ayarlar.index', 'Ayarlar',
-                ['admin.ayarlar.*', 'admin.sertifika.*', 'admin.roller.*', 'admin.api.*']],
+            [Gate::allows('admin'), 'admin.settings.index', 'Ayarlar',
+                ['admin.settings.*', 'admin.sertifika.*', 'admin.roles.*', 'admin.api.*']],
         ];
 
         $view->with([

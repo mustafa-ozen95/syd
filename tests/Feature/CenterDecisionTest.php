@@ -30,10 +30,10 @@ class CenterDecisionTest extends TestCase
 
         config([
             'identity.acik' => true,
-            'identity.yapilandirildi' => true,
-            'identity.adres' => 'https://merkez.test',
-            'identity.istemci' => 'istemci',
-            'identity.sir' => 'sir',
+            'identity.configured' => true,
+            'identity.url' => 'https://merkez.test',
+            'identity.client_id' => 'istemci',
+            'identity.client_secret' => 'sir',
         ]);
 
         Cache::flush();
@@ -42,7 +42,7 @@ class CenterDecisionTest extends TestCase
     private function donus(): TestResponse
     {
         return $this->withSession(['kimlik_durum' => 'durum', 'kimlik_dogrulayici' => 'dogrulayici'])
-            ->get('/giris/merkez/geri?state=durum&code=kod');
+            ->get('/login/center/callback?state=durum&code=kod');
     }
 
     public function test_merkez_yetkisiz_derse_kapi_kapanir(): void
@@ -51,9 +51,9 @@ class CenterDecisionTest extends TestCase
 
         Http::fake([
             'merkez.test/oauth/token' => Http::response(['access_token' => 'jeton']),
-            'merkez.test/oauth/kullanici' => Http::response([
-                'kod' => 'rol_yetkisiz',
-                'hata' => 'Bu uygulamaya erişim yetkiniz yok.',
+            'merkez.test/oauth/userinfo' => Http::response([
+                'code' => 'role_forbidden',
+                'error' => 'Bu uygulamaya erişim yetkiniz yok.',
             ], 403),
         ]);
 
@@ -68,17 +68,17 @@ class CenterDecisionTest extends TestCase
     {
         Http::fake([
             'merkez.test/oauth/token' => Http::response(['access_token' => 'jeton']),
-            'merkez.test/oauth/kullanici' => Http::response([
+            'merkez.test/oauth/userinfo' => Http::response([
                 'sub' => 'kimlik-1',
                 'name' => 'Muhasebeci',
                 'email' => 'muhasebe@ornek.test',
                 'email_verified' => true,
-                'rol' => 'muhasebe',
-                'hesap_acilabilir' => true,
+                'role' => 'muhasebe',
+                'can_create_account' => true,
             ]),
         ]);
 
-        $this->donus()->assertRedirect(route('yedek.index'));
+        $this->donus()->assertRedirect(route('backup.index'));
 
         $kullanici = User::where('email', 'muhasebe@ornek.test')->first();
 
@@ -95,13 +95,13 @@ class CenterDecisionTest extends TestCase
     {
         Http::fake([
             'merkez.test/oauth/token' => Http::response(['access_token' => 'jeton']),
-            'merkez.test/oauth/kullanici' => Http::response([
+            'merkez.test/oauth/userinfo' => Http::response([
                 'sub' => 'kimlik-1',
                 'name' => 'Kişi',
                 'email' => 'kisi@ornek.test',
                 'email_verified' => true,
-                'rol' => 'muhasebe',
-                'hesap_acilabilir' => false,
+                'role' => 'muhasebe',
+                'can_create_account' => false,
             ]),
         ]);
 
@@ -117,13 +117,13 @@ class CenterDecisionTest extends TestCase
            meslektaşının adresiyle kayıt olan birine burada hesap vermektir. */
         Http::fake([
             'merkez.test/oauth/token' => Http::response(['access_token' => 'jeton']),
-            'merkez.test/oauth/kullanici' => Http::response([
+            'merkez.test/oauth/userinfo' => Http::response([
                 'sub' => 'kimlik-1',
                 'name' => 'Kişi',
                 'email' => 'kisi@ornek.test',
                 'email_verified' => false,
-                'rol' => 'muhasebe',
-                'hesap_acilabilir' => true,
+                'role' => 'muhasebe',
+                'can_create_account' => true,
             ]),
         ]);
 

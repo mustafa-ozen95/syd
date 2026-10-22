@@ -7,29 +7,29 @@
 # --delete yok). Kaynak FTP'de silinen bir yedek burada kalır.
 #
 # Ortam:
-#   SWBCK_FTP_ADRES      sunucu, ör. 192.0.2.6
-#   SWBCK_FTP_KULLANICI  kullanıcı
-#   SWBCK_FTP_PAROLA     parola; komut satırına ve dosyaya yazılmaz
+#   SWBCK_FTP_HOST      sunucu, ör. 192.0.2.6
+#   SWBCK_FTP_USER  kullanıcı
+#   SWBCK_FTP_PASSWORD     parola; komut satırına ve dosyaya yazılmaz
 #                        (lftp --env-password, LFTP_PASSWORD'dan okur)
-#   SWBCK_HEDEF          yerel dizin (varsayılan /yedekler)
-#   SWBCK_ARALIK         turlar arası bekleme, saniye (varsayılan 300: önceki tur
+#   SWBCK_TARGET          yerel dizin (varsayılan /yedekler)
+#   SWBCK_INTERVAL         turlar arası bekleme, saniye (varsayılan 300: önceki tur
 #                        bittikten 5 dk sonra)
-#   SWBCK_KURU=1         indirmeden yalnız ne ineceğini listeler, tek tur koşar
+#   SWBCK_DRY_RUN=1         indirmeden yalnız ne ineceğini listeler, tek tur koşar
 set -u
 
-ADRES=${SWBCK_FTP_ADRES:?SWBCK_FTP_ADRES gerekli}
-KULLANICI=${SWBCK_FTP_KULLANICI:?SWBCK_FTP_KULLANICI gerekli}
-export LFTP_PASSWORD=${SWBCK_FTP_PAROLA:?SWBCK_FTP_PAROLA gerekli}
-HEDEF=${SWBCK_HEDEF:-/yedekler}
-ARALIK=${SWBCK_ARALIK:-300}
-KURU=${SWBCK_KURU:-}
+HOST=${SWBCK_FTP_HOST:?SWBCK_FTP_HOST gerekli}
+FTP_LOGIN=${SWBCK_FTP_USER:?SWBCK_FTP_USER gerekli}
+export LFTP_PASSWORD=${SWBCK_FTP_PASSWORD:?SWBCK_FTP_PASSWORD gerekli}
+TARGET_DIR=${SWBCK_TARGET:-/yedekler}
+INTERVAL=${SWBCK_INTERVAL:-300}
+DRY=${SWBCK_DRY_RUN:-}
 
-[ -d "$HEDEF" ] && [ -w "$HEDEF" ] || { echo "HATA: $HEDEF yazılabilir bir dizin değil" >&2; exit 1; }
+[ -d "$TARGET_DIR" ] && [ -w "$TARGET_DIR" ] || { echo "HATA: $TARGET_DIR yazılabilir bir dizin değil" >&2; exit 1; }
 
 # lftp ayarları: düz FTP, pasif kip, kopmalarda yeniden deneme.
-BETIK=$(mktemp)
-trap 'rm -f "$BETIK"' EXIT
-cat > "$BETIK" <<LFTP
+SCRIPT_FILE=$(mktemp)
+trap 'rm -f "$SCRIPT_FILE"' EXIT
+cat > "$SCRIPT_FILE" <<LFTP
 set ftp:ssl-allow no
 set ftp:passive-mode on
 set ftp:use-mlsd yes
@@ -39,17 +39,17 @@ set net:reconnect-interval-base 10
 set mirror:parallel-transfer-count 3
 set mirror:use-pget-n 1
 set xfer:clobber on
-open --env-password -u "$KULLANICI" "$ADRES"
-mirror --continue --only-newer --no-perms ${KURU:+--dry-run} ./ "$HEDEF/"
+open --env-password -u "$FTP_LOGIN" "$HOST"
+mirror --continue --only-newer --no-perms ${DRY:+--dry-run} ./ "$TARGET_DIR/"
 bye
 LFTP
 
 while true; do
-    basla=$(date +%s)
-    once=$(find "$HEDEF" -type f | wc -l)
-    if lftp -f "$BETIK"; then sonuc=tamamlandı; else sonuc="HATA: lftp çıkış kodu $?"; fi
-    sonra=$(find "$HEDEF" -type f | wc -l)
-    echo "$(date '+%F %T') $sonuc · $(( sonra - once )) yeni dosya · toplam $sonra · $(( $(date +%s) - basla )) sn"
-    [ -n "$KURU" ] && exit 0
-    sleep "$ARALIK"
+    started=$(date +%s)
+    before=$(find "$TARGET_DIR" -type f | wc -l)
+    if lftp -f "$SCRIPT_FILE"; then result=tamamlandı; else result="HATA: lftp çıkış kodu $?"; fi
+    after=$(find "$TARGET_DIR" -type f | wc -l)
+    echo "$(date '+%F %T') $result · $(( after - before )) yeni dosya · toplam $after · $(( $(date +%s) - started )) sn"
+    [ -n "$DRY" ] && exit 0
+    sleep "$INTERVAL"
 done

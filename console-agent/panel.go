@@ -15,137 +15,137 @@ import (
 )
 
 // Panelden gelen iş. Alan adları panelin API'siyle (konsol.isler) aynı.
-type Is struct {
+type Job struct {
 	UUID            string   `json:"uuid"`
-	SeriPort        string   `json:"seri_port"`
-	CihazIP         string   `json:"cihaz_ip"`
-	LoaderKomutlari []string `json:"loader_komutlari"`
-	KurulumKomutu   string   `json:"kurulum_komutu"`
-	KurulumDakika   int      `json:"kurulum_dakika"`
-	BeklenenSurum   string   `json:"beklenen_surum"`
-	Parola          string   `json:"parola"`
-	Yapilandirma    bool     `json:"yapilandirma"`
-	YuklemeKomutu   string   `json:"yukleme_komutu"`
-	OnceSil         bool     `json:"once_sil"`
+	SerialPort      string   `json:"serial_port"`
+	DeviceIP        string   `json:"device_ip"`
+	LoaderCommands  []string `json:"loader_commands"`
+	InstallCommand  string   `json:"install_command"`
+	InstallMinutes  int      `json:"install_minutes"`
+	ExpectedVersion string   `json:"expected_version"`
+	Password        string   `json:"password"`
+	Configuration   bool     `json:"configuration"`
+	LoadCommand     string   `json:"load_command"`
+	DeleteFirst     bool     `json:"delete_first"`
 }
 
 // Panelin "iş artık yok" yanıtı: iptal edildi ya da silindi.
-var errCakisma = errors.New("iş artık bu ajanın değil")
+var errConflict = errors.New("iş artık bu ajanın değil")
 
 type Panel struct {
-	adres string
-	jeton string
-	hc    *http.Client
+	address string
+	token   string
+	hc      *http.Client
 }
 
-func yeniPanel(adres, jeton, caDosyasi string) (*Panel, error) {
+func newPanel(address, token, caFile string) (*Panel, error) {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
-	if caDosyasi != "" {
-		pem, err := os.ReadFile(caDosyasi)
+	if caFile != "" {
+		pem, err := os.ReadFile(caFile)
 		if err != nil {
 			return nil, err
 		}
 		// Sistemin kökleri KORUNUR, dosyadaki sertifika EKLENİR: panel
 		// kendinden imzalıyken de, sonra gerçek sertifikaya geçince de çalışır.
-		havuz, err := x509.SystemCertPool()
-		if err != nil || havuz == nil {
-			havuz = x509.NewCertPool()
+		pool, err := x509.SystemCertPool()
+		if err != nil || pool == nil {
+			pool = x509.NewCertPool()
 		}
-		if !havuz.AppendCertsFromPEM(pem) {
-			return nil, fmt.Errorf("%s içinde sertifika yok", caDosyasi)
+		if !pool.AppendCertsFromPEM(pem) {
+			return nil, fmt.Errorf("%s içinde sertifika yok", caFile)
 		}
-		tr.TLSClientConfig = &tls.Config{RootCAs: havuz, MinVersion: tls.VersionTLS12}
+		tr.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
 	}
-	return &Panel{adres: adres, jeton: jeton, hc: &http.Client{Transport: tr, Timeout: 20 * time.Second}}, nil
+	return &Panel{address: address, token: token, hc: &http.Client{Transport: tr, Timeout: 20 * time.Second}}, nil
 }
 
-func (p *Panel) istek(ctx context.Context, yontem, yol string, govde any) (*http.Response, error) {
+func (p *Panel) request(ctx context.Context, method, path string, body any) (*http.Response, error) {
 	var r io.Reader
-	if govde != nil {
-		b, err := json.Marshal(govde)
+	if body != nil {
+		b, err := json.Marshal(body)
 		if err != nil {
 			return nil, err
 		}
 		r = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, yontem, p.adres+yol, r)
+	req, err := http.NewRequestWithContext(ctx, method, p.address+path, r)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+p.jeton)
+	req.Header.Set("Authorization", "Bearer "+p.token)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "konsol-ajan/"+surum)
-	if govde != nil {
+	req.Header.Set("User-Agent", "console-agent/"+version)
+	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	yanit, err := p.hc.Do(req)
+	resp, err := p.hc.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	switch {
-	case yanit.StatusCode == http.StatusConflict || yanit.StatusCode == http.StatusNotFound:
-		yanit.Body.Close()
-		return nil, errCakisma
-	case yanit.StatusCode == http.StatusUnauthorized || yanit.StatusCode == http.StatusForbidden:
-		yanit.Body.Close()
-		return nil, fmt.Errorf("panel jetonu reddetti (%d)", yanit.StatusCode)
-	case yanit.StatusCode >= 300:
-		b, _ := io.ReadAll(io.LimitReader(yanit.Body, 300))
-		yanit.Body.Close()
-		return nil, fmt.Errorf("panel %d: %s", yanit.StatusCode, bytes.TrimSpace(b))
+	case resp.StatusCode == http.StatusConflict || resp.StatusCode == http.StatusNotFound:
+		resp.Body.Close()
+		return nil, errConflict
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		resp.Body.Close()
+		return nil, fmt.Errorf("panel jetonu reddetti (%d)", resp.StatusCode)
+	case resp.StatusCode >= 300:
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
+		resp.Body.Close()
+		return nil, fmt.Errorf("panel %d: %s", resp.StatusCode, bytes.TrimSpace(b))
 	}
-	return yanit, nil
+	return resp, nil
 }
 
-func (p *Panel) isler(ctx context.Context) ([]Is, error) {
-	yanit, err := p.istek(ctx, http.MethodGet, "/api/v1/konsol/isler", nil)
+func (p *Panel) jobs(ctx context.Context) ([]Job, error) {
+	resp, err := p.request(ctx, http.MethodGet, "/api/v1/console/jobs", nil)
 	if err != nil {
 		return nil, err
 	}
-	defer yanit.Body.Close()
+	defer resp.Body.Close()
 	var v struct {
-		Data []Is `json:"data"`
+		Data []Job `json:"data"`
 	}
-	if err := json.NewDecoder(yanit.Body).Decode(&v); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
 		return nil, err
 	}
 	return v.Data, nil
 }
 
 // Yapılandırma metni. Diske yazılmaz.
-func (p *Panel) yapilandirma(ctx context.Context, uuid string) (string, error) {
-	yanit, err := p.istek(ctx, http.MethodGet, "/api/v1/konsol/isler/"+uuid+"/yapilandirma", nil)
+func (p *Panel) configuration(ctx context.Context, uuid string) (string, error) {
+	resp, err := p.request(ctx, http.MethodGet, "/api/v1/console/jobs/"+uuid+"/configuration", nil)
 	if err != nil {
 		return "", err
 	}
-	defer yanit.Body.Close()
-	b, err := io.ReadAll(io.LimitReader(yanit.Body, 8<<20))
+	defer resp.Body.Close()
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	return string(b), err
 }
 
-func (p *Panel) bildir(ctx context.Context, uuid, asama, mesaj string) error {
-	yanit, err := p.istek(ctx, http.MethodPost, "/api/v1/konsol/isler/"+uuid+"/olay", map[string]string{"asama": asama, "mesaj": mesaj})
+func (p *Panel) notify(ctx context.Context, uuid, stage, message string) error {
+	resp, err := p.request(ctx, http.MethodPost, "/api/v1/console/jobs/"+uuid+"/event", map[string]string{"stage": stage, "message": message})
 	if err != nil {
 		return err
 	}
-	yanit.Body.Close()
+	resp.Body.Close()
 	return nil
 }
 
-// CiktiYaniti: panelden konsola elle yazılanlar ve iptal isteği.
-type CiktiYaniti struct {
-	Girdiler []string `json:"girdiler"`
-	Iptal    bool     `json:"iptal"`
+// OutputResponse: panelden konsola elle yazılanlar ve iptal isteği.
+type OutputResponse struct {
+	Inputs    []string `json:"inputs"`
+	Cancelled bool     `json:"cancelled"`
 }
 
-func (p *Panel) cikti(ctx context.Context, uuid string, metin []byte) (*CiktiYaniti, error) {
-	yanit, err := p.istek(ctx, http.MethodPost, "/api/v1/konsol/isler/"+uuid+"/cikti", map[string]string{"metin": string(metin)})
+func (p *Panel) output(ctx context.Context, uuid string, text []byte) (*OutputResponse, error) {
+	resp, err := p.request(ctx, http.MethodPost, "/api/v1/console/jobs/"+uuid+"/output", map[string]string{"text": string(text)})
 	if err != nil {
 		return nil, err
 	}
-	defer yanit.Body.Close()
-	v := &CiktiYaniti{}
-	if err := json.NewDecoder(yanit.Body).Decode(v); err != nil {
+	defer resp.Body.Close()
+	v := &OutputResponse{}
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
 		return nil, err
 	}
 	return v, nil

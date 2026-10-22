@@ -3,13 +3,13 @@ import * as columns from './components/columns.js';
 import * as confirmDialog from './components/confirm.js';
 import * as copy from './components/copy.js';
 import * as dialog from './components/dialog.js';
-import * as kaydirarakGezin from './components/scrolling-navigate.js';
+import * as scrollingNavigate from './components/scrolling-navigate.js';
 import * as keyboard from './components/keyboard.js';
-import * as konsolIzle from './components/console-watch.js';
-import * as konsolForm from './components/console-form.js';
-import * as kullaniciMenu from './components/user-menu.js';
+import * as consoleWatch from './components/console-watch.js';
+import * as consoleForm from './components/console-form.js';
+import * as userMenu from './components/user-menu.js';
 import * as navigation from './components/navigation.js';
-import * as oturumKilidi from './components/session-lock.js';
+import * as sessionLock from './components/session-lock.js';
 import * as theme from './components/theme.js';
 import * as toast from './components/toast.js';
 
@@ -35,7 +35,7 @@ import * as toast from './components/toast.js';
  */
 theme.init();
 
-function herCizimde() {
+function onEveryRender() {
     toast.init();
     keyboard.prepare();
     bulk.prepare();
@@ -47,7 +47,7 @@ function herCizimde() {
      * Konsol kurulumunun canlı ekranı (app/ConsoleModule): her çizimde, çünkü
      * düğüm yenilemesiz geçişte değişiyor.
      */
-    konsolIzle.init();
+    consoleWatch.init();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -57,17 +57,17 @@ document.addEventListener('DOMContentLoaded', () => {
     copy.init();
 
     /* Telefonda parmakla bölüm değiştirme; dinleyici gövdede, bir kez kurulur. */
-    kaydirarakGezin.init();
+    scrollingNavigate.init();
 
     keyboard.init();
-    kullaniciMenu.init();
-    oturumKilidi.init();
+    userMenu.init();
+    sessionLock.init();
     navigation.init();
 
     /* Konsol "Yeni iş" formu; dinleyici belgede, bir kez. */
-    konsolForm.init();
+    consoleForm.init();
 
-    herCizimde();
+    onEveryRender();
 });
 
-document.addEventListener('sys:sayfa', herCizimde);
+document.addEventListener('sys:page', onEveryRender);

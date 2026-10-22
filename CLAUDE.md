@@ -371,13 +371,13 @@ yener, bu yüzden yukarıdaki `-e` satırları şart.
   uğramaz**.
 - **Kimin gireceğine MERKEZ karar verir.** Panelde yerel bir "izinli roller"
   listesi YOKTUR ve olmamalı: aynı karar iki yerde dursa biri değişince öbürü
-  sessizce eski kalırdı. Merkez `/oauth/kullanici` ucunda yetkisiz rolü
-  **403 + `kod: rol_yetkisiz`** ile çevirir; panel bunu "merkez cevap vermedi"
+  sessizce eski kalırdı. Merkez `/oauth/userinfo` ucunda yetkisiz rolü
+  **403 + `code: role_forbidden`** ile çevirir; panel bunu "merkez cevap vermedi"
   hâlinden ayırır (birincisinde kapıyı kapatır, ikincisinde yerel parolaya
   düşer). Panelde tanınmayan bir kimliğe hesap açılıp açılmayacağını da merkez
-  söyler (`hesap_acilabilir`).
+  söyler (`can_create_account`).
 - Kural İKİ UÇTA birden işler: girişte sorulur, sonradan rolü ya da durumu
-  değişen için merkez **anında bildirim** gönderir (`POST /api/kimlik/tazele`,
+  değişen için merkez **anında bildirim** gönderir (`POST /api/identity/refresh`,
   HMAC imzalı) ve panel doğruyu merkezden kendi sorar. Gecelik eşitleme turu
   yedektir. Yalnızca girişte bakmak, rolü sonradan değişen birinin oturumunu
   açık bırakırdı.
@@ -419,8 +419,8 @@ yener, bu yüzden yukarıdaki `-e` satırları şart.
 - Panelde yapılan her anlamlı işlem `activity_logs`'a yazılır ve satırlar
   **birbirine zincirlenir** (HMAC-SHA256): her satır bir öncekinin özetini
   taşır. Bir satırı sonradan değiştiren ya da silen kişi zinciri kırar ve
-  `denetim:dogrula` bunu söyler. Anahtar APP_KEY'den AYRIDIR
-  (`DENETIM_ANAHTARI`): uygulama anahtarı döndüğünde geçmiş okunmaz hâle
+  `audit:verify` bunu söyler. Anahtar APP_KEY'den AYRIDIR
+  (`AUDIT_KEY`): uygulama anahtarı döndüğünde geçmiş okunmaz hâle
   gelmemeli.
 - Kaydı yazan taraf `ActivityRecorder`; başka hiçbir yerden `ActivityLog`
   doğrudan yazılmaz.

@@ -11,8 +11,8 @@
         </p>
       </div>
       <div class="page-head__actions">
-        <form method="get" action="{{ route('yedek.index') }}" class="row row--wrap filter-bar">
-          <input class="input filter" type="search" name="ara" value="{{ $arama }}"
+        <form method="get" action="{{ route('backup.index') }}" class="row row--wrap filter-bar">
+          <input class="input filter" type="search" name="search" value="{{ $arama }}"
                  placeholder="Cihaz adı" aria-label="Cihaz ara">
           <button type="submit" class="btn btn--sm"><x-icon name="search" />Ara</button>
         </form>
@@ -20,8 +20,8 @@
     </header>
 
     @unless ($erisim)
-      <div class="alert alert--danger alert--aralikli">
-        Yedek dizini okunamıyor. Depo panele bağlı mı? (<code>{{ config('backup.kok') }}</code>)
+      <div class="alert alert--danger alert--spaced">
+        Yedek dizini okunamıyor. Depo panele bağlı mı? (<code>{{ config('backup.root') }}</code>)
       </div>
     @endunless
 
@@ -79,8 +79,8 @@
               <tbody>
                 @foreach ($klasorler as $klasor)
                   <tr>
-                    <td data-label="Cihaz" class="satir-baslik">
-                      <a href="{{ route('yedek.klasor', $klasor['ad']) }}">{{ $klasor['ad'] }}</a>
+                    <td data-label="Cihaz" class="row-title">
+                      <a href="{{ route('backup.folder', $klasor['ad']) }}">{{ $klasor['ad'] }}</a>
                     </td>
                     <td data-label="Yedek" class="table__cell--mono">{{ number_format($klasor['adet'], 0, ',', '.') }}</td>
                     <td data-label="Boyut" class="table__cell--mono">{{ Number::fileSize($klasor['boyut'], 1) }}</td>

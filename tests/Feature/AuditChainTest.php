@@ -102,7 +102,7 @@ class AuditChainTest extends TestCase
         $yonetici = User::factory()->admin()->create();
         $hedef = User::factory()->create();
 
-        $this->actingAs($yonetici)->post(route('admin.kullanicilar.update', $hedef), [
+        $this->actingAs($yonetici)->post(route('admin.users.update', $hedef), [
             'ad' => $hedef->name,
             'eposta' => $hedef->email,
             'rol' => 'teknik',

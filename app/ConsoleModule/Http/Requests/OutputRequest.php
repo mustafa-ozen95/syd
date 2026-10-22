@@ -17,6 +17,6 @@ class OutputRequest extends FormRequest
     public function rules(): array
     {
         /* Ajan panele ulaşamazken biriken çıktı bir seferde gelebilir (en çok 256 KB). */
-        return ['metin' => ['present', 'nullable', 'string', 'max:300000']];
+        return ['text' => ['present', 'nullable', 'string', 'max:300000']];
     }
 }

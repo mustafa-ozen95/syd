@@ -1,4 +1,4 @@
-// Konsol kurulum ajanı.
+// Console kurulum ajanı.
 //
 // Sahadaki PC'de çalışır, panelle (SYD) API jetonuyla konuşur. PC'ye takılı
 // USB-seri konsol kablosundan switch'i sürer: cihazı loader'a indirir,
@@ -28,79 +28,79 @@ import (
 )
 
 // Derlemede -ldflags "-X main.surum=..." ile verilir.
-var surum = "gelistirme"
+var version = "gelistirme"
 
-// Ayar ajan.json'dan okunur; jeton komut satırından ALINMAZ (süreç
+// Config agent.json'dan okunur; jeton komut satırından ALINMAZ (süreç
 // listesinde görünürdü).
-type Ayar struct {
+type Config struct {
 	Panel       string `json:"panel"`
-	Jeton       string `json:"jeton"`
-	CADosyasi   string `json:"ca_dosyasi"`
-	SeriPort    string `json:"seri_port"`
-	SorguSaniye int    `json:"sorgu_saniye"`
+	Token       string `json:"token"`
+	CAFile      string `json:"ca_file"`
+	SerialPort  string `json:"serial_port"`
+	PollSeconds int    `json:"poll_seconds"`
 }
 
 func main() {
-	ayarYolu := flag.String("ayar", "", "ayar dosyası (varsayılan: programın yanındaki ajan.json)")
-	surumGoster := flag.Bool("surum", false, "sürümü yazar ve çıkar")
-	portlar := flag.Bool("portlar", false, "seri portları listeler ve çıkar")
-	portSina := flag.String("port-sina", "", "panelsiz: portu açar, hızı arar, sonucu yazar ve çıkar (\"oto\": ajanın seçtiği port)")
+	configPath := flag.String("config", "", "ayar dosyası (varsayılan: programın yanındaki agent.json)")
+	showVersion := flag.Bool("version", false, "sürümü yazar ve çıkar")
+	listPorts := flag.Bool("ports", false, "seri portları listeler ve çıkar")
+	portTest := flag.String("port-test", "", "panelsiz: portu açar, hızı arar, sonucu yazar ve çıkar (\"oto\": ajanın seçtiği port)")
 	flag.Parse()
 
-	if *surumGoster {
-		fmt.Println("konsol-ajan", surum)
+	if *showVersion {
+		fmt.Println("console-agent", version)
 		return
 	}
-	if *portlar {
-		liste, err := portAdaylari()
+	if *listPorts {
+		list, err := portCandidates()
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Println(strings.Join(liste, "\n"))
+		fmt.Println(strings.Join(list, "\n"))
 		return
 	}
-	if *portSina != "" {
-		os.Exit(portuSina(*portSina))
+	if *portTest != "" {
+		os.Exit(testPort(*portTest))
 	}
 
-	yol := *ayarYolu
-	if yol == "" {
-		yol = filepath.Join(programDizini(), "ajan.json")
+	path := *configPath
+	if path == "" {
+		path = filepath.Join(programDir(), "agent.json")
 	}
-	kayitAc(filepath.Join(filepath.Dir(yol), "ajan.log"))
+	openLog(filepath.Join(filepath.Dir(path), "agent.log"))
 
-	ayar, err := ayarOku(yol)
+	cfg, err := readConfig(path)
 	if err != nil {
 		log.Fatalf("ayar: %v", err)
 	}
-	panel, err := yeniPanel(ayar.Panel, ayar.Jeton, ayar.CADosyasi)
+	panel, err := newPanel(cfg.Panel, cfg.Token, cfg.CAFile)
 	if err != nil {
 		log.Fatalf("panel: %v", err)
 	}
 
-	ctx, bitir := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer bitir()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	log.Printf("konsol-ajan %s · panel %s", surum, ayar.Panel)
+	log.Printf("console-agent %s · panel %s", version, cfg.Panel)
 	for {
-		isler, err := panel.isler(ctx)
+		jobs, err := panel.jobs(ctx)
 		if err != nil && ctx.Err() == nil {
 			log.Printf("işler alınamadı: %v", err)
 		}
-		if len(isler) > 0 {
-			isYap(ctx, panel, ayar, isler[0])
+		if len(jobs) > 0 {
+			runJob(ctx, panel, cfg, jobs[0])
 			continue
 		}
 		select {
 		case <-ctx.Done():
 			log.Print("kapatılıyor")
 			return
-		case <-time.After(time.Duration(ayar.SorguSaniye) * time.Second):
+		case <-time.After(time.Duration(cfg.PollSeconds) * time.Second):
 		}
 	}
 }
 
-func programDizini() string {
+func programDir() string {
 	exe, err := os.Executable()
 	if err != nil {
 		return "."
@@ -108,8 +108,8 @@ func programDizini() string {
 	return filepath.Dir(exe)
 }
 
-func kayitAc(yol string) {
-	f, err := os.OpenFile(yol, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+func openLog(path string) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		log.Printf("kayıt dosyası açılamadı (%v); yalnız ekrana yazılıyor", err)
 		return
@@ -117,102 +117,102 @@ func kayitAc(yol string) {
 	log.SetOutput(io.MultiWriter(os.Stdout, f))
 }
 
-func ayarOku(yol string) (*Ayar, error) {
-	b, err := os.ReadFile(yol)
+func readConfig(path string) (*Config, error) {
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	a := &Ayar{}
+	a := &Config{}
 	if err := json.Unmarshal(b, a); err != nil {
-		return nil, fmt.Errorf("%s okunamadı: %w", yol, err)
+		return nil, fmt.Errorf("%s okunamadı: %w", path, err)
 	}
 	a.Panel = strings.TrimRight(a.Panel, "/")
-	if a.Panel == "" || a.Jeton == "" {
+	if a.Panel == "" || a.Token == "" {
 		return nil, errors.New("panel ve jeton dolu olmalı")
 	}
 	if !strings.HasPrefix(a.Panel, "https://") && !strings.HasPrefix(a.Panel, "http://") {
 		return nil, errors.New("panel adresi https:// ile başlamalı")
 	}
-	if a.CADosyasi != "" && !filepath.IsAbs(a.CADosyasi) {
-		a.CADosyasi = filepath.Join(filepath.Dir(yol), a.CADosyasi)
+	if a.CAFile != "" && !filepath.IsAbs(a.CAFile) {
+		a.CAFile = filepath.Join(filepath.Dir(path), a.CAFile)
 	}
-	if a.SorguSaniye <= 0 {
-		a.SorguSaniye = 5
+	if a.PollSeconds <= 0 {
+		a.PollSeconds = 5
 	}
 	return a, nil
 }
 
-// isYap bir işi baştan sona yürütür ve sonucunu panele bildirir.
-func isYap(ana context.Context, panel *Panel, ayar *Ayar, is Is) {
-	ctx, iptal := context.WithCancel(ana)
-	defer iptal()
+// runJob bir işi baştan sona yürütür ve sonucunu panele bildirir.
+func runJob(parent context.Context, panel *Panel, cfg *Config, job Job) {
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
 
-	bildir := func(asama, mesaj string) {
-		log.Printf("[%s] %s: %s", is.UUID, asama, mesaj)
-		bctx, b := context.WithTimeout(ana, 20*time.Second)
+	notify := func(stage, message string) {
+		log.Printf("[%s] %s: %s", job.UUID, stage, message)
+		nctx, b := context.WithTimeout(parent, 20*time.Second)
 		defer b()
-		if err := panel.bildir(bctx, is.UUID, asama, mesaj); errors.Is(err, errCakisma) {
-			iptal()
+		if err := panel.notify(nctx, job.UUID, stage, message); errors.Is(err, errConflict) {
+			cancel()
 		} else if err != nil {
 			log.Printf("bildirilemedi: %v", err)
 		}
 	}
 
-	bildir("basladi", "Ajan işi aldı ("+surum+").")
-	k, port, err := portAc(ctx, firstNonEmpty(is.SeriPort, ayar.SeriPort))
+	notify("basladi", "Ajan işi aldı ("+version+").")
+	k, port, err := openPort(ctx, firstNonEmpty(job.SerialPort, cfg.SerialPort))
 	if err != nil {
-		bildir("hata", err.Error())
+		notify("hata", err.Error())
 		return
 	}
-	defer k.hat.Close()
+	defer k.line.Close()
 
-	pompaBitti := make(chan struct{})
+	pumpDone := make(chan struct{})
 	go func() {
-		defer close(pompaBitti)
-		pompa(ctx, panel, is.UUID, k, iptal)
+		defer close(pumpDone)
+		pump(ctx, panel, job.UUID, k, cancel)
 	}()
 
-	hiz, cevap, err := hizBul(ctx, k)
+	speed, reply, err := detectSpeed(ctx, k)
 	if err != nil {
-		bildir("hata", "Konsol hızı ayarlanamadı: "+err.Error())
+		notify("hata", "Konsol hızı ayarlanamadı: "+err.Error())
 		return
 	}
-	if cevap {
-		bildir("port", fmt.Sprintf("Konsol: %s · %d baud (cihaz cevap verdi).", port, hiz))
+	if reply {
+		notify("port", fmt.Sprintf("Konsol: %s · %d baud (cihaz cevap verdi).", port, speed))
 	} else {
-		bildir("port", fmt.Sprintf("Konsol: %s · %d baud (cihaz henüz cevap vermedi; hız varsayılan).", port, hiz))
+		notify("port", fmt.Sprintf("Konsol: %s · %d baud (cihaz henüz cevap vermedi; hız varsayılan).", port, speed))
 	}
 
-	dakika := is.KurulumDakika
-	if dakika <= 0 {
-		dakika = 240
+	minutes := job.InstallMinutes
+	if minutes <= 0 {
+		minutes = 240
 	}
-	akis := &Akis{
+	flow := &Flow{
 		k:      k,
-		is:     is,
-		bildir: bildir,
-		yapilandirma: func(c context.Context) (string, error) {
-			return panel.yapilandirma(c, is.UUID)
+		job:    job,
+		notify: notify,
+		configuration: func(c context.Context) (string, error) {
+			return panel.configuration(c, job.UUID)
 		},
-		adresKullanimda: pingCevapVerir,
-		acilisSuresi:    10 * time.Minute,
-		kurulumSuresi:   time.Duration(dakika) * time.Minute,
-		elleSuresi:      30 * time.Minute,
+		addressInUse:   pingReplies,
+		bootTimeout:    10 * time.Minute,
+		installTimeout: time.Duration(minutes) * time.Minute,
+		manualTimeout:  30 * time.Minute,
 	}
-	err = akis.Kurulum(ctx)
+	err = flow.Install(ctx)
 
 	// Son çıktı da panele gitsin, sonuç ondan sonra yazılsın.
 	time.Sleep(1500 * time.Millisecond)
 	switch {
 	case ctx.Err() != nil:
-		log.Printf("[%s] iş panelden kapatıldı", is.UUID)
+		log.Printf("[%s] iş panelden kapatıldı", job.UUID)
 	case err != nil:
-		bildir("hata", err.Error())
+		notify("hata", err.Error())
 	default:
-		bildir("tamam", "Kurulum bitti.")
+		notify("tamam", "Kurulum bitti.")
 	}
-	iptal()
-	<-pompaBitti
+	cancel()
+	<-pumpDone
 }
 
 func firstNonEmpty(s ...string) string {
@@ -224,82 +224,82 @@ func firstNonEmpty(s ...string) string {
 	return ""
 }
 
-// portAc verilen portu, yoksa USB-seri dönüştürücüleri dener. Birden çok
+// openPort verilen portu, yoksa USB-seri dönüştürücüleri dener. Birden çok
 // aday varsa cihazın cevap verdiği seçilir.
-func portAc(ctx context.Context, ad string) (*Konsol, string, error) {
-	if ad != "" {
-		h, err := seriAc(ad)
+func openPort(ctx context.Context, name string) (*Console, string, error) {
+	if name != "" {
+		h, err := openSerial(name)
 		if err != nil {
-			return nil, "", fmt.Errorf("%s açılamadı: %w", ad, err)
+			return nil, "", fmt.Errorf("%s açılamadı: %w", name, err)
 		}
-		return yeniKonsol(h), ad, nil
+		return newConsole(h), name, nil
 	}
-	adaylar, err := portAdaylari()
+	candidates, err := portCandidates()
 	if err != nil {
 		return nil, "", fmt.Errorf("seri portlar listelenemedi: %w", err)
 	}
-	if len(adaylar) == 0 {
+	if len(candidates) == 0 {
 		return nil, "", errors.New("PC'de seri port yok: konsol kablosu (USB-seri dönüştürücü) takılı mı?")
 	}
-	if len(adaylar) == 1 {
-		h, err := seriAc(adaylar[0])
+	if len(candidates) == 1 {
+		h, err := openSerial(candidates[0])
 		if err != nil {
-			return nil, "", fmt.Errorf("%s açılamadı: %w", adaylar[0], err)
+			return nil, "", fmt.Errorf("%s açılamadı: %w", candidates[0], err)
 		}
-		return yeniKonsol(h), adaylar[0], nil
+		return newConsole(h), candidates[0], nil
 	}
-	var ilk string
-	for _, a := range adaylar {
-		h, err := seriAc(a)
+	var first string
+	for _, a := range candidates {
+		h, err := openSerial(a)
 		if err != nil {
 			continue
 		}
-		k := yeniKonsol(h)
-		if _, cevap, err := hizBul(ctx, k); err == nil && cevap {
+		k := newConsole(h)
+		if _, reply, err := detectSpeed(ctx, k); err == nil && reply {
 			return k, a, nil
 		}
 		h.Close()
-		if ilk == "" {
-			ilk = a
+		if first == "" {
+			first = a
 		}
 	}
-	if ilk == "" {
-		return nil, "", fmt.Errorf("seri portların hiçbiri açılamadı: %s", strings.Join(adaylar, ", "))
+	if first == "" {
+		return nil, "", fmt.Errorf("seri portların hiçbiri açılamadı: %s", strings.Join(candidates, ", "))
 	}
-	h, err := seriAc(ilk)
+	h, err := openSerial(first)
 	if err != nil {
 		return nil, "", err
 	}
-	return yeniKonsol(h), ilk, nil
+	return newConsole(h), first, nil
 }
 
-// pompa konsol çıktısını saniyede bir panele taşır; dönüşte panelden elle
+// pump konsol çıktısını saniyede bir panele taşır; dönüşte panelden elle
 // yazılanları konsola yazar. İş panelde kapanınca işi durdurur.
-func pompa(ctx context.Context, panel *Panel, uuid string, k *Konsol, iptal context.CancelFunc) {
+func pump(ctx context.Context, panel *Panel, uuid string, k *Console, cancel context.CancelFunc) {
 	for {
-		son := ctx.Err() != nil
-		b := k.PaneleAl()
-		pctx, bitir := context.WithTimeout(context.Background(), 15*time.Second)
-		yanit, err := panel.cikti(pctx, uuid, b)
-		bitir()
+		end := ctx.Err() != nil
+		b := k.TakeForPanel()
+		pctx, stop := context.WithTimeout(context.Background(), 15*time.Second)
+		resp, err := panel.output(pctx, uuid, b)
+		stop()
 		switch {
-		case errors.Is(err, errCakisma):
-			iptal()
+		case errors.Is(err, errConflict):
+			cancel()
 			return
 		case err != nil:
-			k.GeriKoy(b)
+			k.PutBack(b)
 			log.Printf("çıktı panele gidemedi: %v", err)
 		default:
-			for _, g := range yanit.Girdiler {
-				if err := k.Yaz(g); err != nil {
+			for _, g := range resp.Inputs {
+				if err := k.Send(g); err != nil {
 					log.Printf("konsola yazılamadı: %v", err)
 				}
 			}
-			if yanit.Iptal {
-				iptal()
+			if resp.Cancelled {
+				cancel()
 			}
 		}
-		if son {
+		if end {
 			return
 		}
 		select {
@@ -309,31 +309,31 @@ func pompa(ctx context.Context, panel *Panel, uuid string, k *Konsol, iptal cont
 	}
 }
 
-// portuSina sahadaki sınama: işi açmadan portun açılıp ayarlandığını ve
+// testPort sahadaki sınama: işi açmadan portun açılıp ayarlandığını ve
 // cihazın hangi hızda cevap verdiğini gösterir. Cihaz kapalıysa hız
 // bulunamaz; port açılıyorsa o da bir sonuçtur.
-func portuSina(ad string) int {
-	if ad == "oto" {
-		ad = ""
+func testPort(name string) int {
+	if name == "oto" {
+		name = ""
 	}
-	ctx, iptal := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer iptal()
-	k, port, err := portAc(ctx, ad)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	k, port, err := openPort(ctx, name)
 	if err != nil {
 		fmt.Println("HATA:", err)
 		return 1
 	}
-	defer k.hat.Close()
+	defer k.line.Close()
 	fmt.Println("açıldı:", port)
-	hiz, cevap, err := hizBul(ctx, k)
+	speed, reply, err := detectSpeed(ctx, k)
 	switch {
 	case err != nil:
 		fmt.Println("HATA: hız ayarlanamadı:", err)
 		return 1
-	case cevap:
-		fmt.Printf("cihaz %d baud'da cevap verdi\n", hiz)
+	case reply:
+		fmt.Printf("cihaz %d baud'da cevap verdi\n", speed)
 	default:
-		fmt.Printf("cihaz cevap vermedi (kapalı ya da açılıyor); hız %d\n", hiz)
+		fmt.Printf("cihaz cevap vermedi (kapalı ya da açılıyor); hız %d\n", speed)
 	}
 	return 0
 }

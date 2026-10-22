@@ -87,7 +87,7 @@ class IdentitySyncer
      * MERKEZ HER İKİ YÖNDE DE EZER. Yalnızca kapatsaydı, merkezde geri açılan
      * hesap burada kapalı kalır ve kimse hangisinin doğru olduğunu bilemezdi.
      *
-     * @param  array{durum?: string, girebilir?: bool, rol?: ?string}  $durum
+     * @param  array{status?: string, can_enter?: bool, role?: ?string, last_logout?: ?int}  $durum
      * @return array{kapatildi: bool, acildi: bool}
      */
     public function uygula(User $kullanici, array $durum): array
@@ -100,7 +100,7 @@ class IdentitySyncer
          * (bkz. merkezdeki KimlikDurumuController). Panelin ayrıca kendi rol
          * listesini tutmasına gerek yok.
          */
-        $girebilir = (bool) ($durum['girebilir'] ?? false);
+        $girebilir = (bool) ($durum['can_enter'] ?? false);
 
         /*
          * ROL HER DURUMDA eşitlenir — kapalı hesabınki de.
@@ -109,11 +109,11 @@ class IdentitySyncer
          * Slug'lar kardeş panellerde de aynı: merkezdeki rol burada da aynı
          * adla görünmeli. Bu, kimliğin kendisidir; yetki ayrı.
          */
-        $this->roluGuncelle($kullanici, $durum['rol'] ?? null);
+        $this->roluGuncelle($kullanici, $durum['role'] ?? null);
 
         /* Ortak çıkış: bildirim kaybolduysa an buradan gelir (bkz. SharedLogout). */
-        if (is_int($durum['son_cikis'] ?? null) && ($bag = SharedLogout::bag($kullanici)) !== null) {
-            SharedLogout::isle($bag, $durum['son_cikis']);
+        if (is_int($durum['last_logout'] ?? null) && ($bag = SharedLogout::bag($kullanici)) !== null) {
+            SharedLogout::isle($bag, $durum['last_logout']);
         }
 
         if (! $girebilir && $kullanici->aktif) {
@@ -121,8 +121,8 @@ class IdentitySyncer
 
             Log::info('Merkezde erişimi kalktı, hesap kapatıldı.', [
                 'kullanici' => $kullanici->email,
-                'merkezdeki_durum' => (string) ($durum['durum'] ?? 'bilinmiyor'),
-                'merkezdeki_rol' => (string) ($durum['rol'] ?? 'rolsüz'),
+                'merkezdeki_durum' => (string) ($durum['status'] ?? 'bilinmiyor'),
+                'merkezdeki_rol' => (string) ($durum['role'] ?? 'rolsüz'),
             ]);
 
             return ['kapatildi' => true, 'acildi' => false];

@@ -34,10 +34,10 @@ class BackupController extends Controller
          * görebildiği bölüme gider.
          */
         if (Gate::denies('yedek:view')) {
-            return redirect()->route(Gate::allows('junos:view') ? 'kurulum.index' : 'yetkisiz');
+            return redirect()->route(Gate::allows('junos:view') ? 'setup.index' : 'forbidden');
         }
 
-        $arama = trim((string) $request->query('ara', ''));
+        $arama = trim((string) $request->query('search', ''));
 
         $klasorler = $this->depo->klasorler();
 
@@ -56,17 +56,17 @@ class BackupController extends Controller
     }
 
     /** Bir cihazın yedekleri. */
-    public function klasor(Request $request, string $yol = ''): View
+    public function folder(Request $request, string $path = ''): View
     {
-        $tam = $this->depo->coz($yol);
+        $tam = $this->depo->coz($path);
 
         abort_if($tam === null || ! is_dir($tam), 404);
 
-        $arama = trim((string) $request->query('ara', ''));
-        $dosyalar = $this->depo->dosyalar($yol, $arama);
+        $arama = trim((string) $request->query('search', ''));
+        $dosyalar = $this->depo->dosyalar($path, $arama);
 
         return view('backup.folder', [
-            'klasor' => $yol,
+            'klasor' => $path,
             'arama' => $arama,
             'dosyalar' => $this->sayfala($request, $dosyalar),
             'toplam' => $dosyalar->count(),
@@ -82,13 +82,13 @@ class BackupController extends Controller
      * cihazın tüm yapılandırmasıdır — adresler, arayüzler, komşuluklar.
      * Kimin indirdiğini bilmek, bir sızıntı sonrası sorulacak ilk sorudur.
      */
-    public function indir(string $yol, ActivityRecorder $kayit): BinaryFileResponse
+    public function download(string $path, ActivityRecorder $kayit): BinaryFileResponse
     {
-        $dosya = $this->depo->dosya($yol);
+        $dosya = $this->depo->dosya($path);
 
         abort_if($dosya === null, 404);
 
-        $kayit->kaydet('yedek_indirildi', 'Yedek indirildi: '.$yol);
+        $kayit->kaydet('yedek_indirildi', 'Yedek indirildi: '.$path);
 
         /*
          * `.gz` dosyaları tarayıcıda AÇILMASIN diye octet-stream: bazı
@@ -109,15 +109,15 @@ class BackupController extends Controller
      */
     private function sayfala(Request $request, Collection $dosyalar): LengthAwarePaginator
     {
-        $boy = (int) config('backup.sayfa_boyu', 50);
-        $sayfa = max(1, (int) $request->query('sayfa', 1));
+        $boy = (int) config('backup.page_size', 50);
+        $sayfa = max(1, (int) $request->query('page', 1));
 
         return new LengthAwarePaginator(
             $dosyalar->forPage($sayfa, $boy)->values(),
             $dosyalar->count(),
             $boy,
             $sayfa,
-            ['path' => $request->url(), 'query' => $request->query(), 'pageName' => 'sayfa'],
+            ['path' => $request->url(), 'query' => $request->query(), 'pageName' => 'page'],
         );
     }
 }

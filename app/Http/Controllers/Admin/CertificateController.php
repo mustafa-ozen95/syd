@@ -55,7 +55,7 @@ class CertificateController extends Controller implements HasMiddleware
     }
 
     /** Yeni tur: sunucu ACME siparişini açar ve TXT kaydını yazar. */
-    public function baslat(): RedirectResponse
+    public function start(): RedirectResponse
     {
         if (! $this->sertifika->istekBirak('baslat')) {
             return $this->iletilemedi();
@@ -72,7 +72,7 @@ class CertificateController extends Controller implements HasMiddleware
      * Yayılmamış bir kayıtla sağlayıcıya gitmek başarısız bir deneme demek;
      * tur baştan başlar ve kullanıcı sebebini anlamaz.
      */
-    public function tamamla(): RedirectResponse
+    public function complete(): RedirectResponse
     {
         $eksik = collect($this->sertifika->yayilmaDurumu())
             ->reject(fn (array $k): bool => $k['yayildi'])

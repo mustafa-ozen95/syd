@@ -52,7 +52,7 @@ class InitialsTest extends TestCase
         $kullanici = User::factory()->admin()->create(['name' => 'Sınama Ağ']);
 
         $this->actingAs($kullanici)
-            ->get(route('profil.show'))
+            ->get(route('profile.show'))
             ->assertOk()
             ->assertSee('>SA<', false);
     }

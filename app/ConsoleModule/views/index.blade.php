@@ -8,14 +8,14 @@
       </x-slot:subtitle>
       @if ($yetki['ekle'] && $pcSecenekleri !== [])
         <x-slot:actions>
-          <button type="button" class="btn btn--primary btn--sm" data-modal-open="konsol-yeni"><x-icon name="plus" />Yeni iş</button>
+          <button type="button" class="btn btn--primary btn--sm" data-modal-open="console-new"><x-icon name="plus" />Yeni iş</button>
         </x-slot:actions>
       @endif
     </x-ui.page-head>
 
     <x-ui.flash />
 
-    <x-konsol::how :acik="$satirlar === []" :loader-komutlari="$loaderKomutlari" :kurulum-komutu="$kurulumKomutu" :tftp="$tftp" />
+    <x-console::how :acik="$satirlar === []" :loader-komutlari="$loaderKomutlari" :kurulum-komutu="$kurulumKomutu" :tftp="$tftp" />
 
     <section class="panel">
       <header class="panel__head">
@@ -35,7 +35,7 @@
             @forelse ($satirlar as $satir)
               <tr>
                 <td data-label="Cihaz">
-                  <a href="{{ route('konsol.show', $satir['is']) }}"><strong>{{ $satir['is']->ad }}</strong></a>
+                  <a href="{{ route('console.show', $satir['is']) }}"><strong>{{ $satir['is']->ad }}</strong></a>
                   <div class="text-sm text-muted">PC: {{ $satir['pc'] }}</div>
                 </td>
                 <td data-label="Görüntü" class="text-sm">
@@ -76,7 +76,7 @@
             </p>
           </div>
           <div class="panel__actions">
-            <button type="button" class="btn btn--primary btn--sm" data-modal-open="konsol-pc-yeni"><x-icon name="plus" />PC ekle</button>
+            <button type="button" class="btn btn--primary btn--sm" data-modal-open="console-pc-new"><x-icon name="plus" />PC ekle</button>
           </div>
         </header>
         <div class="panel__body panel__body--flush">
@@ -84,13 +84,13 @@
             <div @class(['alert', 'alert--danger' => $pcSonuc['hata'], 'alert--success' => ! $pcSonuc['hata'], 'field--separated'])>
               <strong>{{ $pcSonuc['pc'] }}:</strong>
               @isset($pcSonuc['metin'])
-                <pre class="kod">{{ $pcSonuc['metin'] }}</pre>
+                <pre class="code">{{ $pcSonuc['metin'] }}</pre>
               @endisset
               @isset($pcSonuc['durum'])
                 <div class="text-sm stack">
                   <div>Ajan: <strong>{{ $pcSonuc['durum']['gorev'] ?: '—' }}</strong> · sürüm {{ $pcSonuc['durum']['surum'] ?: '—' }}</div>
-                  <div>Seri portlar:<pre class="kod">{{ implode("\n", $pcSonuc['durum']['portlar']) ?: 'seri port yok (konsol kablosu takılı mı?)' }}</pre></div>
-                  <div>Ajan kaydı (son 40 satır):<pre class="kod">{{ implode("\n", $pcSonuc['durum']['kayit']) ?: 'kayıt yok' }}</pre></div>
+                  <div>Seri portlar:<pre class="code">{{ implode("\n", $pcSonuc['durum']['portlar']) ?: 'seri port yok (konsol kablosu takılı mı?)' }}</pre></div>
+                  <div>Ajan kaydı (son 40 satır):<pre class="code">{{ implode("\n", $pcSonuc['durum']['kayit']) ?: 'kayıt yok' }}</pre></div>
                 </div>
               @endisset
             </div>
@@ -114,14 +114,14 @@
                   </td>
                   <td>
                     <div class="table__row-actions">
-                      @foreach (['sina' => 'Sına', 'durum' => 'Durum', 'kur' => 'Kur', 'kaldir' => 'Kaldır'] as $islem => $etiket)
-                        <form method="POST" action="{{ route('konsol.pc.islem', [$satir['pc'], $islem]) }}">
+                      @foreach (['test' => 'Sına', 'status' => 'Durum', 'install' => 'Kur', 'uninstall' => 'Kaldır'] as $islem => $etiket)
+                        <form method="POST" action="{{ route('console.pc.islem', [$satir['pc'], $islem]) }}">
                           @csrf
                           <button type="submit" class="btn btn--sm">{{ $etiket }}</button>
                         </form>
                       @endforeach
-                      <button type="button" class="btn btn--sm" data-modal-open="konsol-pc-{{ $satir['pc']->id }}"><x-icon name="edit" />Düzenle</button>
-                      <x-ui.delete-form :action="route('konsol.pc.destroy', $satir['pc'])" :confirm="$satir['silOnay']"
+                      <button type="button" class="btn btn--sm" data-modal-open="console-pc-{{ $satir['pc']->id }}"><x-icon name="edit" />Düzenle</button>
+                      <x-ui.delete-form :action="route('console.pc.destroy', $satir['pc'])" :confirm="$satir['silOnay']"
                                         title="PC'yi sil" :verify="$satir['pc']->ad" reasonless />
                     </div>
                   </td>
@@ -137,12 +137,12 @@
 
     {{-- Pencereler `.page__inner`in içinde: yenilemesiz geçiş yalnız bu öğeyi değiştiriyor. --}}
     @if ($yetki['ekle'] && $pcSecenekleri !== [])
-      <x-ui.modal id="konsol-yeni" title="Yeni iş" :open="$ekleAcik" wide>
-        <form method="POST" action="{{ route('konsol.store') }}">
+      <x-ui.modal id="console-new" title="Yeni iş" :open="$ekleAcik" wide>
+        <form method="POST" action="{{ route('console.store') }}">
           @csrf
           <input type="hidden" name="_form" value="ekle">
           <div class="modal__body stack">
-            <x-konsol::is-fields :deger="$ekleDeger" :hatali="$ekleAcik" :pcler="$pcSecenekleri"
+            <x-console::is-fields :deger="$ekleDeger" :hatali="$ekleAcik" :pcler="$pcSecenekleri"
                                    :goruntuler="$goruntuSecenekleri" :yapilandirma-turleri="$yapilandirmaTurleri"
                                    :yedek-cihazlari="$yedekCihazlari" :yedek-dosyalari="$yedekDosyalari"
                                    :pc-adresleri="$pcAdresleri" :adres-turleri="$adresTurleri" />
@@ -153,25 +153,25 @@
     @endif
 
     @if ($yetki['pc'])
-      <x-ui.modal id="konsol-pc-yeni" title="PC ekle" :open="$pcYeniAcik" wide>
-        <form method="POST" action="{{ route('konsol.pc.store') }}">
+      <x-ui.modal id="console-pc-new" title="PC ekle" :open="$pcYeniAcik" wide>
+        <form method="POST" action="{{ route('console.pc.store') }}">
           @csrf
           <input type="hidden" name="_form" value="pc-yeni">
           <div class="modal__body stack">
-            <x-konsol::pc-fields onek="pc-yeni" :deger="$pcYeniDeger" :hatali="$pcYeniAcik" :platformlar="$platformlar" yeni />
+            <x-console::pc-fields onek="pc-yeni" :deger="$pcYeniDeger" :hatali="$pcYeniAcik" :platformlar="$platformlar" yeni />
           </div>
           <x-ui.modal-actions submit="Ekle" />
         </form>
       </x-ui.modal>
 
       @foreach ($pcler as $satir)
-        <x-ui.modal id="konsol-pc-{{ $satir['pc']->id }}" :title="$satir['pc']->ad.' — düzenle'" :open="$satir['acik']" wide>
-          <form method="POST" action="{{ route('konsol.pc.update', $satir['pc']) }}">
+        <x-ui.modal id="console-pc-{{ $satir['pc']->id }}" :title="$satir['pc']->ad.' — düzenle'" :open="$satir['acik']" wide>
+          <form method="POST" action="{{ route('console.pc.update', $satir['pc']) }}">
             @csrf
             @method('PUT')
             <input type="hidden" name="_form" value="pc-{{ $satir['pc']->id }}">
             <div class="modal__body stack">
-              <x-konsol::pc-fields :onek="'pc-'.$satir['pc']->id" :deger="$satir['deger']" :hatali="$satir['acik']" :platformlar="$platformlar" />
+              <x-console::pc-fields :onek="'pc-'.$satir['pc']->id" :deger="$satir['deger']" :hatali="$satir['acik']" :platformlar="$platformlar" />
             </div>
             <x-ui.modal-actions submit="Güncelle" />
           </form>

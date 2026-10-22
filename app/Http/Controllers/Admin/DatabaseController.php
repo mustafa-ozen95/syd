@@ -92,7 +92,7 @@ class DatabaseController extends Controller implements HasMiddleware
         ]);
     }
 
-    public function sina(Request $istek): RedirectResponse
+    public function test(Request $istek): RedirectResponse
     {
         $hedef = ConnectionFile::temizle($istek->validate([
             'host' => ['required', 'string', 'max:255', 'regex:/^[A-Za-z0-9.\-]+$/'],
@@ -127,7 +127,7 @@ class DatabaseController extends Controller implements HasMiddleware
                 : 'Hedef taşımaya uygun değil; ayrıntılar aşağıda.');
     }
 
-    public function tasi(Request $istek): RedirectResponse
+    public function migrate(Request $istek): RedirectResponse
     {
         $hedef = $this->sinanan($istek);
 

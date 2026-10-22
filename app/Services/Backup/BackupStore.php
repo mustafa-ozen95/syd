@@ -29,7 +29,7 @@ class BackupStore
 
     public static function yapilandirmadan(): self
     {
-        return new self((string) config('backup.kok'));
+        return new self((string) config('backup.root'));
     }
 
     public function kok(): string

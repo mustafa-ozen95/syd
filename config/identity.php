@@ -19,22 +19,22 @@ return [
      * Merkezle giriş açık mı? Kapalıyken uçlar 404 döner ve giriş ekranında
      * düğme hiç çizilmez — "var ama çalışmıyor" bir düğme göstermeyiz.
      */
-    'acik' => env('KIMLIK_ACIK', false),
+    'acik' => env('IDENTITY_ENABLED', false),
 
     /* İstemci kimliği ve sırrı verilmemişse akış zaten kurulamaz. */
-    'yapilandirildi' => filled(env('KIMLIK_ISTEMCI')) && filled(env('KIMLIK_ISTEMCI_SIR')),
+    'configured' => filled(env('IDENTITY_CLIENT_ID')) && filled(env('IDENTITY_CLIENT_SECRET')),
 
-    'adres' => rtrim((string) env('KIMLIK_ADRES', 'https://kimlik.ornek.test'), '/'),
-    'istemci' => env('KIMLIK_ISTEMCI'),
-    'sir' => env('KIMLIK_ISTEMCI_SIR'),
+    'url' => rtrim((string) env('IDENTITY_URL', 'https://kimlik.ornek.test'), '/'),
+    'client_id' => env('IDENTITY_CLIENT_ID'),
+    'client_secret' => env('IDENTITY_CLIENT_SECRET'),
 
     /*
      * Dönüş adresi MERKEZDEKİ KAYITLA birebir aynı olmalı; tek harf farkı
      * akışı sessizce düşürür. Merkez yalnızca https kabul ediyor.
      */
-    'donus' => env('KIMLIK_DONUS', 'https://syd.ornek.test/giris/merkez/geri'),
+    'redirect_uri' => env('IDENTITY_REDIRECT_URI', 'https://syd.ornek.test/login/center/callback'),
 
-    'ad' => env('KIMLIK_AD', 'Kimlik Yönetim Merkezi'),
+    'name' => env('IDENTITY_NAME', 'Kimlik Yönetim Merkezi'),
 
     /*
      * OTOMATİK HESAP AÇMA KARARI BURADA DEĞİL.
@@ -55,9 +55,9 @@ return [
      *
      * Boş bırakılırsa bildirim KABUL EDİLMEZ: açık oturumdaki kişi
      * değişikliği ara katmanın yoklamasında (`dogrulama_dakika`), oturumu
-     * olmayan hesap gecelik eşitleme turunda (kimlik:esitle) öğrenir.
+     * olmayan hesap gecelik eşitleme turunda (identity:sync) öğrenir.
      */
-    'bildirim_sirri' => env('KIMLIK_BILDIRIM_SIR'),
+    'notify_secret' => env('IDENTITY_NOTIFY_SECRET'),
 
     /*
      * MERKEZDEKİ DURUM NE SIKLIKLA SORULSUN? (dakika)
@@ -66,7 +66,7 @@ return [
      * önbelleklenir. Sayı, "erişimi kalkan biri en fazla ne kadar daha
      * içeride kalabilir" sorusunun yanıtıdır.
      */
-    'dogrulama_dakika' => (int) env('KIMLIK_DOGRULAMA_DAKIKA', 5),
+    'dogrulama_dakika' => (int) env('IDENTITY_VERIFY_MINUTES', 5),
 
     /*
      * YÖNETİCİLİK DEVROLUR MU? — kapalı.
@@ -76,8 +76,8 @@ return [
      * olmamalı: merkezde rol dağıtabilen biri, buradaki hiçbir yöneticinin
      * haberi olmadan kendini burada da yönetici yapabilirdi.
      */
-    'yonetici_devri' => env('KIMLIK_YONETICI_DEVRI', false),
+    'yonetici_devri' => env('IDENTITY_ADMIN_TAKEOVER', false),
 
     /* Merkezin sertifikası özelse kök sertifikanın yolu. */
-    'kok' => env('KIMLIK_KOK'),
+    'ca_cert' => env('IDENTITY_CA_CERT'),
 ];

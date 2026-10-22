@@ -11,53 +11,53 @@ import { $, $$ } from '../lib/dom.js';
  * ürettiği bağlantı karar verir.
  */
 
-const SATIR_SECICI = '.row-item, .grid-row';
+const ROW_SELECTOR = '.row-item, .grid-row';
 
-function sutunlar() {
+function columns() {
     return $$('.columns .column, .columns .detail');
 }
 
-function satirlar(sutun) {
-    return $$(SATIR_SECICI, sutun).filter((satir) => satir.offsetParent !== null);
+function rows(column) {
+    return $$(ROW_SELECTOR, column).filter((row) => row.offsetParent !== null);
 }
 
-function aktifSutun() {
-    const odak = document.activeElement?.closest('.column, .detail');
+function activeColumn() {
+    const focused = document.activeElement?.closest('.column, .detail');
 
-    return odak ?? sutunlar().at(-1) ?? null;
+    return focused ?? columns().at(-1) ?? null;
 }
 
-function tasi(sutun, yon) {
-    const liste = satirlar(sutun);
+function move(column, direction) {
+    const list = rows(column);
 
-    if (liste.length === 0) {
+    if (list.length === 0) {
         return;
     }
 
-    const simdiki = liste.indexOf(document.activeElement);
-    const sonraki = simdiki === -1
+    const current = list.indexOf(document.activeElement);
+    const following = current === -1
         ? 0
-        : Math.min(liste.length - 1, Math.max(0, simdiki + yon));
+        : Math.min(list.length - 1, Math.max(0, current + direction));
 
-    liste[sonraki].focus();
-    liste[sonraki].scrollIntoView({ block: 'nearest' });
+    list[following].focus();
+    list[following].scrollIntoView({ block: 'nearest' });
 }
 
-function komsuSutun(sutun, yon) {
-    const liste = sutunlar();
-    const sonraki = liste[liste.indexOf(sutun) + yon];
+function neighborColumn(column, direction) {
+    const list = columns();
+    const following = list[list.indexOf(column) + direction];
 
-    if (!sonraki) {
+    if (!following) {
         return;
     }
 
-    const hedef = satirlar(sonraki);
-    (hedef.find((satir) => satir.getAttribute('aria-selected') === 'true') ?? hedef[0])?.focus();
-    sonraki.scrollIntoView({ inline: 'nearest', behavior: 'smooth' });
+    const targetRows = rows(following);
+    (targetRows.find((row) => row.getAttribute('aria-selected') === 'true') ?? targetRows[0])?.focus();
+    following.scrollIntoView({ inline: 'nearest', behavior: 'smooth' });
 }
 
-function yazmaAlanindaMi(hedef) {
-    return ['INPUT', 'TEXTAREA', 'SELECT'].includes(hedef?.tagName);
+function isTypingField(targetRows) {
+    return ['INPUT', 'TEXTAREA', 'SELECT'].includes(targetRows?.tagName);
 }
 
 /**
@@ -68,9 +68,9 @@ function yazmaAlanindaMi(hedef) {
  * odaklanabilir.
  */
 export function prepare() {
-    $$(SATIR_SECICI).forEach((satir) => {
-        if (! satir.hasAttribute('tabindex') && ! ['A', 'BUTTON'].includes(satir.tagName)) {
-            satir.tabIndex = 0;
+    $$(ROW_SELECTOR).forEach((row) => {
+        if (! row.hasAttribute('tabindex') && ! ['A', 'BUTTON'].includes(row.tagName)) {
+            row.tabIndex = 0;
         }
     });
 }
@@ -85,41 +85,41 @@ export function init() {
             return;
         }
 
-        if (event.key === '/' && ! yazmaAlanindaMi(event.target)) {
+        if (event.key === '/' && ! isTypingField(event.target)) {
             event.preventDefault();
             $('.filter__input')?.focus();
 
             return;
         }
 
-        if (yazmaAlanindaMi(event.target)) {
+        if (isTypingField(event.target)) {
             return;
         }
 
-        const sutun = aktifSutun();
+        const column = activeColumn();
 
-        if (! sutun) {
+        if (! column) {
             return;
         }
 
         switch (event.key) {
             case 'ArrowDown':
                 event.preventDefault();
-                tasi(sutun, 1);
+                move(column, 1);
                 break;
             case 'ArrowUp':
                 event.preventDefault();
-                tasi(sutun, -1);
+                move(column, -1);
                 break;
             case 'ArrowRight':
                 event.preventDefault();
-                document.activeElement?.matches(SATIR_SECICI)
+                document.activeElement?.matches(ROW_SELECTOR)
                     ? document.activeElement.click()
-                    : komsuSutun(sutun, 1);
+                    : neighborColumn(column, 1);
                 break;
             case 'ArrowLeft':
                 event.preventDefault();
-                komsuSutun(sutun, -1);
+                neighborColumn(column, -1);
                 break;
             default:
         }

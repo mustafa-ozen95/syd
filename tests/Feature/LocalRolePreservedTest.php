@@ -30,10 +30,10 @@ class LocalRolePreservedTest extends TestCase
 
         config([
             'identity.acik' => true,
-            'identity.yapilandirildi' => true,
-            'identity.adres' => 'https://merkez.test',
-            'identity.istemci' => 'istemci',
-            'identity.sir' => 'sir',
+            'identity.configured' => true,
+            'identity.url' => 'https://merkez.test',
+            'identity.client_id' => 'istemci',
+            'identity.client_secret' => 'sir',
         ]);
 
         Cache::flush();
@@ -48,8 +48,8 @@ class LocalRolePreservedTest extends TestCase
             'email' => $kullanici->email,
         ]);
 
-        Http::fake(['merkez.test/api/kimlik-durumu' => Http::response([
-            'kimlikler' => ['kimlik-1' => ['durum' => 'etkin', 'girebilir' => true, 'rol' => 'muhasebe']],
+        Http::fake(['merkez.test/api/identity-status' => Http::response([
+            'identities' => ['kimlik-1' => ['status' => 'etkin', 'can_enter' => true, 'role' => 'muhasebe']],
         ])]);
     }
 
@@ -60,7 +60,7 @@ class LocalRolePreservedTest extends TestCase
 
         $this->merkezMuhasebeDiyor($hedef);
 
-        $this->actingAs($yonetici)->post(route('admin.kullanicilar.update', $hedef), [
+        $this->actingAs($yonetici)->post(route('admin.users.update', $hedef), [
             'ad' => $hedef->name,
             'eposta' => $hedef->email,
             'rol' => 'admin',
@@ -70,7 +70,7 @@ class LocalRolePreservedTest extends TestCase
         $this->assertSame('admin', $hedef->fresh()->rol?->slug);
         $this->assertTrue($hedef->fresh()->rol_yerel);
 
-        $this->artisan('kimlik:esitle')->assertSuccessful();
+        $this->artisan('identity:sync')->assertSuccessful();
 
         /* Merkez "muhasebe" diyor ama panelde verilen rol duruyor. */
         $this->assertSame('admin', $hedef->fresh()->rol?->slug);
@@ -83,7 +83,7 @@ class LocalRolePreservedTest extends TestCase
 
         $this->merkezMuhasebeDiyor($kullanici);
 
-        $this->artisan('kimlik:esitle')->assertSuccessful();
+        $this->artisan('identity:sync')->assertSuccessful();
 
         $this->assertSame('muhasebe', $kullanici->fresh()->rol?->slug);
     }
@@ -93,18 +93,18 @@ class LocalRolePreservedTest extends TestCase
         /* Varsayılan davranış "merkez ne diyorsa o" olmayı sürdürmeli. */
         Http::fake([
             'merkez.test/oauth/token' => Http::response(['access_token' => 'jeton']),
-            'merkez.test/oauth/kullanici' => Http::response([
+            'merkez.test/oauth/userinfo' => Http::response([
                 'sub' => 'kimlik-9',
                 'name' => 'Yeni Muhasebeci',
                 'email' => 'yeni@ornek.test',
                 'email_verified' => true,
-                'rol' => 'muhasebe',
-                'hesap_acilabilir' => true,
+                'role' => 'muhasebe',
+                'can_create_account' => true,
             ]),
         ]);
 
         $this->withSession(['kimlik_durum' => 'durum', 'kimlik_dogrulayici' => 'dogrulayici'])
-            ->get('/giris/merkez/geri?state=durum&code=kod');
+            ->get('/login/center/callback?state=durum&code=kod');
 
         $yeni = User::where('email', 'yeni@ornek.test')->first();
 

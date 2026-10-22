@@ -45,7 +45,7 @@ class LoginWithPasswordTest extends TestCase
         $this->post(route('login.attempt'), [
             'email' => 'operator@ornek.test',
             'password' => 'cok-uzun-bir-parola',
-        ])->assertRedirect(route('yedek.index'));
+        ])->assertRedirect(route('backup.index'));
 
         $this->assertAuthenticated();
     }
@@ -127,7 +127,7 @@ class LoginWithPasswordTest extends TestCase
         $yonetici = User::factory()->admin()->create();
         $hedef = User::factory()->create(['email' => 'yeni@ornek.test']);
 
-        $this->actingAs($yonetici)->post(route('admin.kullanicilar.update', $hedef), [
+        $this->actingAs($yonetici)->post(route('admin.users.update', $hedef), [
             'ad' => $hedef->name,
             'eposta' => $hedef->email,
             'rol' => 'teknik',
@@ -149,7 +149,7 @@ class LoginWithPasswordTest extends TestCase
         $yonetici = User::factory()->admin()->create();
         $hedef = User::factory()->create();
 
-        $this->actingAs($yonetici)->post(route('admin.kullanicilar.update', $hedef), [
+        $this->actingAs($yonetici)->post(route('admin.users.update', $hedef), [
             'ad' => $hedef->name,
             'eposta' => $hedef->email,
             'rol' => 'teknik',

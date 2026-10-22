@@ -34,10 +34,10 @@ class RoleController extends Controller
     {
         return view('admin.roles.index', [
             'tabs' => $this->sekmeler->all('roller'),
-            'roller' => Role::query()->withCount('kullanicilar')->sirali()->get()->map(fn (Role $rol): array => [
-                'rol' => $rol,
-                'ozet' => $this->ozet($rol),
-                'silinebilir' => $rol->silinebilirMi(),
+            'roller' => Role::query()->withCount('kullanicilar')->sirali()->get()->map(fn (Role $role): array => [
+                'rol' => $role,
+                'ozet' => $this->ozet($role),
+                'silinebilir' => $role->silinebilirMi(),
             ]),
         ]);
     }
@@ -49,63 +49,63 @@ class RoleController extends Controller
 
     public function store(RoleRequest $request): RedirectResponse
     {
-        $rol = Role::create([...$request->payload($this->sozluk), 'yonetici' => false, 'yerlesik' => false]);
+        $role = Role::create([...$request->payload($this->sozluk), 'yonetici' => false, 'yerlesik' => false]);
 
-        $this->kayit->kaydet('rol_ekle', "Rol açıldı: {$rol->label} ({$rol->slug}) · {$this->ozet($rol)}", $rol);
+        $this->kayit->kaydet('rol_ekle', "Rol açıldı: {$role->label} ({$role->slug}) · {$this->ozet($role)}", $role);
 
-        return redirect()->route('admin.roller.index')->with('status', "{$rol->label} eklendi.");
+        return redirect()->route('admin.roles.index')->with('status', "{$role->label} eklendi.");
     }
 
-    public function edit(Role $rol): View
+    public function edit(Role $role): View
     {
-        return view('admin.roles.form', $this->formVerisi($rol));
+        return view('admin.roles.form', $this->formVerisi($role));
     }
 
-    public function update(RoleRequest $request, Role $rol): RedirectResponse
+    public function update(RoleRequest $request, Role $role): RedirectResponse
     {
-        $once = $this->ozet($rol);
+        $once = $this->ozet($role);
         $veri = $request->payload($this->sozluk);
 
         /* Yönetici rolü yetki listesi tutmaz: her kontrolü zaten geçer. */
-        if ($rol->yonetici) {
+        if ($role->yonetici) {
             unset($veri['yetkiler']);
         }
 
-        $rol->update($veri);
+        $role->update($veri);
 
-        $sayi = $rol->kullanicilar()->count();
-        $sonra = $this->ozet($rol->fresh());
+        $sayi = $role->kullanicilar()->count();
+        $sonra = $this->ozet($role->fresh());
 
         $this->kayit->kaydet(
             'rol_guncelle',
-            "Rol güncellendi: {$rol->label}".($once !== $sonra ? " · yetkiler {$once} → {$sonra}" : '')
+            "Rol güncellendi: {$role->label}".($once !== $sonra ? " · yetkiler {$once} → {$sonra}" : '')
                 .($sayi > 0 ? " · roldeki {$sayi} kullanıcıyı etkiler" : ''),
-            $rol,
+            $role,
         );
 
-        return redirect()->route('admin.roller.index')->with('status', $sayi > 0
-            ? "{$rol->label} güncellendi; roldeki {$sayi} kullanıcı için hemen geçerli."
-            : "{$rol->label} güncellendi.");
+        return redirect()->route('admin.roles.index')->with('status', $sayi > 0
+            ? "{$role->label} güncellendi; roldeki {$sayi} kullanıcı için hemen geçerli."
+            : "{$role->label} güncellendi.");
     }
 
-    public function destroy(Role $rol): RedirectResponse
+    public function destroy(Role $role): RedirectResponse
     {
-        if (! $rol->silinebilirMi()) {
+        if (! $role->silinebilirMi()) {
             return back()->withErrors(['rol' => 'Yerleşik rol ya da kullanıcısı olan rol silinemez.']);
         }
 
-        $ad = $rol->label;
-        $rol->delete();
+        $ad = $role->label;
+        $role->delete();
 
         $this->kayit->kaydet('rol_sil', "Rol silindi: {$ad}");
 
-        return redirect()->route('admin.roller.index')->with('status', "{$ad} silindi.");
+        return redirect()->route('admin.roles.index')->with('status', "{$ad} silindi.");
     }
 
     /** Liste ve kayıttaki tek satırlık özet. */
-    private function ozet(Role $rol): string
+    private function ozet(Role $role): string
     {
-        if ($rol->yonetici) {
+        if ($role->yonetici) {
             return 'her şeyi geçer';
         }
 
@@ -114,7 +114,7 @@ class RoleController extends Controller
         foreach ($this->sozluk->resourceKeys() as $kaynak) {
             $aksiyonlar = array_map(
                 fn (string $a): string => $this->sozluk->actionLabel($a),
-                array_values(array_intersect($this->sozluk->actionsFor($kaynak), $rol->aksiyonlar($kaynak))),
+                array_values(array_intersect($this->sozluk->actionsFor($kaynak), $role->aksiyonlar($kaynak))),
             );
 
             if ($aksiyonlar !== []) {
@@ -126,12 +126,12 @@ class RoleController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function formVerisi(?Role $rol): array
+    private function formVerisi(?Role $role): array
     {
-        $secili = (array) old('yetkiler', $rol?->yetkiler ?? []);
+        $secili = (array) old('yetkiler', $role?->yetkiler ?? []);
 
         return [
-            'rol' => $rol,
+            'rol' => $role,
             'tabs' => $this->sekmeler->all('roller'),
             'rozetler' => array_combine(Role::ROZETLER, array_map('ucfirst', Role::ROZETLER)),
             /* Matris satırları hazır: her hücrenin işaretli olup olmadığı burada hesaplanır. */

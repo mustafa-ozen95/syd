@@ -7,7 +7,7 @@
     <header class="page-head">
       <div class="page-head__text">
         <p class="page-head__subtitle">
-          <a href="{{ route('yedek.index') }}">← Cihazlar</a>
+          <a href="{{ route('backup.index') }}">← Cihazlar</a>
         </p>
         <h1>{{ $klasor }}</h1>
         <p class="page-head__subtitle">
@@ -15,8 +15,8 @@
         </p>
       </div>
       <div class="page-head__actions">
-        <form method="get" action="{{ route('yedek.klasor', $klasor) }}" class="row row--wrap filter-bar">
-          <input class="input filter" type="search" name="ara" value="{{ $arama }}"
+        <form method="get" action="{{ route('backup.folder', $klasor) }}" class="row row--wrap filter-bar">
+          <input class="input filter" type="search" name="search" value="{{ $arama }}"
                  placeholder="Dosya adı" aria-label="Dosya ara">
           <button type="submit" class="btn btn--sm"><x-icon name="search" />Ara</button>
         </form>
@@ -51,7 +51,7 @@
               <tbody>
                 @foreach ($dosyalar as $dosya)
                   <tr>
-                    <td data-label="Dosya" class="satir-baslik table__cell--mono">{{ $dosya['ad'] }}</td>
+                    <td data-label="Dosya" class="row-title table__cell--mono">{{ $dosya['ad'] }}</td>
                     <td data-label="Tür"><span class="badge">{{ BackupName::tur($dosya['ad']) }}</span></td>
                     <td data-label="Boyut" class="table__cell--mono">{{ Number::fileSize($dosya['boyut'], 1) }}</td>
                     <td data-label="Tarih" class="table__cell--mono">
@@ -64,7 +64,7 @@
                     <td>
                       <div class="table__row-actions">
                         @if ($indirebilir)
-                          <a href="{{ route('yedek.indir', $dosya['yol']) }}" class="btn btn--sm">
+                          <a href="{{ route('backup.download', $dosya['yol']) }}" class="btn btn--sm">
                             <x-icon name="download" />İndir
                           </a>
                         @endif

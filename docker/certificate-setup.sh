@@ -20,19 +20,19 @@
 # =============================================================================
 set -euo pipefail
 
-KONTEYNER="${KONTEYNER:-syd}"
-ALAN="${ALAN:?ALAN verin, ör. ALAN=syd.ornek.test}"
-HEDEF=/uygulama/storage/app/tls
+CONTAINER="${CONTAINER:-syd}"
+DOMAIN="${DOMAIN:?DOMAIN verin, ör. DOMAIN=syd.ornek.test}"
+TARGET_DIR=/uygulama/storage/app/tls
 
-kirmizi=$'\e[31m'; yesil=$'\e[32m'; sari=$'\e[33m'; bitir=$'\e[0m'
-tamam() { printf '    %s✓%s %s\n' "$yesil" "$bitir" "$1"; }
-uyari() { printf '    %s!%s %s\n' "$sari" "$bitir" "$1"; }
-hata()  { printf '\n%sHATA:%s %s\n\n' "$kirmizi" "$bitir" "$1" >&2; exit 1; }
+red=$'\e[31m'; green=$'\e[32m'; yellow=$'\e[33m'; reset=$'\e[0m'
+ok() { printf '    %s✓%s %s\n' "$green" "$reset" "$1"; }
+warn() { printf '    %s!%s %s\n' "$yellow" "$reset" "$1"; }
+fail()  { printf '\n%sHATA:%s %s\n\n' "$red" "$reset" "$1" >&2; exit 1; }
 
 CRT="${1:-}"; KEY="${2:-}"
-[[ -s "$CRT" && -s "$KEY" ]] || hata "Kullanım: $0 <sertifika.crt> <anahtar.key>"
+[[ -s "$CRT" && -s "$KEY" ]] || fail "Kullanım: $0 <sertifika.crt> <anahtar.key>"
 
-command -v openssl >/dev/null || hata "openssl gerekli."
+command -v openssl >/dev/null || fail "openssl gerekli."
 
 # SERTİFİKA VE ANAHTAR AYNI ÇİFTTEN Mİ?
 #
@@ -45,32 +45,32 @@ if [[ "$CM" != "$KM" ]]; then
   # RSA dışı anahtarlarda modulus karşılaştırması işlemez; açık anahtardan bak.
   C2=$(openssl x509 -noout -pubkey -in "$CRT" | openssl sha256)
   K2=$(openssl pkey -pubout -in "$KEY" | openssl sha256)
-  [[ "$C2" == "$K2" ]] || hata "Sertifika ile anahtar aynı çiftten değil."
+  [[ "$C2" == "$K2" ]] || fail "Sertifika ile anahtar aynı çiftten değil."
 fi
-tamam "sertifika ve anahtar eşleşiyor"
+ok "sertifika ve anahtar eşleşiyor"
 
-# ALAN ADI KAPSANIYOR MU?
-if ! openssl x509 -noout -ext subjectAltName -in "$CRT" | grep -q "DNS:${ALAN}"; then
-  uyari "Sertifika ${ALAN} adını KAPSAMIYOR; tarayıcı yine uyaracak."
-  uyari "Kapsananlar: $(openssl x509 -noout -ext subjectAltName -in "$CRT" | tail -1 | tr -d ' ')"
+# DOMAIN ADI KAPSANIYOR MU?
+if ! openssl x509 -noout -ext subjectAltName -in "$CRT" | grep -q "DNS:${DOMAIN}"; then
+  warn "Sertifika ${DOMAIN} adını KAPSAMIYOR; tarayıcı yine uyaracak."
+  warn "Kapsananlar: $(openssl x509 -noout -ext subjectAltName -in "$CRT" | tail -1 | tr -d ' ')"
 fi
 
-BITIS=$(openssl x509 -noout -enddate -in "$CRT" | cut -d= -f2)
-tamam "bitiş: ${BITIS}"
+EXPIRES=$(openssl x509 -noout -enddate -in "$CRT" | cut -d= -f2)
+ok "bitiş: ${EXPIRES}"
 
-docker inspect "$KONTEYNER" >/dev/null 2>&1 || hata "Konteyner yok: ${KONTEYNER}"
+docker inspect "$CONTAINER" >/dev/null 2>&1 || fail "Konteyner yok: ${CONTAINER}"
 
 # Eski sertifika YEDEKLENİR: yenisi bozuksa geri dönülebilsin.
-docker exec "$KONTEYNER" sh -c "[ -s ${HEDEF}/syd.crt ] && cp -a ${HEDEF}/syd.crt ${HEDEF}/syd.crt.onceki; \
-                                 [ -s ${HEDEF}/syd.key ] && cp -a ${HEDEF}/syd.key ${HEDEF}/syd.key.onceki" || true
+docker exec "$CONTAINER" sh -c "[ -s ${TARGET_DIR}/syd.crt ] && cp -a ${TARGET_DIR}/syd.crt ${TARGET_DIR}/syd.crt.onceki; \
+                                 [ -s ${TARGET_DIR}/syd.key ] && cp -a ${TARGET_DIR}/syd.key ${TARGET_DIR}/syd.key.onceki" || true
 
-docker cp "$CRT" "${KONTEYNER}:${HEDEF}/syd.crt"
-docker cp "$KEY" "${KONTEYNER}:${HEDEF}/syd.key"
-docker exec "$KONTEYNER" sh -c "chown syd:syd ${HEDEF}/syd.crt ${HEDEF}/syd.key && chmod 0600 ${HEDEF}/syd.key"
+docker cp "$CRT" "${CONTAINER}:${TARGET_DIR}/syd.crt"
+docker cp "$KEY" "${CONTAINER}:${TARGET_DIR}/syd.key"
+docker exec "$CONTAINER" sh -c "chown syd:syd ${TARGET_DIR}/syd.crt ${TARGET_DIR}/syd.key && chmod 0600 ${TARGET_DIR}/syd.key"
 
 # Önce SINA, sonra yenile: bozuk bir yapılandırmayla reload nginx'i düşürür.
-docker exec "$KONTEYNER" nginx -t >/dev/null 2>&1 || hata "nginx yapılandırması sınamayı geçmedi; eski sertifika ${HEDEF}/syd.crt.onceki içinde."
-docker exec "$KONTEYNER" nginx -s reload
+docker exec "$CONTAINER" nginx -t >/dev/null 2>&1 || fail "nginx yapılandırması sınamayı geçmedi; eski sertifika ${TARGET_DIR}/syd.crt.onceki içinde."
+docker exec "$CONTAINER" nginx -s reload
 
-tamam "sertifika kuruldu ve nginx yenilendi"
-printf '\n    Doğrulama:  openssl s_client -connect %s:443 -servername %s </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates\n\n' "$ALAN" "$ALAN"
+ok "sertifika kuruldu ve nginx yenilendi"
+printf '\n    Doğrulama:  openssl s_client -connect %s:443 -servername %s </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates\n\n' "$DOMAIN" "$DOMAIN"

@@ -22,31 +22,31 @@ import { on } from '../lib/dom.js';
  * açabiliyor ve yönlendirmeyle bitiyor; araya girmek kazanılan şeye değmez.
  */
 
-const OLAY = 'sys:sayfa';
+const EVENT_NAME = 'sys:page';
 
 /** Devam eden istek: hızlı tıklamada eskisi iptal edilir. */
-let istek = null;
+let request = null;
 
-function ayniKoken(adres) {
-    return adres.origin === window.location.origin;
+function sameOrigin(url) {
+    return url.origin === window.location.origin;
 }
 
 /** Bu bağlantı bizim işimiz mi? */
-function devralinir(baglanti) {
-    const href = baglanti.getAttribute('href') ?? '';
+function isHandled(link) {
+    const href = link.getAttribute('href') ?? '';
 
     return href !== ''
         && ! href.startsWith('#')
-        && ! baglanti.target
-        && ! baglanti.hasAttribute('download')
-        && baglanti.dataset.tamYenile === undefined
-        && ayniKoken(new URL(baglanti.href, window.location.href));
+        && ! link.target
+        && ! link.hasAttribute('download')
+        && link.dataset.fullReload === undefined
+        && sameOrigin(new URL(link.href, window.location.href));
 }
 
-function ciz(metin, adres, gecmis) {
-    const yeni = new DOMParser().parseFromString(metin, 'text/html');
+function render(text, url, history) {
+    const next = new DOMParser().parseFromString(text, 'text/html');
 
-    document.title = yeni.title;
+    document.title = next.title;
 
     /*
      * <head> yerinde kalır (biçem ve betikler yeniden yüklenmesin diye) ama
@@ -54,55 +54,55 @@ function ciz(metin, adres, gecmis) {
      * AJAX istekleri 419 alırdı. Sunucunun yeni sayfada verdiği simge
      * alınır.
      */
-    const simge = yeni.querySelector('meta[name="csrf-token"]')?.content;
-    const mevcut = document.querySelector('meta[name="csrf-token"]');
+    const token = next.querySelector('meta[name="csrf-token"]')?.content;
+    const current = document.querySelector('meta[name="csrf-token"]');
 
-    if (simge && mevcut) {
-        mevcut.content = simge;
+    if (token && current) {
+        current.content = token;
     }
 
-    document.body.innerHTML = yeni.body.innerHTML;
+    document.body.innerHTML = next.body.innerHTML;
 
-    if (gecmis === 'ekle') {
-        window.history.pushState({ sys: true }, '', adres);
+    if (history === 'push') {
+        window.history.pushState({ sys: true }, '', url);
         window.scrollTo(0, 0);
     }
 
     /* Düğüme bağlı çalışan bileşenler kendilerini burada tazeler. */
-    document.dispatchEvent(new CustomEvent(OLAY));
+    document.dispatchEvent(new CustomEvent(EVENT_NAME));
 }
 
-export async function git(adres, gecmis = 'ekle') {
-    istek?.abort();
-    istek = new AbortController();
+export async function navigate(url, history = 'push') {
+    request?.abort();
+    request = new AbortController();
 
-    document.body.dataset.gecis = '';
+    document.body.dataset.transition = '';
 
     try {
-        const yanit = await fetch(adres, {
+        const response = await fetch(url, {
             headers: { 'X-Requested-With': 'fetch' },
             credentials: 'same-origin',
-            signal: istek.signal,
+            signal: request.signal,
         });
 
         /*
          * HTML değilse (dosya indirme, beklenmedik bir yanıt) araya
          * girmeyiz: tarayıcı kendi bildiğini yapsın.
          */
-        if (! yanit.ok || ! (yanit.headers.get('content-type') ?? '').includes('text/html')) {
-            window.location.href = adres;
+        if (! response.ok || ! (response.headers.get('content-type') ?? '').includes('text/html')) {
+            window.location.href = url;
 
             return;
         }
 
         /* Yönlendirme olduysa adres çubuğunda VARILAN yer yazmalı (örn. giriş ekranı). */
-        ciz(await yanit.text(), yanit.url, gecmis);
-    } catch (hata) {
-        if (hata.name !== 'AbortError') {
-            window.location.href = adres;
+        render(await response.text(), response.url, history);
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            window.location.href = url;
         }
     } finally {
-        delete document.body.dataset.gecis;
+        delete document.body.dataset.transition;
     }
 }
 
@@ -121,31 +121,31 @@ export async function git(adres, gecmis = 'ekle') {
  * İstek başarısız olursa ya da HTML dönmezse formun KENDİ gönderimine
  * düşülür — en kötü durumda eski davranış.
  */
-export async function formuGonder(form) {
-    const adres = form.getAttribute('action') || window.location.href;
+export async function submitForm(form) {
+    const url = form.getAttribute('action') || window.location.href;
 
-    document.body.dataset.gecis = '';
+    document.body.dataset.transition = '';
 
     try {
-        const yanit = await fetch(adres, {
+        const response = await fetch(url, {
             method: (form.getAttribute('method') || 'post').toUpperCase(),
             body: new FormData(form),
             headers: { 'X-Requested-With': 'fetch' },
             credentials: 'same-origin',
         });
 
-        if (! yanit.ok || ! (yanit.headers.get('content-type') ?? '').includes('text/html')) {
+        if (! response.ok || ! (response.headers.get('content-type') ?? '').includes('text/html')) {
             form.submit();
 
             return;
         }
 
         /* Yönlendirme sonrası VARILAN adres yazılır; geçmişe kayıt eklenmez. */
-        ciz(await yanit.text(), yanit.url, 'yok');
+        render(await response.text(), response.url, 'none');
     } catch {
         form.submit();
     } finally {
-        delete document.body.dataset.gecis;
+        delete document.body.dataset.transition;
     }
 }
 
@@ -161,12 +161,12 @@ export async function formuGonder(form) {
  * Geçmişe kayıt EKLENMEZ: tazeleme bir gezinme değil, aynı sayfanın yeni
  * hâli. Eklenseydi "geri" tuşu aynı adrese tekrar tekrar düşerdi.
  */
-export function tazele() {
-    return git(window.location.href, 'yok');
+export function refresh() {
+    return navigate(window.location.href, 'none');
 }
 
 export function init() {
-    on('click', 'a[href]', (event, baglanti) => {
+    on('click', 'a[href]', (event, link) => {
         /*
          * Başka bir bileşen (pencere açma, onay penceresi) tıklamayı zaten
          * karşıladıysa karışmayız.
@@ -176,12 +176,12 @@ export function init() {
             return;
         }
 
-        if (! devralinir(baglanti)) {
+        if (! isHandled(link)) {
             return;
         }
 
         event.preventDefault();
-        git(baglanti.href);
+        navigate(link.href);
     });
 
     /* Arama ve süzgeç de birer sayfa geçişidir. */
@@ -191,21 +191,21 @@ export function init() {
             return;
         }
 
-        const adres = new URL(form.getAttribute('action') || window.location.href, window.location.href);
+        const url = new URL(form.getAttribute('action') || window.location.href, window.location.href);
 
-        if (! ayniKoken(adres)) {
+        if (! sameOrigin(url)) {
             return;
         }
 
-        adres.search = new URLSearchParams(new FormData(form)).toString();
+        url.search = new URLSearchParams(new FormData(form)).toString();
 
         event.preventDefault();
-        git(adres.href);
+        navigate(url.href);
     });
 
     /* Geri/ileri: adres zaten değişti, yalnızca içerik getirilir. */
     window.addEventListener('popstate', () => {
-        git(window.location.href, 'yok');
+        navigate(window.location.href, 'none');
     });
 
     /*

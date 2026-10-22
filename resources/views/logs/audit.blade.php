@@ -7,7 +7,7 @@
         <p class="page-head__subtitle">Kim, ne zaman, ne yaptı. Satırlar birbirine zincirlenir; değiştirilen ya da silinen satır zinciri kırar.</p>
       </div>
       <div class="page-head__actions">
-        <form method="post" action="{{ route('admin.kayitlar.dogrula') }}"
+        <form method="post" action="{{ route('admin.logs.verify') }}"
               data-confirm="Bütün kayıt yeniden özetlenecek; büyük tabloda sürebilir."
               data-confirm-title="Zinciri şimdi doğrula">
           @csrf
@@ -23,7 +23,7 @@
 
       Her satır kendinden öncekinin HMAC özetini taşır; biri değiştirilir ya
       da silinirse ondan sonraki bütün özetler tutmaz. Rozet gecelik turun
-      (denetim:dogrula) bıraktığı sonucu okur — ekran her açılışta bütün
+      (audit:verify) bıraktığı sonucu okur — ekran her açılışta bütün
       satırları yeniden özetlemez.
     --}}
     @if ($butunluk)
@@ -66,10 +66,10 @@
         <span class="badge">{{ $kayitlar->total() }}</span>
 
         <form method="get" class="row row--wrap filter-bar">
-          <input class="input filter" type="search" name="ara" value="{{ $ara }}"
+          <input class="input filter" type="search" name="search" value="{{ $ara }}"
                  placeholder="Açıklama veya kullanıcı" aria-label="Kayıtlarda ara">
 
-          <select class="select" name="tur" aria-label="İşlem türü">
+          <select class="select" name="type" aria-label="İşlem türü">
             <option value="">Tüm işlemler</option>
             @foreach ($turler as $t)
               <option value="{{ $t }}" @selected($tur === $t)>{{ $t }}</option>
@@ -79,7 +79,7 @@
           <button type="submit" class="btn btn--sm">Filtrele</button>
 
           @if ($tur !== '' || $ara !== '')
-            <a href="{{ route('admin.kayitlar.denetim') }}" class="btn btn--ghost btn--sm">Temizle</a>
+            <a href="{{ route('admin.logs.audit') }}" class="btn btn--ghost btn--sm">Temizle</a>
           @endif
         </form>
       </div>
@@ -104,7 +104,7 @@
                 {{-- O günkü ad: hesap silinse bile satır kimin yaptığını söyler. --}}
                 <td data-label="Kullanıcı">{{ $k->kullanici_adi ?? '—' }}</td>
                 <td data-label="İşlem"><span class="badge">{{ $k->tur }}</span></td>
-                <td data-label="Açıklama" class="satir-baslik">{{ $k->aciklama ?? '—' }}</td>
+                <td data-label="Açıklama" class="row-title">{{ $k->aciklama ?? '—' }}</td>
                 <td data-label="Adres" class="table__cell--mono">{{ $k->ip_adresi ?? '—' }}</td>
                 <td data-label="Özet" class="table__cell--mono" title="{{ $k->ozet }}">
                   {{ $k->ozet ? \Illuminate\Support\Str::substr($k->ozet, 0, 8) : 'korumasız' }}

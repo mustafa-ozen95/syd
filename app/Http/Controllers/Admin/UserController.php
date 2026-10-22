@@ -59,15 +59,15 @@ class UserController extends Controller
         ]);
     }
 
-    public function update(UserUpdateRequest $request, User $kullanici): RedirectResponse
+    public function update(UserUpdateRequest $request, User $user): RedirectResponse
     {
         $validated = $request->validated();
 
-        $oncekiRol = $kullanici->rol?->slug ?? 'rolsüz';
-        $oncekiYetki = $this->yetkiOzeti($kullanici);
-        $oncekiAktif = $kullanici->aktif;
+        $oncekiRol = $user->rol?->slug ?? 'rolsüz';
+        $oncekiYetki = $this->yetkiOzeti($user);
+        $oncekiAktif = $user->aktif;
 
-        $kullanici->update([
+        $user->update([
             ...(($validated['yeni_sifre'] ?? null)
                 ? ['password' => Hash::make($validated['yeni_sifre'])]
                 : []),
@@ -83,7 +83,7 @@ class UserController extends Controller
             'aktif' => $request->boolean('aktif'),
         ]);
 
-        $this->yetki->istisnalariYaz($kullanici, array_filter((array) $request->input('istisna', [])));
+        $this->yetki->istisnalariYaz($user, array_filter((array) $request->input('istisna', [])));
 
         /*
          * NE DEĞİŞTİĞİ YAZILIR, yeni hâli değil. "Kullanıcı güncellendi"
@@ -92,17 +92,17 @@ class UserController extends Controller
          */
         $degisenler = [];
 
-        $yeniRol = $kullanici->fresh()->rol?->slug ?? 'rolsüz';
+        $yeniRol = $user->fresh()->rol?->slug ?? 'rolsüz';
 
         if ($oncekiRol !== $yeniRol) {
             $degisenler[] = "rol {$oncekiRol} → {$yeniRol}";
         }
 
-        if ($oncekiAktif !== $kullanici->aktif) {
-            $degisenler[] = $kullanici->aktif ? 'hesap açıldı' : 'hesap kapatıldı';
+        if ($oncekiAktif !== $user->aktif) {
+            $degisenler[] = $user->aktif ? 'hesap açıldı' : 'hesap kapatıldı';
         }
 
-        if ($oncekiYetki !== ($yeniYetki = $this->yetkiOzeti($kullanici))) {
+        if ($oncekiYetki !== ($yeniYetki = $this->yetkiOzeti($user))) {
             $degisenler[] = "yetkiler {$oncekiYetki} → {$yeniYetki}";
         }
 
@@ -113,30 +113,30 @@ class UserController extends Controller
 
         app(ActivityRecorder::class)->kaydet(
             'kullanici_guncelle',
-            "Kullanıcı güncellendi: {$kullanici->email}"
+            "Kullanıcı güncellendi: {$user->email}"
                 .($degisenler === [] ? ' · değişiklik yok' : ' · '.implode(', ', $degisenler)),
-            $kullanici,
+            $user,
         );
 
-        return redirect()->route('admin.kullanicilar.index')->with('status', 'Kullanıcı güncellendi.');
+        return redirect()->route('admin.users.index')->with('status', 'Kullanıcı güncellendi.');
     }
 
-    public function destroy(User $kullanici): RedirectResponse
+    public function destroy(User $user): RedirectResponse
     {
         $this->authorize('admin');
 
         /* Kayıt SİLMEDEN ÖNCE: silinen hesabın adı sonradan okunamaz. */
         app(ActivityRecorder::class)->kaydet(
             'kullanici_sil',
-            "Kullanıcı silindi: {$kullanici->email} · {$kullanici->name} · rol ".($kullanici->rol?->slug ?? 'rolsüz'),
+            "Kullanıcı silindi: {$user->email} · {$user->name} · rol ".($user->rol?->slug ?? 'rolsüz'),
         );
 
-        $kullanici->delete();
+        $user->delete();
 
-        return redirect()->route('admin.kullanicilar.index')->with('status', 'Kullanıcı silindi.');
+        return redirect()->route('admin.users.index')->with('status', 'Kullanıcı silindi.');
     }
 
-    public function onaylaYetkiTalebi(PermissionRequest $yetkiTalebi): RedirectResponse
+    public function approvePermissionRequest(PermissionRequest $permissionRequest): RedirectResponse
     {
         $this->authorize('admin');
 
@@ -146,37 +146,37 @@ class UserController extends Controller
          * kişinin yedek istisnalarını kaldırır; rol neyse o kalır.
          */
         $istisnalar = array_filter(
-            $this->yetki->istisnalar($yetkiTalebi->user),
+            $this->yetki->istisnalar($permissionRequest->user),
             fn (string $cift): bool => ! str_starts_with($cift, 'yedek:'),
             ARRAY_FILTER_USE_KEY,
         );
 
-        if ($yetkiTalebi->perm_yedek) {
+        if ($permissionRequest->perm_yedek) {
             $istisnalar['yedek:view'] = UserPermission::IZIN;
             $istisnalar['yedek:download'] = UserPermission::IZIN;
         }
 
-        $this->yetki->istisnalariYaz($yetkiTalebi->user, $istisnalar);
+        $this->yetki->istisnalariYaz($permissionRequest->user, $istisnalar);
 
-        $yetkiTalebi->update(['durum' => 'onaylandi']);
+        $permissionRequest->update(['durum' => 'onaylandi']);
 
         app(ActivityRecorder::class)->kaydet(
             'yetki_talebi_onay',
-            "Yetki talebi onaylandı: {$yetkiTalebi->user->email} · yeni yetkiler "
-                .$this->yetkiOzeti($yetkiTalebi->user->fresh()),
-            $yetkiTalebi->user,
+            "Yetki talebi onaylandı: {$permissionRequest->user->email} · yeni yetkiler "
+                .$this->yetkiOzeti($permissionRequest->user->fresh()),
+            $permissionRequest->user,
         );
 
-        return redirect()->route('admin.kullanicilar.index')->with('status', 'Yetki talebi onaylandı.');
+        return redirect()->route('admin.users.index')->with('status', 'Yetki talebi onaylandı.');
     }
 
-    public function reddetYetkiTalebi(PermissionRequest $yetkiTalebi): RedirectResponse
+    public function rejectPermissionRequest(PermissionRequest $permissionRequest): RedirectResponse
     {
         $this->authorize('admin');
 
-        $yetkiTalebi->update(['durum' => 'reddedildi']);
+        $permissionRequest->update(['durum' => 'reddedildi']);
 
-        return redirect()->route('admin.kullanicilar.index')->with('status', 'Yetki talebi reddedildi.');
+        return redirect()->route('admin.users.index')->with('status', 'Yetki talebi reddedildi.');
     }
 
     /**
@@ -190,9 +190,9 @@ class UserController extends Controller
      *
      * @return list<array{cift: string, etiket: string, rol: string, secili: string}>
      */
-    private function istisnaSatirlari(User $kullanici): array
+    private function istisnaSatirlari(User $user): array
     {
-        $istisnalar = $this->yetki->istisnalar($kullanici);
+        $istisnalar = $this->yetki->istisnalar($user);
         $satirlar = [];
 
         foreach ($this->sozluk->resourceKeys() as $kaynak) {
@@ -201,7 +201,7 @@ class UserController extends Controller
                 $satirlar[] = [
                     'cift' => $cift,
                     'etiket' => $this->sozluk->label($kaynak).' · '.$this->sozluk->actionLabel($aksiyon),
-                    'rol' => $kullanici->rol?->verir($kaynak, $aksiyon) ? 'rol verir' : 'rol vermez',
+                    'rol' => $user->rol?->verir($kaynak, $aksiyon) ? 'rol verir' : 'rol vermez',
                     'secili' => $istisnalar[$cift] ?? '',
                 ];
             }
@@ -210,10 +210,10 @@ class UserController extends Controller
         return $satirlar;
     }
 
-    private function yetkiOzeti(User $kullanici): string
+    private function yetkiOzeti(User $user): string
     {
-        $this->yetki->flush($kullanici);
-        $ozet = $this->yetki->ozet($kullanici->load('rol'));
+        $this->yetki->flush($user);
+        $ozet = $this->yetki->ozet($user->load('rol'));
 
         return $ozet === [] ? 'yok' : implode(', ', $ozet);
     }

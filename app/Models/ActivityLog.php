@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  *
  * Satırlar HMAC-SHA256 ile zincirlenir (bkz. Services\Activity\ActivityChain):
  * her satır bir öncekinin özetini taşır. Sonradan değiştirilen ya da silinen
- * bir satır zinciri kırar ve `denetim:dogrula` bunu söyler.
+ * bir satır zinciri kırar ve `audit:verify` bunu söyler.
  *
  * Tablo "kim ne yaptı" kaydıdır; `tur` alanı işlemin adını taşır
  * (yedek_indirildi, kullanici_guncelle, giris, cikis…).

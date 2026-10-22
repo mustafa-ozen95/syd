@@ -38,7 +38,7 @@ class AccountOpener
      *
      * KARAR MERKEZİNDİR: hangi uygulamada hesabın kendiliğinden açılacağını
      * merkez söyler (İstemciler ekranında uygulama başına bir kutucuk) ve
-     * kimlik yanıtında `hesap_acilabilir` olarak gönderir. Panel kendi
+     * kimlik yanıtında `can_create_account` olarak gönderir. Panel kendi
      * listesini tutmaz — aynı karar iki yerde durursa biri değişince öbürü
      * sessizce eski kalır.
      *
@@ -46,11 +46,11 @@ class AccountOpener
      * doğrulanmamış bir adresle hesap açmak, meslektaşının adresiyle kayıt
      * olan birine burada hesap vermek olurdu.
      *
-     * @param  array{email_verified?: bool, hesap_acilabilir?: bool}  $kimlik
+     * @param  array{email_verified?: bool, can_create_account?: bool}  $kimlik
      */
     public function acilabilirMi(array $kimlik): bool
     {
-        return ($kimlik['hesap_acilabilir'] ?? false)
+        return ($kimlik['can_create_account'] ?? false)
             && ($kimlik['email_verified'] ?? false);
     }
 
@@ -71,7 +71,7 @@ class AccountOpener
              */
             'password' => Str::random(64),
 
-            'rol_id' => $this->rol($kimlik['rol'] ?? null),
+            'rol_id' => $this->rol($kimlik['role'] ?? null),
             'aktif' => true,
 
             /*

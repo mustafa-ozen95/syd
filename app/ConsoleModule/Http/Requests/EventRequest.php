@@ -19,8 +19,8 @@ class EventRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'asama' => ['required', Rule::in(array_keys(ConsoleJob::ASAMALAR))],
-            'mesaj' => ['nullable', 'string', 'max:4000'],
+            'stage' => ['required', Rule::in(array_keys(ConsoleJob::ASAMALAR))],
+            'message' => ['nullable', 'string', 'max:4000'],
         ];
     }
 }

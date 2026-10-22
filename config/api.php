@@ -71,23 +71,23 @@ return [
     |
     */
     'endpoints' => [
-        'cihazlar.index' => [
+        'devices.index' => [
             'summary' => 'Cihazlar',
             'ability' => 'yedek:view',
             'description' => 'Yedeği tutulan cihaz klasörleri: yedek sayısı, son yedek zamanı, toplam boyut.',
             'parameters' => [
-                'ara' => 'klasör adında arar',
+                'search' => 'klasör adında arar',
             ],
         ],
-        'cihazlar.yedekler' => [
+        'devices.backups' => [
             'summary' => 'Cihazın yedekleri',
             'ability' => 'yedek:view',
             'description' => 'Bir cihaz klasöründeki yedek dosyaları, yeniden eskiye. Dosyanın İÇERİĞİ DÖNMEZ.',
             'parameters' => [
-                'ara' => 'dosya adında arar',
+                'search' => 'dosya adında arar',
             ],
         ],
-        'cihazlar.indir' => [
+        'devices.download' => [
             'summary' => 'Yedeği indir',
             'ability' => 'yedek:download',
             'description' => 'AYRI YETKİ ister: dosya cihazın bütün yapılandırmasıdır. '

@@ -22,7 +22,7 @@ use Illuminate\Console\Command;
  */
 class IdentitySyncCommand extends Command
 {
-    protected $signature = 'kimlik:esitle';
+    protected $signature = 'identity:sync';
 
     protected $description = 'Merkezdeki hesap durumlarını bu panele işler';
 

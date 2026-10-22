@@ -30,7 +30,7 @@
                 <td data-label="Son görülme" class="table__cell--mono">{{ $h->last_seen_at?->format('d.m.Y H:i') }}</td>
                 <td data-label="Kaç kez">{{ $h->occurrences }}</td>
                 <td data-label="Tür" class="table__cell--mono">{{ class_basename($h->type) }}</td>
-                <td data-label="Mesaj" class="satir-baslik">{{ \Illuminate\Support\Str::limit($h->message, 160) }}</td>
+                <td data-label="Mesaj" class="row-title">{{ \Illuminate\Support\Str::limit($h->message, 160) }}</td>
                 <td data-label="Nerede" class="table__cell--mono">
                   {{ $h->context_label }}
                   @if ($h->file)

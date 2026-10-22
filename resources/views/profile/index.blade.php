@@ -25,7 +25,7 @@
         </div>
         @endif
 
-        <form method="post" action="{{ route('profil.ad') }}" class="form-dar">
+        <form method="post" action="{{ route('profile.name') }}" class="form-narrow">
           @csrf
           <input type="hidden" name="_form" value="ad">
           <div class="field">
@@ -88,7 +88,7 @@
           — {{ $bekleyenTalep->created_at->format('d.m.Y H:i') }}
         </div>
         @else
-        <form method="post" action="{{ route('profil.yetki-talebi') }}" class="field--separated">
+        <form method="post" action="{{ route('profile.permission-request') }}" class="field--separated">
           @csrf
           <div class="choices">
             <label class="checkbox">

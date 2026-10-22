@@ -28,7 +28,7 @@ class RoleRequest extends FormRequest
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
-        $yeni = $this->route('rol') === null;
+        $yeni = $this->route('role') === null;
 
         return [
             'slug' => $yeni
@@ -67,7 +67,7 @@ class RoleRequest extends FormRequest
         }
 
         return array_filter([
-            'slug' => $this->route('rol') === null ? $this->string('slug')->value() : null,
+            'slug' => $this->route('role') === null ? $this->string('slug')->value() : null,
             'label' => $this->string('label')->squish()->value(),
             'aciklama' => $this->string('aciklama')->squish()->value() ?: null,
             'badge' => $this->string('badge')->value(),

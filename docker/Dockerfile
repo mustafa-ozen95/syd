@@ -19,7 +19,7 @@ ARG PHP_VERSION=8.5
 # -----------------------------------------------------------------------------
 #  1. Arayüz varlıkları
 # -----------------------------------------------------------------------------
-FROM node:22-bookworm-slim AS varliklar
+FROM node:22-bookworm-slim AS assets
 
 WORKDIR /uygulama
 
@@ -48,10 +48,10 @@ COPY console-agent/ ./
 RUN go vet ./... \
  && GOOS=windows go vet ./... \
  && go test ./... \
- && SURUM=$(cat go.mod go.sum *.go | sha256sum | cut -c1-12) \
- && BAYRAK="-s -w -X main.surum=${SURUM}" \
- && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$BAYRAK" -o /dist/console-agent-linux-amd64 . \
- && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$BAYRAK" -o /dist/console-agent-windows-amd64.exe . \
+ && VERSION=$(cat go.mod go.sum *.go | sha256sum | cut -c1-12) \
+ && LDFLAGS="-s -w -X main.version=${VERSION}" \
+ && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o /dist/console-agent-linux-amd64 . \
+ && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o /dist/console-agent-windows-amd64.exe . \
  && (cd /dist && sha256sum * > SHA256SUMS)
 
 # -----------------------------------------------------------------------------
@@ -72,7 +72,7 @@ RUN go vet ./... \
 # -----------------------------------------------------------------------------
 #  2. PHP tabanı — hem bağımlılık çözümü hem çalışma zamanı bunu paylaşır
 # -----------------------------------------------------------------------------
-FROM debian:bookworm-slim AS php-taban
+FROM debian:bookworm-slim AS php-base
 
 ARG PHP_VERSION
 # Güvenlik sürümü çıkınca artır: değeri değişen katman önbellekten gelmez, Debian ve PHP
@@ -117,7 +117,7 @@ RUN update-alternatives --set php /usr/bin/php${PHP_VERSION}
 # -----------------------------------------------------------------------------
 #  3. PHP bağımlılıkları
 # -----------------------------------------------------------------------------
-FROM php-taban AS saticilar
+FROM php-base AS vendors
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
@@ -134,7 +134,7 @@ RUN composer dump-autoload --no-dev --optimize --classmap-authoritative
 # -----------------------------------------------------------------------------
 #  4. Çalışma zamanı
 # -----------------------------------------------------------------------------
-FROM php-taban AS calisma
+FROM php-base AS runtime
 
 ARG PHP_VERSION
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -167,8 +167,8 @@ RUN useradd --system --create-home --home-dir /uygulama --shell /usr/sbin/nologi
 WORKDIR /uygulama
 
 COPY --chown=syd:syd . .
-COPY --from=saticilar --chown=syd:syd /uygulama/vendor ./vendor
-COPY --from=varliklar --chown=syd:syd /uygulama/public/build ./public/build
+COPY --from=vendors --chown=syd:syd /uygulama/vendor ./vendor
+COPY --from=assets --chown=syd:syd /uygulama/public/build ./public/build
 COPY --from=console-agent --chown=syd:syd /dist ./console-agent/dist
 COPY --from=junos-tftp /junos-tftp /usr/local/bin/junos-tftp
 
@@ -197,12 +197,12 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
 
 # Hangi commit'ten derlendiği: panel kendi sürümünü buradan bilir (Ayarlar →
 # Güncelleme). Son katmanda: değeri her derlemede değişir, önbelleği bozmasın.
-ARG SURUM=""
-ENV UYGULAMA_SURUMU=${SURUM}
-# SURUM verilmezse (bazı platformlar derlemeye commit vermez)
-# bağlamdaki .git'ten okunur ve /uygulama/SURUM'a yazılır; config önce
+ARG APP_VERSION=""
+ENV APP_VERSION=${APP_VERSION}
+# APP_VERSION verilmezse (bazı platformlar derlemeye commit vermez)
+# bağlamdaki .git'ten okunur ve /uygulama/VERSION'a yazılır; config önce
 # ortama, sonra bu dosyaya bakar. .git yoksa (zip) dosya boş kalır.
-RUN --mount=type=bind,target=/tmp/baglam sh /tmp/baglam/docker/version-read.sh > /uygulama/SURUM
+RUN --mount=type=bind,target=/tmp/baglam sh /tmp/baglam/docker/version-read.sh > /uygulama/VERSION
 
 ENTRYPOINT ["/usr/local/bin/syd-entrypoint"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]

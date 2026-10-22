@@ -44,9 +44,9 @@ function close(box) {
 
     box.querySelectorAll('form').forEach((form) => form.reset());
 
-    box.querySelectorAll('.field__error').forEach((hata) => hata.remove());
-    box.querySelectorAll('[aria-invalid="true"]').forEach((alan) => {
-        alan.setAttribute('aria-invalid', 'false');
+    box.querySelectorAll('.field__error').forEach((error) => error.remove());
+    box.querySelectorAll('[aria-invalid="true"]').forEach((field) => {
+        field.setAttribute('aria-invalid', 'false');
     });
 }
 
@@ -80,7 +80,7 @@ export function init() {
         }
     });
 
-    $('[data-modal-acik]')?.removeAttribute('hidden');
+    $('[data-modal-opened]')?.removeAttribute('hidden');
 
     /*
      * DOĞRULAMA HATASI OLAN PENCERE KENDİLİĞİNDEN AÇILIR.
@@ -90,7 +90,7 @@ export function init() {
      * gönderiliyor, sayfa yenileniyor, pencere kapanıyor ve ekranda "bir şey
      * olmadı" izlenimi kalıyor — oysa hata oradaydı, yalnızca görünmüyordu.
      *
-     * YUKARIDAKİ `data-modal-acik` YETMİYOR: onu her form ayrı ayrı
+     * YUKARIDAKİ `data-modal-opened` YETMİYOR: onu her form ayrı ayrı
      * işaretlemek zorunda ve işaret genelde "adreste hangi pencere yazıyor"
      * bilgisine bağlanmış durumda, hataya değil. İşaretlemeyi unutan ya da
      * yönlendirmede adresi koruyamayan her form sessizce bu duruma düşüyordu.
@@ -98,11 +98,11 @@ export function init() {
      * Kural GENELDİR: içinde hata olan pencere kendini açar. Her forma tek
      * tek işaret koymak, birini unutmaya açık olurdu.
      */
-    const hatali = $('[data-modal] .field__error')?.closest('[data-modal]');
+    const invalid = $('[data-modal] .field__error')?.closest('[data-modal]');
 
-    if (hatali) {
-        hatali.hidden = false;
-        hatali.querySelector('.field__error')
+    if (invalid) {
+        invalid.hidden = false;
+        invalid.querySelector('.field__error')
             ?.closest('.field')
             ?.querySelector('input, select, textarea')
             ?.focus();

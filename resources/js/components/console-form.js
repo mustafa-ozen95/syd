@@ -3,115 +3,115 @@
  *
  * "Seçilen yedek" dışında yedek cihazı ve dosyası gizlenir; ilk görünüm sunucudan doğru gelir, burada
  * yalnız değişiklik izlenir. Yedek cihazı seçilince o cihazın yedekleri
- * `data-adres`ten çekilip dosya kutusuna doldurulur.
+ * `data-url`ten çekilip dosya kutusuna doldurulur.
  *
  * Dinleyici belgede, bir kez kurulur: pencere yenilemesiz geçişte yeniden
  * çizilse de çalışır.
  */
 
-let istekNo = 0;
+let requestNo = 0;
 
-function gorunumuYenile(form) {
-    const yapilandirma = form.querySelector('[data-konsol-yapilandirma]')?.value;
+function refreshVisibility(form) {
+    const configuration = form.querySelector('[data-console-configuration]')?.value;
 
-    form.querySelectorAll('[data-konsol-sadece]').forEach((alan) => {
-        alan.classList.toggle('is-hidden', alan.dataset.konsolSadece !== yapilandirma);
+    form.querySelectorAll('[data-console-only]').forEach((field) => {
+        field.classList.toggle('is-hidden', field.dataset.consoleOnly !== configuration);
     });
 }
 
-function secenek(deger, metin) {
+function makeOption(value, text) {
     const o = document.createElement('option');
-    o.value = deger;
-    o.textContent = metin;
+    o.value = value;
+    o.textContent = text;
 
     return o;
 }
 
-async function yedekleriDoldur(cihazKutusu) {
-    const dosyaKutusu = cihazKutusu.form.querySelector('[data-konsol-yedek-dosya]');
+async function fillBackups(deviceSelect) {
+    const fileSelect = deviceSelect.form.querySelector('[data-console-backup-file]');
 
-    if (!dosyaKutusu) {
+    if (!fileSelect) {
         return;
     }
 
-    const no = ++istekNo;
-    const cihaz = cihazKutusu.value;
+    const seq = ++requestNo;
+    const device = deviceSelect.value;
 
-    if (cihaz === '') {
-        dosyaKutusu.replaceChildren(secenek('', 'Önce cihazı seçin'));
+    if (device === '') {
+        fileSelect.replaceChildren(makeOption('', 'Önce cihazı seçin'));
 
         return;
     }
 
-    dosyaKutusu.replaceChildren(secenek('', 'Yükleniyor…'));
-    dosyaKutusu.disabled = true;
+    fileSelect.replaceChildren(makeOption('', 'Yükleniyor…'));
+    fileSelect.disabled = true;
 
     try {
-        const yanit = await fetch(`${cihazKutusu.dataset.adres}?cihaz=${encodeURIComponent(cihaz)}`, {
+        const response = await fetch(`${deviceSelect.dataset.url}?device=${encodeURIComponent(device)}`, {
             headers: { Accept: 'application/json' },
         });
 
-        if (!yanit.ok) {
-            throw new Error(String(yanit.status));
+        if (!response.ok) {
+            throw new Error(String(response.status));
         }
 
-        const { yedekler } = await yanit.json();
+        const { yedekler: backups } = await response.json();
 
-        if (no !== istekNo) {
+        if (seq !== requestNo) {
             return;
         }
 
-        dosyaKutusu.replaceChildren(
-            secenek('', yedekler.length ? '— seçin —' : 'Bu cihazın yedeği yok'),
-            ...yedekler.map((y) => secenek(y.dosya, y.etiket)),
+        fileSelect.replaceChildren(
+            makeOption('', backups.length ? '— seçin —' : 'Bu cihazın yedeği yok'),
+            ...backups.map((y) => makeOption(y.dosya, y.etiket)),
         );
     } catch {
-        if (no === istekNo) {
-            dosyaKutusu.replaceChildren(secenek('', 'Liste alınamadı; cihazı yeniden seçin'));
+        if (seq === requestNo) {
+            fileSelect.replaceChildren(makeOption('', 'Liste alınamadı; cihazı yeniden seçin'));
         }
     } finally {
-        if (no === istekNo) {
-            dosyaKutusu.disabled = false;
+        if (seq === requestNo) {
+            fileSelect.disabled = false;
         }
     }
 }
 
 export function init() {
-    document.addEventListener('change', (olay) => {
-        const hedef = olay.target;
+    document.addEventListener('change', (event) => {
+        const target = event.target;
 
-        if (!(hedef instanceof HTMLSelectElement) || !hedef.form) {
+        if (!(target instanceof HTMLSelectElement) || !target.form) {
             return;
         }
 
-        if (hedef.matches('[data-konsol-adres]')) {
-            hedef.form.querySelectorAll('[data-konsol-sabit]').forEach((alan) => {
-                alan.classList.toggle('is-hidden', hedef.value === 'dhcp');
+        if (target.matches('[data-console-address]')) {
+            target.form.querySelectorAll('[data-console-fixed]').forEach((field) => {
+                field.classList.toggle('is-hidden', target.value === 'dhcp');
             });
-        } else if (hedef.matches('[data-konsol-pc]')) {
+        } else if (target.matches('[data-console-pc]')) {
             /* PC değişince adres onun kaydındakiyle dolar. */
-            const secili = hedef.selectedOptions[0];
-            const ip = hedef.form.querySelector('[data-konsol-ip]');
-            const gecit = hedef.form.querySelector('[data-konsol-gecit]');
+            const selected = target.selectedOptions[0];
+            const ip = target.form.querySelector('[data-console-ip]');
+            const gatewayInput = target.form.querySelector('[data-console-gateway]');
 
-            if (secili && ip && gecit) {
-                ip.value = secili.dataset.ip ?? '';
-                gecit.value = secili.dataset.gecit ?? '';
+            if (selected && ip && gatewayInput) {
+                ip.value = selected.dataset.ip ?? '';
+                gatewayInput.value = selected.dataset.gateway ?? '';
             }
-        } else if (hedef.matches('[data-konsol-yapilandirma]')) {
-            gorunumuYenile(hedef.form);
+        } else if (target.matches('[data-console-configuration]')) {
+            refreshVisibility(target.form);
 
             /* "Seçilen yedek"e geçince cihaz boşsa "Cihaz" alanındaki ad önerilir. */
-            const cihazKutusu = hedef.form.querySelector('[data-konsol-yedek-cihaz]');
-            const ad = hedef.form.querySelector('[data-konsol-cihaz]')?.value;
+            const deviceSelect = target.form.querySelector('[data-console-backup-device]');
+            const deviceName = target.form.querySelector('[data-console-device]')?.value;
 
-            if (hedef.value === 'yedek' && cihazKutusu && cihazKutusu.value === ''
-                && [...cihazKutusu.options].some((o) => o.value === ad)) {
-                cihazKutusu.value = ad;
-                yedekleriDoldur(cihazKutusu);
+            if (target.value === 'yedek' && deviceSelect && deviceSelect.value === ''
+                && [...deviceSelect.options].some((o) => o.value === deviceName)) {
+                deviceSelect.value = deviceName;
+                fillBackups(deviceSelect);
             }
-        } else if (hedef.matches('[data-konsol-yedek-cihaz]')) {
-            yedekleriDoldur(hedef);
+        } else if (target.matches('[data-console-backup-device]')) {
+            fillBackups(target);
         }
     });
 }

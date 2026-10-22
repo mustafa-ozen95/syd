@@ -7,7 +7,7 @@
 
             <x-ui.flash />
 
-            <form method="POST" action="{{ route('admin.ayarlar.update') }}"
+            <form method="POST" action="{{ route('admin.settings.update') }}"
                   data-confirm="{{ $definition['label'] }} ayarları değişecek."
                   data-confirm-title="Ayarları kaydet"
                   data-confirm-reasonless>

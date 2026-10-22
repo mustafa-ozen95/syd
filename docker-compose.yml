@@ -14,13 +14,13 @@
 #
 #  Servisler: panel (nginx + php-fpm + zamanlayıcı), db (MariaDB), redis
 #  (önbellek, oturum, kuyruk; kalıcılık kapalı), tftp (Junos görüntüleri,
-#  69/udp), swbck-cek (switch yedeklerini FTP'den çeker; varsayılan kapalı).
+#  69/udp), swbck-pull (switch yedeklerini FTP'den çeker; varsayılan kapalı).
 #
 #  Dışarıdaki ya da platformun yönettiği bir veritabanı: DB_HOST ve
-#  kimlik bilgilerini verin, VT_KOPYA=0 ile db servisi hiç kalkmaz.
+#  kimlik bilgilerini verin, DB_REPLICAS=0 ile db servisi hiç kalkmaz.
 #
-#  Adlar: konteyner ve hacimler ONEK ile başlar (varsayılan syd). Aynı
-#  sunucuda ikinci kurulum ONEK'i değiştirir.
+#  Adlar: konteyner ve hacimler STACK_PREFIX ile başlar (varsayılan syd). Aynı
+#  sunucuda ikinci kurulum STACK_PREFIX'i değiştirir.
 # =============================================================================
 
 services:
@@ -28,8 +28,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    image: ${ONEK:-syd}:yerel
-    container_name: ${ONEK:-syd}
+    image: ${STACK_PREFIX:-syd}:local
+    container_name: ${STACK_PREFIX:-syd}
     restart: unless-stopped
     stop_grace_period: 2m
     expose: ["80"]
@@ -52,20 +52,20 @@ services:
       - REDIS_HOST
       - REDIS_PORT
       - REDIS_PASSWORD
-      - YEDEK_KOK
+      - BACKUP_ROOT
       - JUNOS_TFTP
-      - KIMLIK_ACIK
-      - KIMLIK_ADRES
-      - KIMLIK_ISTEMCI
-      - KIMLIK_ISTEMCI_SIR
-      - KIMLIK_DONUS
-      - KIMLIK_BILDIRIM_SIR
-      - KIMLIK_AD
-      - KIMLIK_KOK
-      - TEMA_ALANI
-      - DENETIM_ANAHTARI
-      - GUNCELLEME_JETONU
-      - PANEL_AD
+      - IDENTITY_ENABLED
+      - IDENTITY_URL
+      - IDENTITY_CLIENT_ID
+      - IDENTITY_CLIENT_SECRET
+      - IDENTITY_REDIRECT_URI
+      - IDENTITY_NOTIFY_SECRET
+      - IDENTITY_NAME
+      - IDENTITY_CA_CERT
+      - THEME_COOKIE_DOMAIN
+      - AUDIT_KEY
+      - UPDATE_TOKEN
+      - PANEL_NAME
       - MAIL_MAILER
       - MAIL_HOST
       - MAIL_PORT
@@ -81,7 +81,7 @@ services:
       - logs:/uygulama/storage/logs
       # Switch yedekleri SALT OKUNUR: çoğu zaman cihaz yedeklerinin tek kopyası. Panelin
       # yazma ucu yok; kod bir gün yanlışlıkla yazmaya kalksa bile dosya
-      # sistemi izin vermesin. Yazan yalnız swbck-cek (ya da sunucudaki FTP).
+      # sistemi izin vermesin. Yazan yalnız swbck-pull (ya da sunucudaki FTP).
       - backups:/yedekler:ro
       # TFTP sunucusunun ilerleme dosyası (konsol işi sayfası gösterir).
       - tftp-state:/durum:ro
@@ -100,11 +100,11 @@ services:
 
   db:
     image: mariadb:11.4
-    container_name: ${ONEK:-syd}-db
+    container_name: ${STACK_PREFIX:-syd}-db
     restart: unless-stopped
     # 0: dışarıdaki ya da platformun veritabanı kullanılıyor (DB_HOST).
     deploy:
-      replicas: ${VT_KOPYA:-1}
+      replicas: ${DB_REPLICAS:-1}
     command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
     environment:
       MARIADB_DATABASE: ${DB_DATABASE:-syd}
@@ -123,7 +123,7 @@ services:
 
   redis:
     image: redis:7.4-alpine
-    container_name: ${ONEK:-syd}-redis
+    container_name: ${STACK_PREFIX:-syd}-redis
     restart: unless-stopped
     # Kalıcılık KAPALI: burada yalnız önbellek, oturum ve kuyruk durur.
     command: ["redis-server", "--save", "", "--appendonly", "no"]
@@ -143,11 +143,11 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    image: ${ONEK:-syd}:yerel
-    container_name: ${ONEK:-syd}-tftp
+    image: ${STACK_PREFIX:-syd}:local
+    container_name: ${STACK_PREFIX:-syd}-tftp
     restart: unless-stopped
     entrypoint: ["/usr/local/bin/junos-tftp"]
-    command: ["-kok", "/junos", "-adres", ":69", "-durum", "/durum/tftp.json"]
+    command: ["-root", "/junos", "-addr", ":69", "-state", "/durum/tftp.json"]
     ports:
       - "${TFTP_PORT:-69}:69/udp"
     volumes:
@@ -166,28 +166,28 @@ services:
       disable: true
 
   # ---------------------------------------------------------------------------
-  #  SWBCK-CEK — switch yedeklerini FTP'den çeker (varsayılan KAPALI)
+  #  SWBCK-PULL — switch yedeklerini FTP'den çeker (varsayılan KAPALI)
   # ---------------------------------------------------------------------------
   #  Yedekler bu sunucuya FTP ile gelmiyorsa (cihazlar başka bir FTP'ye
-  #  yazıyorsa) SWBCK_CEK_KOPYA=1 ve SWBCK_FTP_*. Yalnız yeni ya da değişmiş
+  #  yazıyorsa) SWBCK_PULL_REPLICAS=1 ve SWBCK_FTP_*. Yalnız yeni ya da değişmiş
   #  dosya iner, yerelde hiçbir dosya silinmez. Dosyalar 1000:1000'e ait.
   #  FTP bilgisi yalnız bu serviste; panel görmez.
-  swbck-cek:
+  swbck-pull:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    image: ${ONEK:-syd}:yerel
-    container_name: ${ONEK:-syd}-swbck-cek
+    image: ${STACK_PREFIX:-syd}:local
+    container_name: ${STACK_PREFIX:-syd}-swbck-pull
     restart: unless-stopped
     deploy:
-      replicas: ${SWBCK_CEK_KOPYA:-0}
+      replicas: ${SWBCK_PULL_REPLICAS:-0}
     user: "1000:1000"
     entrypoint: ["/usr/local/bin/syd-swbck-pull"]
     environment:
-      - SWBCK_FTP_ADRES
-      - SWBCK_FTP_KULLANICI
-      - SWBCK_FTP_PAROLA
-      - SWBCK_ARALIK
+      - SWBCK_FTP_HOST
+      - SWBCK_FTP_USER
+      - SWBCK_FTP_PASSWORD
+      - SWBCK_INTERVAL
       - HOME=/tmp
     volumes:
       - backups:/yedekler
@@ -208,19 +208,19 @@ networks:
     # Ağ yalıtımı: true iken konteynerler switchlere, PC'lere, kimlik merkezine ve
     # dışarıya bağlanamaz (taşıma ya da deneme kurulumunda canlıya dokunmamak
     # için). Port yayınları da o zaman dışarıdan erişilmez.
-    internal: ${AG_YALITIMI:-false}
+    internal: ${NETWORK_ISOLATED:-false}
   dis: {}
 
 volumes:
   storage:
-    name: ${ONEK:-syd}_storage
+    name: ${STACK_PREFIX:-syd}_storage
   logs:
-    name: ${ONEK:-syd}_logs
+    name: ${STACK_PREFIX:-syd}_logs
   database:
-    name: ${ONEK:-syd}_database
+    name: ${STACK_PREFIX:-syd}_database
   backups:
-    name: ${ONEK:-syd}_swbck
+    name: ${STACK_PREFIX:-syd}_swbck
   junos:
-    name: ${ONEK:-syd}_junos
+    name: ${STACK_PREFIX:-syd}_junos
   tftp-state:
-    name: ${ONEK:-syd}_tftp-state
+    name: ${STACK_PREFIX:-syd}_tftp-state

@@ -35,7 +35,7 @@ class CenterLoginController extends Controller
 
     private const DOGRULAYICI = 'kimlik_dogrulayici';
 
-    public function baslat(Request $request, CenterClient $merkez): RedirectResponse
+    public function start(Request $request, CenterClient $merkez): RedirectResponse
     {
         abort_unless($merkez->acikMi(), 404);
 
@@ -52,7 +52,7 @@ class CenterLoginController extends Controller
         return redirect()->away($merkez->girisAdresi($durum, $merkez->meydanOkuma($dogrulayici)));
     }
 
-    public function geri(
+    public function callback(
         Request $request,
         CenterClient $merkez,
         AccountMatcher $eslestirici,
@@ -124,7 +124,7 @@ class CenterLoginController extends Controller
             $kayit->kaydet(
                 'merkez-hesap-acildi',
                 "Merkezden gelen kimlik için hesap açıldı: {$kullanici->email}"
-                    ." · {$kimlik['email']} · merkezdeki rol ".($kimlik['rol'] ?? 'rolsüz'),
+                    ." · {$kimlik['email']} · merkezdeki rol ".($kimlik['role'] ?? 'rolsüz'),
                 $kullanici,
                 $kullanici,
             );
@@ -149,12 +149,12 @@ class CenterLoginController extends Controller
 
         $kayit->kaydet(
             $ilkBag->wasRecentlyCreated ? 'merkez-giris-baglandi' : 'merkez-giris',
-            "Merkezle giriş: {$kimlik['email']} (rol: ".($kimlik['rol'] ?? 'rolsüz').')',
+            "Merkezle giriş: {$kimlik['email']} (rol: ".($kimlik['role'] ?? 'rolsüz').')',
             $kullanici,
             $kullanici,
         );
 
-        return redirect()->intended(route('yedek.index'));
+        return redirect()->intended(route('backup.index'));
     }
 
     private function hata(string $mesaj): RedirectResponse

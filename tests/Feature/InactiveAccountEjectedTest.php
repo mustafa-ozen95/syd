@@ -22,11 +22,11 @@ class InactiveAccountEjectedTest extends TestCase
     {
         $kullanici = User::factory()->yedekci()->create();
 
-        $this->actingAs($kullanici)->get(route('yedek.index'))->assertOk();
+        $this->actingAs($kullanici)->get(route('backup.index'))->assertOk();
 
         $kullanici->forceFill(['aktif' => false])->save();
 
-        $this->get(route('yedek.index'))->assertRedirect(route('login'));
+        $this->get(route('backup.index'))->assertRedirect(route('login'));
         $this->assertGuest();
     }
 
@@ -34,8 +34,8 @@ class InactiveAccountEjectedTest extends TestCase
     {
         $kullanici = User::factory()->yedekci()->create();
 
-        $this->actingAs($kullanici)->get(route('yedek.index'))->assertOk();
-        $this->get(route('yedek.index'))->assertOk();
+        $this->actingAs($kullanici)->get(route('backup.index'))->assertOk();
+        $this->get(route('backup.index'))->assertOk();
 
         $this->assertAuthenticatedAs($kullanici);
     }

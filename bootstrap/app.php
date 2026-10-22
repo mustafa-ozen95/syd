@@ -95,13 +95,13 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
 
-        // Yetkisiz istek 403 sayfası yerine /yetkisiz ekranına yönlendirilir
+        // Yetkisiz istek 403 sayfası yerine /forbidden ekranına yönlendirilir
         // (Laravel varsayılanı 403 sayfası döner).
         // Not: Illuminate\Auth\Access\AuthorizationException, Handler::prepareException()
         // tarafindan bu noktaya gelmeden once AccessDeniedHttpException'a cevriliyor.
         $exceptions->render(function (AccessDeniedHttpException $e, Request $request) {
             if (! $request->expectsJson() && $request->user()) {
-                return redirect()->route('yetkisiz');
+                return redirect()->route('forbidden');
             }
         });
     })->create();

@@ -24,18 +24,18 @@
             <tbody>
               @foreach ($yetkiTalepleri as $t)
               <tr>
-                <td data-label="Kullanıcı" class="satir-baslik">{{ $t->user->name }}</td>
+                <td data-label="Kullanıcı" class="row-title">{{ $t->user->name }}</td>
                 <td data-label="Talep edilen yetkiler">
                   {{ $t->perm_yedek ? 'Yedekleri görüntüleme ve indirme' : 'hiçbiri (izin kaldırma talebi)' }}
                 </td>
                 <td data-label="Talep zamanı" class="table__cell--mono">{{ $t->created_at->format('d.m.Y H:i') }}</td>
                 <td>
                   <div class="table__row-actions">
-                    <form method="post" action="{{ route('admin.yetki-talepleri.onayla', $t) }}">
+                    <form method="post" action="{{ route('admin.permission-requests.approve', $t) }}">
                       @csrf
                       <button type="submit" class="btn btn--sm btn--primary"><x-icon name="check" />Onayla</button>
                     </form>
-                    <form method="post" action="{{ route('admin.yetki-talepleri.reddet', $t) }}">
+                    <form method="post" action="{{ route('admin.permission-requests.reject', $t) }}">
                       @csrf
                       <button type="submit" class="btn btn--sm">Reddet</button>
                     </form>
@@ -72,7 +72,7 @@
             <tbody>
               @foreach ($kullanicilar as $k)
               <tr>
-                <td data-label="Kullanıcı" class="satir-baslik">{{ $k->name }}</td>
+                <td data-label="Kullanıcı" class="row-title">{{ $k->name }}</td>
                 <td data-label="E-posta" class="mono text-muted">{{ $k->email ?? '—' }}</td>
                 {{-- Rozet rengi rolün kendi kaydından gelir; ekrana koda gömülü renk yazılmaz. --}}
                 <td data-label="Rol">
@@ -100,10 +100,10 @@
                 <td data-label="İzinler" class="text-sm text-muted">{{ $yetkiler[$k->id]['ozet'] }}</td>
                 <td>
                   <div class="table__row-actions">
-                    <a href="#" class="btn btn--sm" data-modal-open="kullanici-duzenle-{{ $k->id }}"><x-icon name="edit" />Düzenle</a>
+                    <a href="#" class="btn btn--sm" data-modal-open="user-edit-{{ $k->id }}"><x-icon name="edit" />Düzenle</a>
                     <form
                       method="post"
-                      action="{{ route('admin.kullanicilar.destroy', $k) }}"
+                      action="{{ route('admin.users.destroy', $k) }}"
                       data-confirm="&quot;{{ $k->email }}&quot; hesabı kalıcı olarak silinecek."
                       data-confirm-title="Kullanıcıyı sil"
                       data-confirm-variant="danger"
@@ -133,19 +133,19 @@
     @foreach ($kullanicilar as $k)
 <div
   class="modal"
-  id="kullanici-duzenle-{{ $k->id }}"
+  id="user-edit-{{ $k->id }}"
   data-modal
   @unless ($formlar[$k->id]['acik']) hidden @endunless
-  @if ($formlar[$k->id]['acik']) data-modal-acik data-modal-kapanis="{{ route('admin.kullanicilar.index') }}" @endif
-  role="dialog" aria-modal="true" aria-labelledby="kullanici-duzenle-{{ $k->id }}-baslik"
+  @if ($formlar[$k->id]['acik']) data-modal-opened data-modal-close-url="{{ route('admin.users.index') }}" @endif
+  role="dialog" aria-modal="true" aria-labelledby="user-edit-{{ $k->id }}-baslik"
 >
   <div class="modal__box modal__box--wide">
     <header class="modal__header">
-      <h2 class="modal__title" id="kullanici-duzenle-{{ $k->id }}-baslik">{{ $k->name }} — düzenle</h2>
+      <h2 class="modal__title" id="user-edit-{{ $k->id }}-baslik">{{ $k->name }} — düzenle</h2>
       <button type="button" class="modal__close" data-modal-close aria-label="Kapat">×</button>
     </header>
 
-    <form method="post" action="{{ route('admin.kullanicilar.update', $k) }}">
+    <form method="post" action="{{ route('admin.users.update', $k) }}">
       @csrf
       <input type="hidden" name="_form" value="duzenle-{{ $k->id }}">
       <div class="modal__body">
@@ -160,27 +160,27 @@
         @endif
 
         <div class="field">
-          <label class="field__label" for="ad-{{ $k->id }}">Ad soyad</label>
-          <input type="text" class="input" id="ad-{{ $k->id }}" name="ad"
+          <label class="field__label" for="name-{{ $k->id }}">Ad soyad</label>
+          <input type="text" class="input" id="name-{{ $k->id }}" name="ad"
                  value="{{ $formlar[$k->id]['acik'] ? old('ad') : $k->name }}" required
                  aria-invalid="{{ $formlar[$k->id]['acik'] && $errors->has('ad') ? 'true' : 'false' }}">
         </div>
 
         <div class="field">
-          <label class="field__label" for="eposta-{{ $k->id }}">E-posta <span class="text-muted">(giriş anahtarı)</span></label>
-          <input type="email" class="input input--mono" id="eposta-{{ $k->id }}" name="eposta" required
+          <label class="field__label" for="email-{{ $k->id }}">E-posta <span class="text-muted">(giriş anahtarı)</span></label>
+          <input type="email" class="input input--mono" id="email-{{ $k->id }}" name="eposta" required
                  value="{{ $formlar[$k->id]['acik'] ? old('eposta') : $k->email }}" placeholder="ad.soyad@ornek.test"
                  aria-invalid="{{ $formlar[$k->id]['acik'] && $errors->has('eposta') ? 'true' : 'false' }}">
         </div>
 
         <div class="field-row">
-            <label class="field__label" for="rol-{{ $k->id }}">Rol</label>
+            <label class="field__label" for="role-{{ $k->id }}">Rol</label>
             {{--
               Roller VERİDEN gelir (merkezdekiyle aynı slug'lar). Seçenekleri
               koda gömmek, yeni bir rol eklendiğinde iki yeri birden
               düzenlemeyi gerektirirdi.
             --}}
-            <select class="select" id="rol-{{ $k->id }}" name="rol">
+            <select class="select" id="role-{{ $k->id }}" name="rol">
               @foreach ($roller as $rol)
                 <option value="{{ $rol->slug }}" {{ $formlar[$k->id]['rol'] === $rol->slug ? 'selected' : '' }}>{{ $rol->label }}</option>
               @endforeach
@@ -197,10 +197,10 @@
           bırakılırsa var olan parola değişmez.
         --}}
         <div class="field field--separated">
-          <label class="field__label" for="yeni-sifre-{{ $k->id }}">
+          <label class="field__label" for="new-password-{{ $k->id }}">
             Parola <span class="text-muted">(merkez erişilemezse girebilmek için)</span>
           </label>
-          <input type="password" class="input" id="yeni-sifre-{{ $k->id }}" name="yeni_sifre"
+          <input type="password" class="input" id="new-password-{{ $k->id }}" name="yeni_sifre"
                  autocomplete="new-password" placeholder="değişmesin diye boş bırakın"
                  aria-invalid="{{ $formlar[$k->id]['acik'] && $errors->has('yeni_sifre') ? 'true' : 'false' }}">
           <span class="field__hint">En az 12 karakter. Boş bırakılırsa parola değişmez.</span>
@@ -224,11 +224,11 @@
                 @foreach ($yetkiler[$k->id]['satirlar'] as $satir)
                   <tr>
                     <td data-label="Yetki">
-                      <label for="istisna-{{ $k->id }}-{{ $loop->index }}">{{ $satir['etiket'] }}</label>
+                      <label for="exception-{{ $k->id }}-{{ $loop->index }}">{{ $satir['etiket'] }}</label>
                       <div class="text-sm text-muted">{{ $satir['rol'] }}</div>
                     </td>
                     <td data-label="Bu kişide">
-                      <select class="select" id="istisna-{{ $k->id }}-{{ $loop->index }}" name="istisna[{{ $satir['cift'] }}]">
+                      <select class="select" id="exception-{{ $k->id }}-{{ $loop->index }}" name="istisna[{{ $satir['cift'] }}]">
                         <option value="" @selected($satir['secili'] === '')>Rolden</option>
                         <option value="izin" @selected($satir['secili'] === 'izin')>İzin</option>
                         <option value="yasak" @selected($satir['secili'] === 'yasak')>Yasak</option>

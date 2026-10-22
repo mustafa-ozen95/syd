@@ -25,12 +25,12 @@ Route::middleware(['auth:api', 'throttle:api'])
     ->prefix('v1')
     ->name('api.v1.')
     ->group(function (): void {
-        Route::get('cihazlar', [DeviceApiController::class, 'index'])
-            ->middleware('can:yedek:view')->name('cihazlar.index');
-        Route::get('cihazlar/{cihaz}/yedekler', [DeviceApiController::class, 'yedekler'])
-            ->middleware('can:yedek:view')->name('cihazlar.yedekler');
-        Route::get('cihazlar/{cihaz}/yedekler/{dosya}', [DeviceApiController::class, 'indir'])
-            ->middleware('can:yedek:download')->name('cihazlar.indir');
+        Route::get('devices', [DeviceApiController::class, 'index'])
+            ->middleware('can:yedek:view')->name('devices.index');
+        Route::get('devices/{device}/backups', [DeviceApiController::class, 'backups'])
+            ->middleware('can:yedek:view')->name('devices.backups');
+        Route::get('devices/{device}/backups/{file}', [DeviceApiController::class, 'download'])
+            ->middleware('can:yedek:download')->name('devices.download');
         Route::get('junos', JunosApiController::class)
             ->middleware('can:junos:view')->name('junos.index');
     });
@@ -48,11 +48,11 @@ Route::middleware(['auth:api', 'throttle:api'])
  *
  * Hız sınırı var: imza tutmasa bile bu uç merkeze bir istek attırabilir.
  */
-Route::post('kimlik/tazele', IdentityRefreshController::class)
+Route::post('identity/refresh', IdentityRefreshController::class)
     ->middleware('throttle:60,1')
-    ->name('api.kimlik.tazele');
+    ->name('api.identity.refresh');
 
 /* MERKEZDEN "bu kişi çıkış yaptı" — ortak çıkış (bkz. IdentityLogoutController). */
-Route::post('kimlik/cikis', IdentityLogoutController::class)
+Route::post('identity/logout', IdentityLogoutController::class)
     ->middleware('throttle:60,1')
-    ->name('api.kimlik.cikis');
+    ->name('api.identity.logout');

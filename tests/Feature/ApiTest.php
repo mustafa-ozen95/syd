@@ -32,7 +32,7 @@ final class ApiTest extends TestCase
         mkdir($this->kok.'/SW-A', 0755, true);
         file_put_contents($this->kok.'/SW-A/sw-a_juniper.conf.gz_20260115_090000', 'yapilandirma');
         file_put_contents($this->kok.'/gizli.txt', 'kok');
-        config(['backup.kok' => $this->kok]);
+        config(['backup.root' => $this->kok]);
         $this->app->forgetInstance(BackupStore::class);
     }
 
@@ -69,8 +69,8 @@ final class ApiTest extends TestCase
     #[Test]
     public function jetonsuz_ve_oturum_cereziyle_girilmez(): void
     {
-        $this->getJson(route('api.v1.cihazlar.index'))->assertUnauthorized();
-        $this->actingAs(User::factory()->admin()->create())->getJson(route('api.v1.cihazlar.index'))->assertUnauthorized();
+        $this->getJson(route('api.v1.devices.index'))->assertUnauthorized();
+        $this->actingAs(User::factory()->admin()->create())->getJson(route('api.v1.devices.index'))->assertUnauthorized();
     }
 
     #[Test]
@@ -79,15 +79,15 @@ final class ApiTest extends TestCase
         $sahip = User::factory()->rol('network')->create();
         $jeton = $this->jeton($sahip, ['yedek' => ['view']]);
 
-        $this->istek($jeton, 'api.v1.cihazlar.index')->assertOk()->assertJsonPath('data.0.ad', 'SW-A');
-        $this->istek($jeton, 'api.v1.cihazlar.yedekler', ['cihaz' => 'SW-A'])->assertOk()
+        $this->istek($jeton, 'api.v1.devices.index')->assertOk()->assertJsonPath('data.0.ad', 'SW-A');
+        $this->istek($jeton, 'api.v1.devices.backups', ['device' => 'SW-A'])->assertOk()
             ->assertJsonPath('data.0.ad', 'sw-a_juniper.conf.gz_20260115_090000')
             ->assertJsonMissingPath('data.0.icerik');
-        $this->istek($jeton, 'api.v1.cihazlar.indir', ['cihaz' => 'SW-A', 'dosya' => 'sw-a_juniper.conf.gz_20260115_090000'])
+        $this->istek($jeton, 'api.v1.devices.download', ['device' => 'SW-A', 'file' => 'sw-a_juniper.conf.gz_20260115_090000'])
             ->assertForbidden();
 
         $indiren = $this->jeton($sahip, ['yedek' => ['view', 'download']]);
-        $this->istek($indiren, 'api.v1.cihazlar.indir', ['cihaz' => 'SW-A', 'dosya' => 'sw-a_juniper.conf.gz_20260115_090000'])
+        $this->istek($indiren, 'api.v1.devices.download', ['device' => 'SW-A', 'file' => 'sw-a_juniper.conf.gz_20260115_090000'])
             ->assertOk();
         $this->assertStringContainsString('API · sinama', (string) ActivityLog::where('tur', 'yedek_indirildi')->latest('id')->value('aciklama'));
     }
@@ -96,10 +96,10 @@ final class ApiTest extends TestCase
     public function jeton_sahibini_asamaz_yonetici_jetonu_da_listesiyle_sinirli(): void
     {
         $teknik = User::factory()->rol('teknik')->create();
-        $this->istek($this->jeton($teknik, ['yedek' => ['view']]), 'api.v1.cihazlar.index')->assertForbidden();
+        $this->istek($this->jeton($teknik, ['yedek' => ['view']]), 'api.v1.devices.index')->assertForbidden();
 
         $yonetici = User::factory()->admin()->create();
-        $this->istek($this->jeton($yonetici, ['junos' => ['view']]), 'api.v1.cihazlar.index')->assertForbidden();
+        $this->istek($this->jeton($yonetici, ['junos' => ['view']]), 'api.v1.devices.index')->assertForbidden();
         $this->istek($this->jeton($yonetici, ['junos' => ['view']]), 'api.v1.junos.index')->assertOk()
             ->assertJsonPath('data.0.komut', 'install --format tftp://192.0.2.5/jinstall-ex-2200-12.3R12.4-domestic-signed.tgz');
     }
@@ -110,17 +110,17 @@ final class ApiTest extends TestCase
         $sahip = User::factory()->rol('network')->create();
         $y = ['yedek' => ['view']];
 
-        $this->istek($this->jeton($sahip, $y, ['expires_at' => now()->subDay()]), 'api.v1.cihazlar.index')->assertUnauthorized();
-        $this->istek($this->jeton($sahip, $y, ['allowed_ips' => ['203.0.113.0/24']]), 'api.v1.cihazlar.index')->assertUnauthorized();
-        $this->istek($this->jeton($sahip, $y, ['allowed_ips' => ['127.0.0.0/8']]), 'api.v1.cihazlar.index')->assertOk();
+        $this->istek($this->jeton($sahip, $y, ['expires_at' => now()->subDay()]), 'api.v1.devices.index')->assertUnauthorized();
+        $this->istek($this->jeton($sahip, $y, ['allowed_ips' => ['203.0.113.0/24']]), 'api.v1.devices.index')->assertUnauthorized();
+        $this->istek($this->jeton($sahip, $y, ['allowed_ips' => ['127.0.0.0/8']]), 'api.v1.devices.index')->assertOk();
 
         $iptal = $this->jeton($sahip, $y);
         ApiToken::latest('id')->first()->revoke();
-        $this->istek($iptal, 'api.v1.cihazlar.index')->assertUnauthorized();
+        $this->istek($iptal, 'api.v1.devices.index')->assertUnauthorized();
 
         $kapali = $this->jeton($sahip, $y);
         $sahip->update(['aktif' => false]);
-        $this->istek($kapali, 'api.v1.cihazlar.index')->assertUnauthorized();
+        $this->istek($kapali, 'api.v1.devices.index')->assertUnauthorized();
     }
 
     #[Test]
@@ -128,9 +128,9 @@ final class ApiTest extends TestCase
     {
         $jeton = $this->jeton(User::factory()->rol('network')->create(), ['yedek' => ['view', 'download']]);
 
-        $this->istek($jeton, 'api.v1.cihazlar.yedekler', ['cihaz' => '..'])->assertNotFound();
-        $this->istek($jeton, 'api.v1.cihazlar.indir', ['cihaz' => 'SW-A', 'dosya' => '..%2Fgizli.txt'])->assertNotFound();
-        $this->istek($jeton, 'api.v1.cihazlar.indir', ['cihaz' => '..', 'dosya' => 'gizli.txt'])->assertNotFound();
+        $this->istek($jeton, 'api.v1.devices.backups', ['device' => '..'])->assertNotFound();
+        $this->istek($jeton, 'api.v1.devices.download', ['device' => 'SW-A', 'file' => '..%2Fgizli.txt'])->assertNotFound();
+        $this->istek($jeton, 'api.v1.devices.download', ['device' => '..', 'file' => 'gizli.txt'])->assertNotFound();
     }
 
     #[Test]
@@ -157,9 +157,9 @@ final class ApiTest extends TestCase
             ->assertOk()->assertSee($sir);
         $this->actingAs($yonetici)->get(route('admin.api.show', $token))->assertOk()->assertDontSee($sir);
         $this->actingAs($yonetici)->get(route('admin.api.index'))->assertOk()->assertDontSee($sir);
-        $this->actingAs($yonetici)->get(route('admin.api.docs'))->assertOk()->assertSee('/api/v1/cihazlar');
+        $this->actingAs($yonetici)->get(route('admin.api.docs'))->assertOk()->assertSee('/api/v1/devices');
 
-        $this->actingAs($sahip)->get(route('admin.api.index'))->assertRedirect(route('yetkisiz'));
+        $this->actingAs($sahip)->get(route('admin.api.index'))->assertRedirect(route('forbidden'));
     }
 
     #[Test]

@@ -4,7 +4,7 @@
             <x-ui.page-head title="Ayarlar"
                             subtitle="Rolün yetkileri canlıdır: kaydedildiği an o roldeki herkes için geçerli. Kişiye özel istisnalar Kullanıcılar ekranından verilir. Hangi rolün bu panele girdiğine kimlik merkezi karar verir.">
                 <x-slot:actions>
-                    <a href="{{ route('admin.roller.create') }}" class="btn btn--primary btn--sm"><x-icon name="plus" />Yeni rol</a>
+                    <a href="{{ route('admin.roles.create') }}" class="btn btn--primary btn--sm"><x-icon name="plus" />Yeni rol</a>
                 </x-slot:actions>
             </x-ui.page-head>
 
@@ -38,9 +38,9 @@
                                     <td data-label="Yetkiler" class="text-sm text-muted">{{ $satir['ozet'] }}</td>
                                     <td>
                                         <div class="table__row-actions">
-                                            <a href="{{ route('admin.roller.edit', $satir['rol']) }}" class="btn btn--sm"><x-icon name="edit" />Düzenle</a>
+                                            <a href="{{ route('admin.roles.edit', $satir['rol']) }}" class="btn btn--sm"><x-icon name="edit" />Düzenle</a>
                                             @if ($satir['silinebilir'])
-                                                <x-ui.delete-form :action="route('admin.roller.destroy', $satir['rol'])"
+                                                <x-ui.delete-form :action="route('admin.roles.destroy', $satir['rol'])"
                                                                   confirm="{{ $satir['rol']->label }} rolü silinecek."
                                                                   title="Rolü sil"
                                                                   verify="{{ $satir['rol']->slug }}"

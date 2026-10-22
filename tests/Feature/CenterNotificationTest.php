@@ -31,11 +31,11 @@ class CenterNotificationTest extends TestCase
 
         config([
             'identity.acik' => true,
-            'identity.yapilandirildi' => true,
-            'identity.adres' => 'https://merkez.test',
-            'identity.istemci' => 'istemci',
-            'identity.sir' => 'sir',
-            'identity.bildirim_sirri' => self::SIR,
+            'identity.configured' => true,
+            'identity.url' => 'https://merkez.test',
+            'identity.client_id' => 'istemci',
+            'identity.client_secret' => 'sir',
+            'identity.notify_secret' => self::SIR,
         ]);
 
         Cache::flush();
@@ -57,8 +57,8 @@ class CenterNotificationTest extends TestCase
 
     private function bildir(string $konu, ?string $imza = null): TestResponse
     {
-        return $this->postJson(route('api.kimlik.tazele'), ['subject' => $konu], [
-            'X-Kimlik-Imza' => $imza ?? hash_hmac('sha256', $konu, self::SIR),
+        return $this->postJson(route('api.identity.refresh'), ['subject' => $konu], [
+            'X-Identity-Signature' => $imza ?? hash_hmac('sha256', $konu, self::SIR),
         ]);
     }
 
@@ -66,11 +66,11 @@ class CenterNotificationTest extends TestCase
     {
         $kullanici = $this->bagli();
 
-        Http::fake(['merkez.test/api/kimlik-durumu' => Http::response([
-            'kimlikler' => ['kimlik-1' => ['durum' => 'askida', 'girebilir' => false, 'rol' => 'muhasebe']],
+        Http::fake(['merkez.test/api/identity-status' => Http::response([
+            'identities' => ['kimlik-1' => ['status' => 'askida', 'can_enter' => false, 'role' => 'muhasebe']],
         ])]);
 
-        $this->bildir('kimlik-1')->assertOk()->assertJson(['sonuc' => 'alındı']);
+        $this->bildir('kimlik-1')->assertOk()->assertJson(['result' => 'received']);
 
         $this->assertFalse($kullanici->fresh()->aktif);
     }
@@ -100,14 +100,14 @@ class CenterNotificationTest extends TestCase
          */
         $kullanici = $this->bagli();
 
-        Http::fake(['merkez.test/api/kimlik-durumu' => Http::response([
-            'kimlikler' => ['kimlik-1' => ['durum' => 'etkin', 'girebilir' => true, 'rol' => 'muhasebe']],
+        Http::fake(['merkez.test/api/identity-status' => Http::response([
+            'identities' => ['kimlik-1' => ['status' => 'etkin', 'can_enter' => true, 'role' => 'muhasebe']],
         ])]);
 
-        $this->postJson(route('api.kimlik.tazele'), [
+        $this->postJson(route('api.identity.refresh'), [
             'subject' => 'kimlik-1',
-            'rol' => 'admin',
-        ], ['X-Kimlik-Imza' => hash_hmac('sha256', 'kimlik-1', self::SIR)])->assertOk();
+            'role' => 'admin',
+        ], ['X-Identity-Signature' => hash_hmac('sha256', 'kimlik-1', self::SIR)])->assertOk();
 
         $this->assertSame('muhasebe', $kullanici->fresh()->rol?->slug);
         $this->assertFalse($kullanici->fresh()->isAdmin());
@@ -125,13 +125,13 @@ class CenterNotificationTest extends TestCase
 
     public function test_sir_tanimsizsa_bildirim_kabul_edilmez(): void
     {
-        config(['identity.bildirim_sirri' => null]);
+        config(['identity.notify_secret' => null]);
 
         $kullanici = $this->bagli();
         Http::fake();
 
-        $this->postJson(route('api.kimlik.tazele'), ['subject' => 'kimlik-1'], [
-            'X-Kimlik-Imza' => hash_hmac('sha256', 'kimlik-1', ''),
+        $this->postJson(route('api.identity.refresh'), ['subject' => 'kimlik-1'], [
+            'X-Identity-Signature' => hash_hmac('sha256', 'kimlik-1', ''),
         ])->assertOk();
 
         $this->assertTrue($kullanici->fresh()->aktif);
