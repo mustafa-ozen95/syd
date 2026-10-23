@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Services\ActivityRecorder;
 use App\Services\Settings\SettingsTabs;
+use App\Services\Update\UpdateApply;
 use App\Services\Update\UpdateCheck;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,13 +15,15 @@ use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Carbon;
 use Illuminate\View\View;
+use RuntimeException;
 use Throwable;
 
 /**
  * Güncelleme kontrolü: çalışan sürüm ve GitHub'daki son başarılı derleme.
  *
- * Yalnızca BAKAR. Kontrol her sabah kendiliğinden yapılır (update:check);
- * düğme aynı kontrolü hemen yapar. Güncellemenin kendisi sunucudan yapılır.
+ * Kontrol her sabah kendiliğinden yapılır (update:check); düğme aynı
+ * kontrolü hemen yapar. Yeni sürüm varsa "Şimdi güncelle" platformun deploy
+ * hook'unu tetikler (UpdateApply); kurulumu platform yapar.
  *
  * Yetkilendirme: HasMiddleware ile `can:admin`.
  */
@@ -38,6 +42,8 @@ class UpdateController extends Controller implements HasMiddleware
     public function __construct(
         private SettingsTabs $sekmeler,
         private UpdateCheck $denetim,
+        private UpdateApply $guncelleme,
+        private ActivityRecorder $kayit,
     ) {}
 
     /** @return array<int, Middleware> */
@@ -72,6 +78,8 @@ class UpdateController extends Controller implements HasMiddleware
                 'eski' => ($son['calisan'] ?? null) !== $calisan,
             ],
             'durum' => $son === null ? null : self::DURUMLAR[$son['durum']],
+            'guncellenebilir' => $this->guncelleme->mumkun(),
+            'hookYok' => ! $this->guncelleme->hazir(),
         ]);
     }
 
@@ -85,6 +93,19 @@ class UpdateController extends Controller implements HasMiddleware
             'hata' => 'Kontrol edilemedi: '.($sonuc['aciklama'] ?? ''),
             default => 'Kontrol edildi: '.($sonuc['aciklama'] ?? ''),
         });
+    }
+
+    public function apply(): RedirectResponse
+    {
+        try {
+            $sonuc = $this->guncelleme->baslat();
+        } catch (RuntimeException $e) {
+            return back()->with('error', 'Güncelleme başlatılamadı: '.$e->getMessage());
+        }
+
+        $this->kayit->kaydet('guncelleme_baslat', 'Panel güncellemesi başlatıldı: '.$sonuc);
+
+        return back()->with('status', 'Güncelleme başlatıldı ('.$sonuc.'). Panel birkaç dakika içinde yeni sürümle yeniden açılır; bu sırada sayfa kısa bir süre yanıt vermeyebilir.');
     }
 
     private static function zaman(?string $iso): ?string

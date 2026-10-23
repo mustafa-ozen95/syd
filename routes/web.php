@@ -144,11 +144,13 @@ Route::middleware('auth')->group(function () {
         Route::post('/database/migrate', [DatabaseController::class, 'migrate'])->name('database.migrate');
 
         /*
-         * GÜNCELLEME. Yalnızca bakar: çalışan sürüm GitHub'daki son başarılı
-         * derlemeyle karşılaştırılır (bkz. UpdateCheck).
+         * GÜNCELLEME. Çalışan sürüm GitHub'daki son başarılı derlemeyle
+         * karşılaştırılır (bkz. UpdateCheck); yeni sürüm varsa apply platformun
+         * deploy hook'unu tetikler (bkz. UpdateApply).
          */
         Route::get('/update', [UpdateController::class, 'index'])->name('update.index');
         Route::post('/update', [UpdateController::class, 'check'])->name('update.check');
+        Route::post('/update/apply', [UpdateController::class, 'apply'])->name('update.apply');
 
         /*
          * KAYITLAR. Kayıt tutmak tek başına yetmiyor: kimse bakamıyorsa
