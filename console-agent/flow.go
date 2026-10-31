@@ -19,6 +19,9 @@ import (
  *   `install --format tftp://...` yazılır, cihaz açılınca sürüm doğrulanır,
  *   istenmişse yedek `load override terminal` ile yüklenip commit edilir.
  *
+ *   "Yalnız yedek" işinde (LoadOnly) kurulum yoktur: Junos'u kurulu cihazın
+ *   CLI'sine girilir ve yalnız yedek yüklenir.
+ *
  * Komutların metni panelden gelir (iş tanımı); burada yalnız istemler
  * beklenir. İstemler cihazın son satırına bakılarak tanınır.
  */
@@ -481,12 +484,99 @@ func (a *Flow) Install(ctx context.Context) error {
 			return err
 		}
 	}
-	// Console oturumu açık bırakılmaz.
+	a.logout(ctx)
+	return nil
+}
+
+// LoadOnly yalnız yedeği yükler: Junos'u kurulu cihazın CLI'sine girilir,
+// yedek `load override terminal` ile yüklenip commit edilir. Cihaz yeniden
+// başlatılmaz, loader'a inilmez.
+func (a *Flow) LoadOnly(ctx context.Context) error {
+	a.notify("yapilandirma", "Cihazın CLI'sine giriliyor.")
+	if err := a.reachCli(ctx); err != nil {
+		return err
+	}
+	if err := a.verifyVersion(ctx); err != nil {
+		return err
+	}
+	if err := a.loadConfiguration(ctx); err != nil {
+		return err
+	}
+	a.logout(ctx)
+	return nil
+}
+
+// reachCli cihazı hangi durumdaysa CLI istemine getirir; açılmaktaysa
+// açılmasını bekler. Loader'da ya da U-Boot'taysa Junos açtırılır.
+func (a *Flow) reachCli(ctx context.Context) error {
+	for attempt := 0; attempt < 8; attempt++ {
+		start := a.k.Position()
+		d, err := a.detectState(ctx)
+		if err != nil {
+			return err
+		}
+		a.notify("bilgi", "Konsolda görülen: "+stateNames[d]+".")
+
+		switch d {
+		case stCli:
+			return nil
+		case stActivate:
+			continue // detectState zaten Enter gönderiyor
+		case stYesNo:
+			err = a.send("no\r")
+		case stConf:
+			pos := a.k.Position()
+			if err := a.send("exit configuration-mode\r"); err != nil {
+				return err
+			}
+			// Commit edilmemiş değişiklik varsa sorar; atılır.
+			i, werr := a.k.Wait(ctx, pos, 10*time.Second, reCli, reYesNo)
+			if werr == nil && i == 1 {
+				err = a.send("yes\r")
+			}
+		case stShell:
+			if cerr := a.command(ctx, "cli", 20*time.Second, reCli); cerr != nil && !errors.Is(cerr, errTimeout) {
+				return cerr
+			}
+		case stPassword:
+			// Yarım kalmış bir giriş: boş geçilir, giriş istemi yeniden gelir.
+			err = a.send("\r")
+			time.Sleep(3 * time.Second)
+		case stLogin:
+			if lerr := a.login(ctx); lerr != nil {
+				if errors.Is(lerr, errPassword) {
+					return errors.New("cihaza girilemedi: root parolası yok ya da yanlış; işi cihazın root parolasıyla yeniden açın")
+				}
+				return lerr
+			}
+		case stLoader, stUboot:
+			a.notify("bilgi", "Cihaz "+stateNames[d]+" isteminde; Junos açtırılıyor.")
+			pos := a.k.Position()
+			if err := a.send("boot\r"); err != nil {
+				return err
+			}
+			if _, werr := a.k.Wait(ctx, pos, a.bootTimeout, reLogin, reActivate); werr != nil {
+				return fmt.Errorf("Junos açılmadı: %w", werr)
+			}
+		default: // sessiz, açılış menüsü, db, mountroot, kurulum kabuğu
+			a.notify("uyari", "Cihaz konsoldan CLI'ye hazır cevap vermiyor ("+stateNames[d]+"). Kapalıysa elektrik verin; giriş istemini bekliyorum.")
+			if _, werr := a.k.Wait(ctx, start, a.manualTimeout, reLogin, reActivate, reCli); werr != nil {
+				return fmt.Errorf("cihazın giriş istemi gelmedi: %w", werr)
+			}
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return errors.New("cihazın CLI'sine birkaç denemede girilemedi")
+}
+
+// logout konsol oturumunu açık bırakmaz.
+func (a *Flow) logout(ctx context.Context) {
 	_ = a.command(ctx, "exit", 10*time.Second, reLogin, reShell)
 	if reShell.MatchString(clean(a.k.Text(a.k.Position() - 100))) {
 		_ = a.command(ctx, "exit", 10*time.Second, reLogin)
 	}
-	return nil
 }
 
 // watchInstall install komutundan cihazın giriş istemine gelmesine kadar.

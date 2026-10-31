@@ -199,7 +199,11 @@ func runJob(parent context.Context, panel *Panel, cfg *Config, job Job) {
 		installTimeout: time.Duration(minutes) * time.Minute,
 		manualTimeout:  30 * time.Minute,
 	}
-	err = flow.Install(ctx)
+	if job.LoadOnly {
+		err = flow.LoadOnly(ctx)
+	} else {
+		err = flow.Install(ctx)
+	}
 
 	// Son çıktı da panele gitsin, sonuç ondan sonra yazılsın.
 	time.Sleep(1500 * time.Millisecond)
@@ -209,7 +213,11 @@ func runJob(parent context.Context, panel *Panel, cfg *Config, job Job) {
 	case err != nil:
 		notify("hata", err.Error())
 	default:
-		notify("tamam", "Kurulum bitti.")
+		if job.LoadOnly {
+			notify("tamam", "Yedek yüklendi.")
+		} else {
+			notify("tamam", "Kurulum bitti.")
+		}
 	}
 	cancel()
 	<-pumpDone

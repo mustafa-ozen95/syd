@@ -29,6 +29,13 @@
           kaldırılır.</li>
     </ol>
 
+    <h3>Yalnız yedek yükleme</h3>
+    <p>
+      Junos'u kurulu (ör. sıfır) bir cihaza yalnız yapılandırma yüklenecekse "Yeni iş"te <strong>İşlem: Yalnız yedeği yükle</strong>
+      seçin. Cihaz yeniden başlatılmaz, loader'a inilmez, adres ve görüntü gerekmez; yalnız konsol kablosu yeter. Ajan
+      <code>root</code> ile girer (parolalı cihazda işte verilen parolayla), sürümü yazar, yedeği yükleyip commit eder.
+    </p>
+
     <h3>Ajanın konsolda yazdıkları</h3>
     <ul class="stack">
       <li>Çalışan cihazda: <code>root</code> + parola, <code>cli</code>, <code>request system reboot</code>, <code>yes</code>.</li>

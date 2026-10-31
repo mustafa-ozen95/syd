@@ -54,7 +54,7 @@ class AgentApiController extends Controller
         };
 
         if (in_array($asama, ['tamam', 'hata'], true)) {
-            $kayit->kaydet('konsol_is_'.$asama, "Konsol kurulumu {$asama}: {$job->ad} · {$job->goruntu_etiket}".($mesaj ? " · {$mesaj}" : ''), $job);
+            $kayit->kaydet('konsol_is_'.$asama, "Konsol kurulumu {$asama}: {$job->ad} · {$job->islemOzeti()}".($mesaj ? " · {$mesaj}" : ''), $job);
         }
 
         return response()->json(['status' => $job->durum]);

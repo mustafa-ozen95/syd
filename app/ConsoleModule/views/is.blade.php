@@ -3,7 +3,7 @@
   <div class="page__inner page__inner--wide">
     <x-ui.page-head :title="$is->ad">
       <x-slot:subtitle>
-        PC: {{ $is->pc?->ad ?? '—' }} · {{ $is->goruntu_etiket }} · {{ $is->adresOzeti() }} · {{ $yapilandirma }}
+        PC: {{ $is->pc?->ad ?? '—' }} · {{ $is->islemOzeti() }} · {{ $is->adresOzeti() }} · {{ $yapilandirma }}
         · {{ $olusturan }}, {{ $acilis }} · <a href="{{ route('console.index') }}">Tüm işler</a>
       </x-slot:subtitle>
       <x-slot:actions>

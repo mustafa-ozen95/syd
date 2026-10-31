@@ -27,6 +27,8 @@ type Job struct {
 	Configuration   bool     `json:"configuration"`
 	LoadCommand     string   `json:"load_command"`
 	DeleteFirst     bool     `json:"delete_first"`
+	// LoadOnly: Junos kurulmaz, yalnız yedek yüklenir (Flow.LoadOnly).
+	LoadOnly bool `json:"load_only"`
 }
 
 // Panelin "iş artık yok" yanıtı: iptal edildi ya da silindi.

@@ -1,6 +1,7 @@
 /**
  * Konsol "Yeni iş" formu (app/ConsoleModule, is-fields.blade.php).
  *
+ * "Yalnız yedeği yükle"de kurulum alanları (adres, görüntü) gizlenir, görüntü zorunlu olmaktan çıkar.
  * "Seçilen yedek" dışında yedek cihazı ve dosyası gizlenir; ilk görünüm sunucudan doğru gelir, burada
  * yalnız değişiklik izlenir. Yedek cihazı seçilince o cihazın yedekleri
  * `data-url`ten çekilip dosya kutusuna doldurulur.
@@ -84,7 +85,16 @@ export function init() {
             return;
         }
 
-        if (target.matches('[data-console-address]')) {
+        if (target.matches('[data-console-mode]')) {
+            const onlyBackup = target.value === 'yedek';
+
+            target.form.querySelector('[data-console-install]')?.classList.toggle('is-hidden', onlyBackup);
+            const image = target.form.querySelector('[data-console-image]');
+
+            if (image) {
+                image.required = !onlyBackup;
+            }
+        } else if (target.matches('[data-console-address]')) {
             target.form.querySelectorAll('[data-console-fixed]').forEach((field) => {
                 field.classList.toggle('is-hidden', target.value === 'dhcp');
             });

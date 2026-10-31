@@ -97,6 +97,7 @@ final class ConsoleTest extends TestCase
         $this->assertSame('198.51.100.120', $veri['device_ip']);
         $this->assertSame('eski-root', $veri['password']);
         $this->assertTrue($veri['configuration']);
+        $this->assertFalse($veri['load_only']);
 
         /* Yedek metni yalnız açık işte, en son yedek. */
         $this->app['auth']->forgetGuards();
@@ -217,6 +218,40 @@ final class ConsoleTest extends TestCase
         $this->actingAs($yonetici)->post(route('console.store'), ['yedek_dosya' => 'sw-a_9'] + $secilen)->assertSessionHasErrors('yedek_dosya');
         $this->actingAs($yonetici)->post(route('console.store'), ['yedek_dosya' => 'sw-a_1'] + $secilen)->assertSessionHasNoErrors();
         $this->assertSame(['sw-a', 'sw-a_1'], [ConsoleJob::sole()->yedek_cihaz, ConsoleJob::sole()->yedek_dosya]);
+    }
+
+    #[Test]
+    public function yalniz_yedek_isi_kurulumsuz_gider(): void
+    {
+        $this->yedekler();
+        $yonetici = User::factory()->admin()->create();
+        $pc = $this->pc();
+
+        /* Yalnız yedekte yedek şart; görüntü ve adres gerekmez. */
+        $this->actingAs($yonetici)->post(route('console.store'), ['pc_id' => $pc->id, 'islem' => 'yedek', 'ad' => 'sw-a', 'yapilandirma_turu' => 'yok'])
+            ->assertSessionHasErrors('yapilandirma_turu')->assertSessionDoesntHaveErrors('goruntu');
+        $this->actingAs($yonetici)->post(route('console.store'), [
+            'pc_id' => $pc->id, 'islem' => 'yedek', 'ad' => 'sw-a', 'yapilandirma_turu' => 'son_yedek', 'goruntu' => '', 'cihaz_ip' => '',
+        ])->assertSessionHasNoErrors();
+
+        $is = ConsoleJob::sole();
+        $this->assertTrue($is->yalnizYedekMi());
+        $this->assertSame([null, null, null], [$is->goruntu_adres, $is->beklenen_surum, $is->cihaz_ip]);
+        $this->assertSame('Yalnız yedek yükleme', $is->islemOzeti());
+
+        $jeton = $this->ajan($pc, $yonetici);
+        $this->app['auth']->forgetGuards();
+        $veri = $this->withToken($jeton)->getJson(route('api.v1.console.jobs'))->assertOk()->json('data.0');
+        $this->assertTrue($veri['load_only']);
+        $this->assertTrue($veri['configuration']);
+        $this->assertSame([[], '', ''], [$veri['loader_commands'], $veri['install_command'], $veri['device_ip']]);
+
+        $this->app['auth']->forgetGuards();
+        $metin = $this->withToken($jeton)->get(route('api.v1.console.configuration', $is))->assertOk()->getContent();
+        $this->assertStringContainsString('host-name sw-a;', (string) $metin);
+
+        $this->app['auth']->forgetGuards();
+        $this->actingAs($yonetici)->get(route('console.show', $is))->assertOk()->assertSee('Yalnız yedek yükleme');
     }
 
     #[Test]

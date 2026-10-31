@@ -3,7 +3,7 @@
   <div class="page__inner page__inner--wide">
     <x-ui.page-head title="Konsoldan Kurulum">
       <x-slot:subtitle>
-        PC'ye takılı konsol kablosundan: cihaz loader'a indirilir, Junos TFTP'den kurulur, istenirse yedeği yüklenir.
+        PC'ye takılı konsol kablosundan: cihaz loader'a indirilir, Junos TFTP'den kurulur, istenirse yedeği yüklenir. Junos'u kurulu cihaza yalnız yedek de yüklenebilir.
         Ajan yalnızca burada açılmış işi uygular.
       </x-slot:subtitle>
       @if ($yetki['ekle'] && $pcSecenekleri !== [])
@@ -145,7 +145,7 @@
             <x-console::is-fields :deger="$ekleDeger" :hatali="$ekleAcik" :pcler="$pcSecenekleri"
                                    :goruntuler="$goruntuSecenekleri" :yapilandirma-turleri="$yapilandirmaTurleri"
                                    :yedek-cihazlari="$yedekCihazlari" :yedek-dosyalari="$yedekDosyalari"
-                                   :pc-adresleri="$pcAdresleri" :adres-turleri="$adresTurleri" />
+                                   :pc-adresleri="$pcAdresleri" :adres-turleri="$adresTurleri" :islemler="$islemler" />
           </div>
           <x-ui.modal-actions submit="İşi aç" />
         </form>

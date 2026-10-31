@@ -42,11 +42,12 @@ class ConsoleController extends Controller
         $job = ConsoleJob::create($request->payload() + ['olusturan_id' => Auth::id()]);
         $job->olaylar()->create(['asama' => 'basladi', 'mesaj' => 'İş açıldı.', 'kaynak' => Auth::user()?->name]);
 
-        $this->kayit->kaydet('konsol_is_ac', "Konsol işi açıldı: {$job->ad} · PC: {$pc->ad} · {$job->goruntu_etiket} · {$job->adresOzeti()} · {$job->yapilandirmaOzeti()}"
+        $this->kayit->kaydet('konsol_is_ac', "Konsol işi açıldı: {$job->ad} · PC: {$pc->ad} · {$job->islemOzeti()} · {$job->adresOzeti()} · {$job->yapilandirmaOzeti()}"
             .($job->root_parola !== null ? ' · root parolası verildi' : ''), $job);
 
         return redirect()->route('console.show', $job)
-            ->with('status', "İş açıldı; ajan en geç bir dakika içinde {$pc->ad} üzerine kurulur ve konsolu açar. İş bitince kaldırılır.");
+            ->with('status', ($job->yalnizYedekMi() ? 'İş açıldı (yalnız yedek)' : 'İş açıldı')
+                ."; ajan en geç bir dakika içinde {$pc->ad} üzerine kurulur ve konsolu açar. İş bitince kaldırılır.");
     }
 
     /** Yeni iş formunda seçilen cihazın yedekleri (console-form.js). */

@@ -1,11 +1,21 @@
 @props(['deger', 'hatali' => false, 'pcler' => [], 'goruntuler' => [],
          'yapilandirmaTurleri' => [], 'yedekCihazlari' => [], 'yedekDosyalari' => [],
-         'pcAdresleri' => [], 'adresTurleri' => []])
+         'pcAdresleri' => [], 'adresTurleri' => [], 'islemler' => []])
 
 {{-- Yeni işin alanları. Değerler hazır gelir (ConsolePage); hata yalnız gönderilen pencerede. --}}
 @if ($hatali)
     <x-ui.errors />
 @endif
+
+<div class="field">
+    <label class="field__label" for="console-mode">İşlem</label>
+    <select class="select" id="console-mode" name="islem" data-console-mode>
+        @foreach ($islemler as $anahtar => $etiket)
+            <option value="{{ $anahtar }}" @selected($deger['islem'] === $anahtar)>{{ $etiket }}</option>
+        @endforeach
+    </select>
+    <span class="field__hint">"Yalnız yedeği yükle"de cihaz yeniden başlatılmaz, Junos kurulmaz: ajan CLI'ye girer ve yedeği yükler.</span>
+</div>
 
 <div class="field-row">
     <div class="field">
@@ -30,6 +40,8 @@
     </div>
 </div>
 
+{{-- Kurulumun alanları (adres, görüntü): "Yalnız yedek"te gizli; console-form.js açar/kapar. --}}
+<div @class(['stack', 'is-hidden' => $deger['islem'] === 'yedek']) data-console-install>
 {{-- Switch'in loader'daki adresi; PC kaydındakiyle dolu gelir. DHCP'de adres satırları gönderilmez. --}}
 <div class="field-row">
     <div class="field">
@@ -55,7 +67,7 @@
 
 <div class="field">
     <label class="field__label" for="console-image">Junos görüntüsü</label>
-    <select class="select" id="console-image" name="goruntu" required>
+    <select class="select" id="console-image" name="goruntu" @required($deger['islem'] !== 'yedek') data-console-image>
         <option value="" @selected($deger['goruntu'] === '')>—</option>
         @foreach ($goruntuler as $g)
             <option value="{{ $g['anahtar'] }}" @selected($deger['goruntu'] === $g['anahtar'])>{{ $g['etiket'] }} · {{ $g['dosya'] }}</option>
@@ -63,11 +75,12 @@
     </select>
     <span class="field__hint">Liste Kurulum sayfasındaki tablodur. <code>--format</code> ile kurulur: cihazdaki yapılandırma silinir.</span>
 </div>
+</div>
 
 {{-- "Seçilen yedek" dışında cihaz ve dosya gizli; değişince console-form.js açar/kapar, dosyaları çeker. --}}
 <div class="field-row">
     <div class="field">
-        <label class="field__label" for="console-configuration">Kurulumdan sonra</label>
+        <label class="field__label" for="console-configuration">Yüklenecek yapılandırma</label>
         <select class="select" id="console-configuration" name="yapilandirma_turu" data-console-configuration>
             @foreach ($yapilandirmaTurleri as $anahtar => $etiket)
                 <option value="{{ $anahtar }}" @selected($deger['yapilandirma_turu'] === $anahtar)>{{ $etiket }}</option>
@@ -101,7 +114,8 @@
     <label class="field__label" for="console-root">Cihazın şu anki root parolası (isteğe bağlı)</label>
     <input class="input" type="password" id="console-root" name="root_parola" maxlength="128" autocomplete="new-password">
     <span class="field__hint">
-        Cihaz çalışıyorsa ajan girip <code>request system reboot</code> ile loader'a iner. Parola yoksa ya da tutmazsa
-        sizden cihazın elektriğini çekip takmanızı ister. Şifreli saklanır, iş bitince silinir.
+        Kurulumda cihaz çalışıyorsa ajan girip <code>request system reboot</code> ile loader'a iner; parola yoksa ya da tutmazsa
+        sizden cihazın elektriğini çekip takmanızı ister. Yalnız yedekte ajan bu parolayla girer (sıfır cihazda boş bırakın).
+        Şifreli saklanır, iş bitince silinir.
     </span>
 </div>

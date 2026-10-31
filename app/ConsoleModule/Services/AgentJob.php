@@ -17,6 +17,25 @@ class AgentJob
     public function hazirla(ConsoleJob $is): array
     {
         $pc = $is->pc;
+
+        /* Yalnız yedek: loader'a inilmez, kurulmaz; ajan CLI'ye girip yükler. */
+        if ($is->yalnizYedekMi()) {
+            return [
+                'uuid' => $is->uuid,
+                'serial_port' => (string) $pc->seri_port,
+                'device_ip' => '',
+                'loader_commands' => [],
+                'install_command' => '',
+                'install_minutes' => 0,
+                'expected_version' => '',
+                'password' => (string) $is->root_parola,
+                'configuration' => true,
+                'load_command' => 'load override terminal',
+                'delete_first' => false,
+                'load_only' => true,
+            ];
+        }
+
         $dhcp = $is->adres_turu === 'dhcp';
         [$ip, $maske] = $dhcp ? ['', ''] : ConsolePc::adresCoz((string) ($is->cihaz_ip ?? $pc->cihaz_ip));
 
@@ -44,6 +63,7 @@ class AgentJob
             'configuration' => $is->yapilandirma_turu !== 'yok',
             'load_command' => 'load override terminal',
             'delete_first' => false,
+            'load_only' => false,
         ];
     }
 

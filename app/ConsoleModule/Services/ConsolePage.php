@@ -44,6 +44,7 @@ class ConsolePage
             'pcAdresleri' => ConsolePc::query()->get(['id', 'cihaz_ip', 'gecit'])
                 ->mapWithKeys(fn (ConsolePc $p): array => [$p->id => ['ip' => (string) $p->cihaz_ip, 'gecit' => (string) $p->gecit]])->all(),
             'adresTurleri' => ConsoleJob::ADRES_TURLERI,
+            'islemler' => ConsoleJob::ISLEMLER,
             'goruntuSecenekleri' => $this->goruntuler->secenekler(),
             'yapilandirmaTurleri' => ConsoleJob::YAPILANDIRMA_TURLERI,
             'yedekCihazlari' => $yetki['ekle'] ? $this->yedekler->cihazlar() : [],
@@ -133,7 +134,7 @@ class ConsolePage
             ->map(fn (ConsoleJob $is): array => [
                 'is' => $is,
                 'pc' => $is->pc?->ad ?? '—',
-                'goruntu' => (string) $is->goruntu_etiket,
+                'goruntu' => $is->islemOzeti(),
                 'yapilandirma' => $is->yapilandirmaOzeti(),
                 'durum' => $is->durumEtiketi(),
                 'renk' => $is->durumRengi(),
@@ -190,13 +191,14 @@ class ConsolePage
     {
         $deger = [];
 
-        foreach (['pc_id', 'ad', 'goruntu', 'yapilandirma_turu', 'yedek_cihaz', 'yedek_dosya', 'adres_turu', 'cihaz_ip', 'gecit'] as $alan) {
+        foreach (['pc_id', 'islem', 'ad', 'goruntu', 'yapilandirma_turu', 'yedek_cihaz', 'yedek_dosya', 'adres_turu', 'cihaz_ip', 'gecit'] as $alan) {
             $deger[$alan] = $hatali ? (string) old($alan, '') : '';
         }
 
         /* Varsayılan: yükleme yok, fabrika ayarında kalır. */
         $deger['yapilandirma_turu'] = $deger['yapilandirma_turu'] ?: 'yok';
         $deger['adres_turu'] = $deger['adres_turu'] ?: 'sabit';
+        $deger['islem'] = $deger['islem'] ?: 'kurulum';
 
         /* Adres, seçili (ya da ilk) PC'nin kaydındakiyle dolu gelir. */
         $pc = ConsolePc::query()->find($deger['pc_id'] ?: null) ?? ConsolePc::query()->orderBy('ad')->first();

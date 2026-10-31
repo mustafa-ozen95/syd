@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
-/** Konsol kablosundan bir loader kurulumu. */
+/** Konsol kablosundan bir loader kurulumu ya da yalnız yedek yükleme. */
 class ConsoleJob extends Model
 {
     protected $table = 'konsol_isleri';
@@ -28,6 +28,12 @@ class ConsoleJob extends Model
         'tamam' => ['Tamam', BadgeVariant::Green],
         'hata' => ['Hata', BadgeVariant::Red],
         'iptal' => ['Kapatıldı', BadgeVariant::Gray],
+    ];
+
+    /** İşin ne yaptığı. "yedek": Junos'u kurulu cihaza yalnız yedek yüklenir. */
+    public const ISLEMLER = [
+        'kurulum' => 'Junos kur (sonra istenirse yedeği yükle)',
+        'yedek' => 'Yalnız yedeği yükle (Junos kurulu cihaz)',
     ];
 
     public const ADRES_TURLERI = [
@@ -57,7 +63,7 @@ class ConsoleJob extends Model
     ];
 
     protected $fillable = [
-        'pc_id', 'ad', 'goruntu_etiket', 'goruntu_adres', 'beklenen_surum',
+        'pc_id', 'islem', 'ad', 'goruntu_etiket', 'goruntu_adres', 'beklenen_surum',
         'yapilandirma_turu', 'yedek_cihaz', 'yedek_dosya', 'adres_turu', 'cihaz_ip', 'gecit', 'root_parola',
         'durum', 'asama', 'son_mesaj', 'ajan_token_id', 'olusturan_id', 'cikti_bayt',
     ];
@@ -100,9 +106,24 @@ class ConsoleJob extends Model
         return self::DURUMLAR[$this->durum][1] ?? BadgeVariant::Gray;
     }
 
+    public function yalnizYedekMi(): bool
+    {
+        return $this->islem === 'yedek';
+    }
+
+    /** Kurulan görüntü ya da "Yalnız yedek", ekranda. */
+    public function islemOzeti(): string
+    {
+        return $this->yalnizYedekMi() ? 'Yalnız yedek yükleme' : (string) $this->goruntu_etiket;
+    }
+
     /** Switch'in loader'daki adresi, ekranda. */
     public function adresOzeti(): string
     {
+        if ($this->yalnizYedekMi()) {
+            return 'Adres verilmez';
+        }
+
         if ($this->adres_turu === 'dhcp') {
             return 'Adres: DHCP';
         }

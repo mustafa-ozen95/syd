@@ -545,3 +545,56 @@ func TestInstallerFailureAndShellRecovery(t *testing.T) {
 		t.Errorf("kurulmadı ya da kabuk tanınmadı; olaylar: %v", *events)
 	}
 }
+
+// Yalnız yedek: kurulu cihaza girilir, loader'a inilmez, yedek yüklenir.
+func TestLoadOnlyFromLogin(t *testing.T) {
+	c := newFake(t, "login")
+	c.password = "gizli"
+	job := Job{Password: "gizli", Configuration: true, LoadCommand: "load override terminal", LoadOnly: true}
+	a, events := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	if err := a.LoadOnly(ctx); err != nil {
+		t.Fatalf("yükleme: %v\nolaylar: %v\nkonsol: %q", err, *events, a.k.Text(0))
+	}
+	if c.installed != "" || len(c.loaderSettings) != 0 {
+		t.Errorf("kurulum yapılmamalıydı: %q %v", c.installed, c.loaderSettings)
+	}
+	if strings.Join(c.loaded, "\n") != "system {\nhost-name sw1;\n}" {
+		t.Errorf("yüklenen: %q", c.loaded)
+	}
+	if c.state != "login" {
+		t.Errorf("oturum açık kaldı: %s", c.state)
+	}
+}
+
+// Biri konsolda CLI'de bırakmışsa parola gerekmez.
+func TestLoadOnlyFromCli(t *testing.T) {
+	c := newFake(t, "cli")
+	job := Job{Configuration: true, LoadCommand: "load override terminal", LoadOnly: true}
+	a, events := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	if err := a.LoadOnly(ctx); err != nil {
+		t.Fatalf("yükleme: %v\nolaylar: %v", err, *events)
+	}
+	if len(c.loaded) != 3 {
+		t.Errorf("yüklenen: %q", c.loaded)
+	}
+}
+
+func TestLoadOnlyWrongPassword(t *testing.T) {
+	c := newFake(t, "login")
+	c.password = "gizli"
+	job := Job{Password: "yanlis", Configuration: true, LoadCommand: "load override terminal", LoadOnly: true}
+	a, _ := newTestFlow(t, c, job)
+	err := a.LoadOnly(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "root parolası") {
+		t.Fatalf("parola hatası beklendi: %v", err)
+	}
+	if c.state == "acilis" || c.installed != "" {
+		t.Errorf("cihaz yeniden başlatılmamalıydı: %s", c.state)
+	}
+}

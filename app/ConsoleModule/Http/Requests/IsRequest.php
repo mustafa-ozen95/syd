@@ -28,8 +28,10 @@ class IsRequest extends FormRequest
     {
         $yapilandirma = (string) $this->input('yapilandirma_turu');
         $secilen = $yapilandirma === 'yedek';
+        $yalnizYedek = $this->input('islem') === 'yedek';
 
         return [
+            'islem' => ['nullable', Rule::in(array_keys(ConsoleJob::ISLEMLER))],
             'pc_id' => ['required', 'integer', Rule::exists('konsol_pcleri', 'id'), function (string $alan, mixed $deger, Closure $hata): void {
                 if (ConsoleJob::query()->acik()->where('pc_id', (int) $deger)->exists()) {
                     $hata('Bu PC\'de açık bir iş var; konsol kablosu bir tane. Önce onu kapatın.');
@@ -48,12 +50,16 @@ class IsRequest extends FormRequest
             'adres_turu' => ['nullable', Rule::in(array_keys(ConsoleJob::ADRES_TURLERI))],
             'cihaz_ip' => ['nullable', 'string', 'regex:/^(\d{1,3}\.){3}\d{1,3}\/([8-9]|[12]\d|30)$/'],
             'gecit' => ['nullable', 'ip'],
-            'goruntu' => ['required', 'string', function (string $alan, mixed $deger, Closure $hata): void {
-                if (app(ImageSource::class)->bul((string) $deger) === null) {
+            'goruntu' => [Rule::requiredIf(! $yalnizYedek), 'nullable', 'string', function (string $alan, mixed $deger, Closure $hata) use ($yalnizYedek): void {
+                if (! $yalnizYedek && app(ImageSource::class)->bul((string) $deger) === null) {
                     $hata('Görüntü listede yok.');
                 }
             }],
-            'yapilandirma_turu' => ['required', Rule::in(array_keys(ConsoleJob::YAPILANDIRMA_TURLERI))],
+            'yapilandirma_turu' => ['required', Rule::in(array_keys(ConsoleJob::YAPILANDIRMA_TURLERI)), function (string $alan, mixed $deger, Closure $hata) use ($yalnizYedek): void {
+                if ($yalnizYedek && $deger === 'yok') {
+                    $hata('Yalnız yedek yüklemede yüklenecek yedeği seçin: cihazın en son yedeği ya da seçilen yedek.');
+                }
+            }],
             'yedek_cihaz' => [Rule::requiredIf($secilen), 'nullable', 'string', 'max:120', function (string $alan, mixed $deger, Closure $hata) use ($secilen): void {
                 if ($secilen && ! in_array((string) $deger, app(ConfigurationSource::class)->cihazlar(), true)) {
                     $hata('Bu cihazın yedeği yok.');
@@ -83,23 +89,36 @@ class IsRequest extends FormRequest
     /** @return array<string, mixed> */
     public function payload(): array
     {
-        $g = app(ImageSource::class)->bul((string) $this->input('goruntu'));
+        $yalnizYedek = $this->input('islem') === 'yedek';
+        $g = $yalnizYedek ? null : app(ImageSource::class)->bul((string) $this->input('goruntu'));
         $yapilandirma = (string) $this->input('yapilandirma_turu');
 
         $pc = $this->pc();
         $dhcp = $this->input('adres_turu') === 'dhcp';
 
-        return [
-            'pc_id' => $pc->id,
-            'ad' => $this->string('ad')->value() ?: 'Yeni cihaz',
+        $kurulum = $g === null ? [
+            /* Yalnız yedek: görüntü ve loader adresi yok. */
+            'adres_turu' => 'sabit',
+            'cihaz_ip' => null,
+            'gecit' => null,
+            'goruntu_etiket' => null,
+            'goruntu_adres' => null,
+            'beklenen_surum' => null,
+        ] : [
             /* Boş bırakılırsa PC kaydındaki adres. */
             'adres_turu' => $dhcp ? 'dhcp' : 'sabit',
             'cihaz_ip' => $dhcp ? null : ($this->string('cihaz_ip')->trim()->value() ?: $pc->cihaz_ip),
             'gecit' => $dhcp ? null : ($this->string('gecit')->trim()->value() ?: $pc->gecit),
-            'root_parola' => $this->filled('root_parola') ? (string) $this->input('root_parola') : null,
             'goruntu_etiket' => $g['etiket'],
             'goruntu_adres' => $g['adres'],
             'beklenen_surum' => AgentJob::surum($g['dosya']),
+        ];
+
+        return $kurulum + [
+            'pc_id' => $pc->id,
+            'islem' => $yalnizYedek ? 'yedek' : 'kurulum',
+            'ad' => $this->string('ad')->value() ?: 'Yeni cihaz',
+            'root_parola' => $this->filled('root_parola') ? (string) $this->input('root_parola') : null,
             'yapilandirma_turu' => $yapilandirma,
             'yedek_cihaz' => match ($yapilandirma) {
                 'son_yedek' => $this->string('ad')->value(),
