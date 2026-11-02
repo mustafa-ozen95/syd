@@ -27,7 +27,7 @@ class AgentJob
                 'uplink_interface' => (string) $is->uplink_arayuz,
                 'patch' => $is->yama !== null,
                 'uplink_interface' => (string) $is->uplink_arayuz,
-                'serial_port' => (string) $pc->seri_port,
+                'serial_port' => $this->port($is),
                 'device_ip' => '',
                 'loader_commands' => [],
                 'install_command' => '',
@@ -57,7 +57,7 @@ class AgentJob
             'resume_stage' => $this->devamAsamasi($is),
             'patch' => $is->yama !== null,
             'uplink_interface' => (string) $is->uplink_arayuz,
-            'serial_port' => (string) $pc->seri_port,
+            'serial_port' => $this->port($is),
             'device_ip' => $ip,
             /* DHCP'de adres satırları yazılmaz; loader adresi kendisi alır. */
             'loader_commands' => array_values(array_map(fn (string $s): string => strtr($s, $yerler), array_filter(
@@ -94,5 +94,11 @@ class AgentJob
     private function devamAsamasi(ConsoleJob $is): string
     {
         return $is->durum === 'calisiyor' ? (string) $is->asama : '';
+    }
+
+    /** İşin portu; eski işte ya da otomatikte PC'nin (tek) portu. */
+    private function port(ConsoleJob $is): string
+    {
+        return (string) ($is->seri_port ?: $is->pc->seri_port);
     }
 }

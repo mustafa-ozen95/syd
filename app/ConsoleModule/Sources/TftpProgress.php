@@ -27,14 +27,32 @@ class TftpProgress
         $veri = json_decode((string) file_get_contents($yol, false, null, 0, 1 << 20), true);
         $bulunan = null;
 
-        /* Bu işten sonra başlamış, aynı dosyanın en son aktarımı. */
+        /*
+         * Bu işten sonra başlamış, aynı dosyanın en son aktarımı. Aynı PC'den
+         * aynı anda iki switch aynı imajı çekebilir: önce bu işin loader
+         * adresinden gelen aktarım aranır; araya NAT girdiği için (istemci
+         * yönlendiricinin adresi görünür) bulunamazsa, ancak bu dosyayı çeken
+         * başka açık iş yoksa en son aktarım bu işindir. Yoksa ilerleme
+         * gösterilmez: yanlış işin yüzdesi gösterilmesin.
+         */
+        $ip = strtok((string) $is->cihaz_ip, '/');
+        $kendi = null;
         foreach ((array) ($veri['transfers'] ?? []) as $a) {
             $basladi = strtotime((string) ($a['started'] ?? '')) ?: 0;
 
             if (($a['file'] ?? null) === $dosya && $basladi >= ($is->created_at?->getTimestamp() ?? PHP_INT_MAX)) {
                 $bulunan = $a + ['_basladi' => $basladi];
+                if ($ip !== false && $ip !== '' && strtok((string) ($a['client'] ?? ''), ':') === $ip) {
+                    $kendi = $bulunan;
+                }
             }
         }
+
+        if ($kendi === null && $bulunan !== null && ConsoleJob::query()->acik()->whereKeyNot($is->getKey())
+            ->where('goruntu_adres', $is->goruntu_adres)->exists()) {
+            return null;
+        }
+        $bulunan = $kendi ?? $bulunan;
 
         if ($bulunan === null) {
             return null;

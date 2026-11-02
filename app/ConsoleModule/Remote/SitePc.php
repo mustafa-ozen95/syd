@@ -76,7 +76,8 @@ class SitePc
         $ajanAyari = (string) json_encode([
             'panel' => $panel,
             'token' => $sir['plain'],
-            'serial_port' => (string) $pc->seri_port,
+            /* Çok portlu PC'de port işten gelir; ajan varsayılanla tahmin etmesin. */
+            'serial_port' => count($pc->portlar()) > 1 ? '' : (string) $pc->seri_port,
         ] + ($pem !== null ? ['ca_file' => 'panel.pem'] : []), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         $adres = "{$panel}/api/v1/console/agent/{$platform}";
         $sure = (int) config('console.install_timeout');

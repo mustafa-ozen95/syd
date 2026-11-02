@@ -1,5 +1,5 @@
 @props(['deger', 'hatali' => false, 'pcler' => [], 'goruntuler' => [],
-         'yedekCihazlari' => [], 'yedekDosyalari' => [], 'sablonlar' => [], 'ozellestirTumu' => false, 'ozGorunur' => false,
+         'yedekCihazlari' => [], 'yedekDosyalari' => [], 'portSecenekleri' => [], 'sablonlar' => [], 'ozellestirTumu' => false, 'ozGorunur' => false,
          'pcAdresleri' => [], 'adresTurleri' => [], 'islemler' => []])
 
 {{-- Yeni işin alanları. Değerler hazır gelir (ConsolePage); hata yalnız gönderilen pencerede. --}}
@@ -23,10 +23,21 @@
         <select class="select" id="console-pc" name="pc" required data-console-pc>
             @foreach ($pcler as $uuid => $ad)
                 <option value="{{ $uuid }}" data-ip="{{ $pcAdresleri[$uuid]['ip'] ?? '' }}" data-gateway="{{ $pcAdresleri[$uuid]['gecit'] ?? '' }}"
+                        data-ports="{{ json_encode($pcAdresleri[$uuid]['portlar'] ?? []) }}"
                         @selected($deger['pc'] === $uuid)>{{ $ad }}</option>
             @endforeach
         </select>
         <span class="field__hint">Switch'in konsol kablosu bu PC'ye takılı olmalı.</span>
+    </div>
+    {{-- Seçenekler seçili PC'nin portları; PC değişince console-form.js yeniden doldurur. Birden çok portta seçmek şart. --}}
+    <div class="field">
+        <label class="field__label" for="console-port">Seri port</label>
+        <select class="select" id="console-port" name="seri_port" data-console-port>
+            @foreach ($portSecenekleri as $portDeger => $etiket)
+                <option value="{{ $portDeger }}" @selected($deger['seri_port'] === $portDeger)>{{ $etiket }}</option>
+            @endforeach
+        </select>
+        <span class="field__hint">Her portta aynı anda bir iş: birden çok kablo takılıysa her biri ayrı switch kurar.</span>
     </div>
     <div class="field">
         <label class="field__label" for="console-name">Cihaz</label>
@@ -69,7 +80,7 @@
                maxlength="45" placeholder="198.51.100.1" data-console-gateway>
     </div>
 </div>
-<span class="field__hint">Sabit adreste ajan önce adrese ping atar; başka bir cihaz cevap verirse kurmaz.</span>
+<span class="field__hint">Sabit adreste ajan önce adrese ping atar; başka bir cihaz cevap verirse kurmaz. Aynı PC'de aynı anda kurulan switch'ler aynı loader adresini alamaz: ikinci işe başka bir adres verin (panel aynı adresi reddeder).</span>
 
 <div class="field">
     <label class="field__label" for="console-image">Junos görüntüsü</label>

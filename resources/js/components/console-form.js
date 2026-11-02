@@ -240,6 +240,18 @@ export function init() {
                 ip.value = selected.dataset.ip ?? '';
                 gatewayInput.value = selected.dataset.gateway ?? '';
             }
+
+            /* Port seçenekleri o PC'nin portları: tek portta "Otomatik" de var, çok portta seçmek şart. */
+            const portSelect = target.form.querySelector('[data-console-port]');
+
+            if (selected && portSelect) {
+                const ports = JSON.parse(selected.dataset.ports || '[]');
+
+                portSelect.replaceChildren(
+                    ...(ports.length > 1 ? [] : [makeOption('', 'Otomatik')]),
+                    ...ports.map((p) => makeOption(p, p)),
+                );
+            }
         } else if (target.matches('[data-console-device]')) {
             fillBackups(target);
         } else if (target.matches('[data-console-backup-file]')) {

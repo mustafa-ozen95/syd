@@ -23,6 +23,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -88,23 +89,77 @@ func main() {
 	// loader'a indirilip baştan formatlanıyordu. Sonuç her turda yeniden
 	// gönderilir, panel alınca (ya da işi kapatmışsa) düşer.
 	done := map[string]*finalEvent{}
+	// Çalışan işler (uuid → port anahtarı) yalnız bu döngüde tutulur: kilit
+	// gerekmez. Her seri portta aynı anda bir iş; farklı portlardaki işler
+	// birlikte yürür (bir PC'ye birden çok konsol kablosu).
+	running := map[string]string{}
+	results := make(chan jobResult)
 	for {
 		resendFinals(ctx, panel, done)
 		jobs, err := panel.jobs(ctx)
 		if err != nil && ctx.Err() == nil {
 			log.Printf("işler alınamadı: %v", err)
 		}
-		if job, ok := nextJob(jobs, done); ok {
-			done[job.UUID] = runJob(ctx, panel, cfg, job)
-			continue
+		for _, job := range launchable(jobs, done, running, cfg) {
+			running[job.UUID] = portKey(job, cfg)
+			go func(j Job) { results <- jobResult{uuid: j.UUID, unsent: runJob(ctx, panel, cfg, j)} }(job)
 		}
 		select {
+		case r := <-results:
+			done[r.uuid] = r.unsent
+			delete(running, r.uuid)
 		case <-ctx.Done():
 			log.Print("kapatılıyor")
+			// Süren işler son çıktılarını ve sonuçlarını bildirsin.
+			for len(running) > 0 {
+				r := <-results
+				delete(running, r.uuid)
+			}
 			return
 		case <-time.After(time.Duration(cfg.PollSeconds) * time.Second):
 		}
 	}
+}
+
+// jobResult bir işin bittiği ve panele ulaşamamış sonucudur (yoksa nil).
+type jobResult struct {
+	uuid   string
+	unsent *finalEvent
+}
+
+// portKey işin seri portudur; boşsa "otomatik": aynı anda tek otomatik iş
+// (tarama öbür işin kablosunu deneyebilirdi).
+func portKey(job Job, cfg *Config) string {
+	if p := firstNonEmpty(job.SerialPort, cfg.SerialPort); p != "" {
+		return p
+	}
+	return "otomatik"
+}
+
+// launchable bu ajanın şimdi başlatabileceği işlerdir: daha önce
+// yürütülmemiş, şu an yürümeyen ve portu boş olanlar; aynı porta iki iş
+// verilmez.
+func launchable(jobs []Job, done map[string]*finalEvent, running map[string]string, cfg *Config) []Job {
+	busy := map[string]bool{}
+	for _, key := range running {
+		busy[key] = true
+	}
+	var out []Job
+	for _, j := range jobs {
+		if _, ok := done[j.UUID]; ok {
+			continue
+		}
+		if _, ok := running[j.UUID]; ok {
+			continue
+		}
+		key := portKey(j, cfg)
+		if busy[key] {
+			continue
+		}
+		busy[key] = true
+		out = append(out, j)
+	}
+	return out
 }
 
 func programDir() string {
@@ -155,16 +210,6 @@ type finalEvent struct{ stage, message string }
 // finalRetries son bildirimin iş içinde kaç kez, hangi aralıklarla
 // deneneceğidir; ulaşamazsa ana döngü her turda yeniden dener.
 var finalRetries = []time.Duration{2 * time.Second, 5 * time.Second, 15 * time.Second, 30 * time.Second}
-
-// nextJob bu ajanın daha önce yürütmediği ilk iştir.
-func nextJob(jobs []Job, done map[string]*finalEvent) (Job, bool) {
-	for _, j := range jobs {
-		if _, ok := done[j.UUID]; !ok {
-			return j, true
-		}
-	}
-	return Job{}, false
-}
 
 // resendFinals panele ulaşamamış son bildirimleri yeniden gönderir.
 func resendFinals(ctx context.Context, panel *Panel, done map[string]*finalEvent) {
@@ -233,6 +278,7 @@ func runJob(parent context.Context, panel *Panel, cfg *Config, job Job) (unsent 
 		notify("hata", err.Error())
 		return unsent
 	}
+	defer claimed.Release(port)
 	defer k.line.Close()
 
 	pumpDone := make(chan struct{})
@@ -310,32 +356,45 @@ func firstNonEmpty(s ...string) string {
 
 // openPort verilen portu, yoksa USB-seri dönüştürücüleri dener. Birden çok
 // aday varsa cihazın cevap verdiği seçilir.
+//
+// Açılan port, iş bitene kadar claimed'de tutulur (runJob bırakır): aynı anda
+// yürüyen başka bir iş onu açmaz, otomatik tarama onu denemez.
 func openPort(ctx context.Context, name string) (*Console, string, error) {
 	if name != "" {
+		if !claimed.Claim(name) {
+			return nil, "", fmt.Errorf("%s başka bir işte kullanılıyor", name)
+		}
 		h, err := openSerial(name)
 		if err != nil {
+			claimed.Release(name)
 			return nil, "", fmt.Errorf("%s açılamadı: %w", name, err)
 		}
 		return newConsole(h), name, nil
 	}
-	candidates, err := portCandidates()
+	all, err := portCandidates()
 	if err != nil {
 		return nil, "", fmt.Errorf("seri portlar listelenemedi: %w", err)
+	}
+	var candidates []string
+	for _, a := range all {
+		if !claimed.Held(a) {
+			candidates = append(candidates, a)
+		}
 	}
 	if len(candidates) == 0 {
 		return nil, "", errors.New("PC'de seri port yok: konsol kablosu (USB-seri dönüştürücü) takılı mı?")
 	}
 	if len(candidates) == 1 {
-		h, err := openSerial(candidates[0])
-		if err != nil {
-			return nil, "", fmt.Errorf("%s açılamadı: %w", candidates[0], err)
-		}
-		return newConsole(h), candidates[0], nil
+		return openPort(ctx, candidates[0])
 	}
 	var first string
 	for _, a := range candidates {
+		if !claimed.Claim(a) {
+			continue
+		}
 		h, err := openSerial(a)
 		if err != nil {
+			claimed.Release(a)
 			continue
 		}
 		k := newConsole(h)
@@ -343,6 +402,7 @@ func openPort(ctx context.Context, name string) (*Console, string, error) {
 			return k, a, nil
 		}
 		h.Close()
+		claimed.Release(a)
 		if first == "" {
 			first = a
 		}
@@ -350,11 +410,38 @@ func openPort(ctx context.Context, name string) (*Console, string, error) {
 	if first == "" {
 		return nil, "", fmt.Errorf("seri portların hiçbiri açılamadı: %s", strings.Join(candidates, ", "))
 	}
-	h, err := openSerial(first)
-	if err != nil {
-		return nil, "", err
+	return openPort(ctx, first)
+}
+
+// portSet aynı anda yürüyen işlerin açtığı seri portlardır.
+type portSet struct {
+	mu sync.Mutex
+	m  map[string]bool
+}
+
+var claimed = &portSet{m: map[string]bool{}}
+
+// Claim portu alır; başkası tutuyorsa false.
+func (p *portSet) Claim(name string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.m[name] {
+		return false
 	}
-	return newConsole(h), first, nil
+	p.m[name] = true
+	return true
+}
+
+func (p *portSet) Release(name string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.m, name)
+}
+
+func (p *portSet) Held(name string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.m[name]
 }
 
 // pump konsol çıktısını saniyede bir panele taşır; dönüşte panelden elle

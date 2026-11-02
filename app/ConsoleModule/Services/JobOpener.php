@@ -6,6 +6,7 @@ namespace App\ConsoleModule\Services;
 
 use App\ConsoleModule\Models\ConsoleJob;
 use App\ConsoleModule\Models\ConsolePc;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -14,9 +15,10 @@ use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
- * İşi açar. Bir PC'de tek açık iş olabilir (konsol kablosu bir tane): form
- * isteği bunu sorar ama "sor sonra yaz" iki operatör aynı anda gönderince
- * ikisini de geçirir. Asıl denetim burada, PC satırı kilitliyken yapılır.
+ * İşi açar. Bir seri portta tek açık iş olabilir (o kablo bir switch'e
+ * takılı): form isteği bunu sorar ama "sor sonra yaz" iki operatör aynı anda
+ * gönderince ikisini de geçirir. Asıl denetim burada, PC satırı kilitliyken
+ * yapılır; veritabanında da unique(pc_id, acik_port) var.
  *
  * Bilgisayardan seçilen Junos dosyası TFTP dizinine (junos diski) bu işin
  * adıyla yazılır; önce gizli geçici adla, bitince yerine (TFTP yarım dosya
@@ -37,11 +39,17 @@ class JobOpener
             return DB::transaction(function () use ($pc, $veri): ConsoleJob {
                 ConsolePc::query()->whereKey($pc->id)->lockForUpdate()->first();
 
-                if ($pc->isler()->acik()->exists()) {
-                    throw ValidationException::withMessages(['pc' => ConsoleJob::PC_MESGUL]);
+                $port = (string) ($veri['acik_port'] ?? '');
+                if ($pc->isler()->acik()->where('acik_port', $port)->exists()) {
+                    throw ValidationException::withMessages(['pc' => ConsoleJob::portMesgul($port)]);
                 }
 
-                return ConsoleJob::create($veri);
+                try {
+                    return ConsoleJob::create($veri);
+                } catch (UniqueConstraintViolationException) {
+                    /* Son kale: unique(pc_id, acik_port). */
+                    throw ValidationException::withMessages(['pc' => ConsoleJob::portMesgul($port)]);
+                }
             });
         } catch (Throwable $e) {
             if ($gecici !== null) {

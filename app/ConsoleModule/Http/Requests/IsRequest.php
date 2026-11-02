@@ -45,10 +45,22 @@ class IsRequest extends FormRequest
             'islem' => ['nullable', Rule::in(array_keys(ConsoleJob::ISLEMLER))],
             /* Formda uuid; açık iş denetimi burada ekranda iz bırakır, kilitli asıl denetim JobOpener'da. */
             'pc' => ['required', 'uuid', Rule::exists('konsol_pcleri', 'uuid'), function (string $alan, mixed $deger, Closure $hata): void {
-                if (ConsoleJob::query()->acik()->whereHas('pc', fn ($q) => $q->where('uuid', (string) $deger))->exists()) {
-                    $hata(ConsoleJob::PC_MESGUL);
+                $pc = $this->pcYaDaNull();
+                if ($pc !== null && $pc->isler()->acik()->where('acik_port', $this->secilenPort())->exists()) {
+                    $hata(ConsoleJob::portMesgul($this->secilenPort()));
                 }
             }],
+            /*
+             * Seri port: PC'nin portlarından biri. İki ve daha çok portlu PC'de
+             * seçmek şart: "otomatik" taramada ajan öbür işin kablosunu da
+             * deneyebilirdi.
+             */
+            'seri_port' => [Rule::requiredIf(fn (): bool => count($this->pcYaDaNull()?->portlar() ?? []) > 1), 'nullable', 'string', 'max:60',
+                function (string $alan, mixed $deger, Closure $hata): void {
+                    if (! in_array((string) $deger, $this->pcYaDaNull()?->portlar() ?? [], true)) {
+                        $hata('Bu port PC\'de tanımlı değil.');
+                    }
+                }],
             /*
              * Cihaz listeden (yedek klasörleri) ya da boş. Boşsa switch fabrika
              * ayarında kalır; seçilirse o cihazın bir yedeği yüklenir. Yalnız
@@ -60,7 +72,15 @@ class IsRequest extends FormRequest
                 }
             }],
             'adres_turu' => ['nullable', Rule::in(array_keys(ConsoleJob::ADRES_TURLERI))],
-            'cihaz_ip' => ['nullable', 'string', 'regex:/^(\d{1,3}\.){3}\d{1,3}\/([8-9]|[12]\d|30)$/'],
+            /* Aynı PC'de aynı anda kurulan iki switch aynı loader adresini alamaz. */
+            'cihaz_ip' => ['nullable', 'string', 'regex:/^(\d{1,3}\.){3}\d{1,3}\/([8-9]|[12]\d|30)$/', function (string $alan, mixed $deger, Closure $hata) use ($yalnizYedek): void {
+                $pc = $this->pcYaDaNull();
+                $adres = trim((string) $deger) ?: (string) $pc?->cihaz_ip;
+                if ($pc !== null && ! $yalnizYedek && $this->input('adres_turu') !== 'dhcp'
+                    && $pc->isler()->acik()->where('cihaz_ip', $adres)->exists()) {
+                    $hata("Bu PC'de açık başka bir iş {$adres} loader adresini kullanıyor; bu switch'e başka bir adres verin.");
+                }
+            }],
             'gecit' => ['nullable', 'ip'],
             'goruntu' => [Rule::requiredIf(! $yalnizYedek && ! $goruntuYuklendi), 'nullable', 'string', function (string $alan, mixed $deger, Closure $hata) use ($yalnizYedek, $goruntuYuklendi): void {
                 if (! $yalnizYedek && ! $goruntuYuklendi && app(ImageSource::class)->bul((string) $deger) === null) {
@@ -96,6 +116,7 @@ class IsRequest extends FormRequest
             'goruntu.required' => 'Junos görüntüsünü listeden seçin ya da bilgisayardan bir Junos dosyası seçin.',
             'cihaz_ip.regex' => 'Adres önekle yazılmalı: 198.51.100.120/24.',
             'yedek_dosya.required' => 'Yüklenecek yedeği seçin.',
+            'seri_port.required' => 'Bu PC\'de birden çok seri port var; konsol kablosunun takılı olduğu portu seçin.',
         ] + $this->ozellestirmeIletileri();
     }
 
@@ -132,6 +153,8 @@ class IsRequest extends FormRequest
 
         return $kurulum + [
             'pc_id' => $pc->id,
+            'seri_port' => $this->secilenPort(),
+            'acik_port' => $this->secilenPort(),
             'islem' => $yalnizYedek ? 'yedek' : 'kurulum',
             'ad' => $cihaz ?: (pathinfo($yedekAdi, PATHINFO_FILENAME) ?: 'Yeni cihaz'),
             'root_parola' => $this->filled('root_parola') ? (string) $this->input('root_parola') : null,
@@ -191,5 +214,22 @@ class IsRequest extends FormRequest
     public function pc(): ConsolePc
     {
         return ConsolePc::query()->where('uuid', $this->string('pc')->value())->firstOrFail();
+    }
+
+    private function pcYaDaNull(): ?ConsolePc
+    {
+        return ConsolePc::query()->where('uuid', $this->string('pc')->value())->first();
+    }
+
+    /**
+     * İşin portu: seçilen; seçilmediyse PC'nin tek portu; o da yoksa ''
+     * (otomatik). Aynı porta ikinci açık iş bu değerle aranır.
+     */
+    public function secilenPort(): string
+    {
+        $secilen = $this->string('seri_port')->trim()->value();
+        $portlar = $this->pcYaDaNull()?->portlar() ?? [];
+
+        return $secilen !== '' ? $secilen : (count($portlar) === 1 ? $portlar[0] : '');
     }
 }

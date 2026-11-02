@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\ConsoleModule\Http\Requests;
 
 use App\ConsoleModule\Models\ConsolePc;
+use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -38,7 +39,20 @@ class PcRequest extends FormRequest
             'cihaz_ip' => ['required', 'string', 'regex:/^(\d{1,3}\.){3}\d{1,3}\/([8-9]|[12]\d|30)$/'],
             /* Loader komutu yalnız IPv4 alır; kolon da 15 karakter. */
             'gecit' => ['required', 'ipv4'],
-            'seri_port' => ['nullable', 'string', 'max:60', 'regex:/^(COM\d{1,3}|\/dev\/[A-Za-z0-9_.\/-]+)$/', 'not_regex:/\.\./'],
+            /* Satır başına bir port; ajan betiğine ve agent.json'a yazılır: yalnız güvenli biçim. */
+            'seri_portlar' => ['nullable', 'string', function (string $alan, mixed $deger, Closure $hata): void {
+                $portlar = self::portlar((string) $deger);
+                if (count($portlar) > 8) {
+                    $hata('En çok 8 seri port.');
+                }
+                foreach ($portlar as $port) {
+                    if (preg_match('/^(COM\d{1,3}|\/dev\/[A-Za-z0-9_.\/-]{1,50})$/', $port) !== 1 || str_contains($port, '..')) {
+                        $hata("Seri port COM3 ya da /dev/ttyUSB0 biçiminde olmalı: {$port}");
+
+                        return;
+                    }
+                }
+            }],
             'dizin' => ['nullable', 'string', 'max:120', $windows
                 ? 'regex:/^[A-Za-z]:\\\\[A-Za-z0-9 _.\\\\-]*$/'
                 : 'regex:/^\/[A-Za-z0-9_.\/-]*$/', 'not_regex:/\.\./'],
@@ -50,7 +64,6 @@ class PcRequest extends FormRequest
     {
         return [
             'cihaz_ip.regex' => 'Switch\'e verilecek adres önekle yazılmalı: 198.51.100.120/24.',
-            'seri_port.regex' => 'Seri port COM3 ya da /dev/ttyUSB0 biçiminde olmalı; boş bırakılırsa ajan kendisi bulur.',
             'dizin.regex' => 'Dizinde yalnızca harf, rakam, boşluk, nokta, tire ve alt çizgi olabilir.',
             'kullanici.regex' => 'Kullanıcı adında tırnak ya da noktalı virgül olamaz.',
             'adres.regex' => 'Adres bir IP ya da makine adı olmalı.',
@@ -73,8 +86,16 @@ class PcRequest extends FormRequest
             'parola' => $this->filled('parola') ? (string) $this->input('parola') : null,
             'cihaz_ip' => $this->string('cihaz_ip')->trim()->value(),
             'gecit' => $this->string('gecit')->trim()->value(),
-            'seri_port' => $this->filled('seri_port') ? $this->string('seri_port')->trim()->value() : '',
+            'seri_portlar' => $portlar = self::portlar((string) $this->input('seri_portlar')),
+            /* İlk port eski alanda da durur: eski ajan.json ve tek portlu PC'ler. */
+            'seri_port' => $portlar[0] ?? '',
             'dizin' => $this->filled('dizin') ? rtrim($this->string('dizin')->trim()->value(), '\\/') : $varsayilan['dizin'],
         ], fn ($v) => $v !== null);
+    }
+
+    /** @return list<string> */
+    private static function portlar(string $metin): array
+    {
+        return array_values(array_unique(array_filter(array_map('trim', preg_split('/[\r\n,]+/', $metin) ?: []), fn (string $p): bool => $p !== '')));
     }
 }

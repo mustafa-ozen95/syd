@@ -66,9 +66,9 @@
 
 <div class="field-row">
     <div class="field">
-        <label class="field__label" for="{{ $onek }}-seri">Seri port</label>
-        <input class="input input--mono" type="text" id="{{ $onek }}-seri" name="seri_port" value="{{ $deger['seri_port'] }}" maxlength="60" placeholder="boş: otomatik · COM3 · /dev/ttyUSB0">
-        <span class="field__hint">Boşsa ajan USB-seri dönüştürücüyü kendisi bulur; birden çoksa cihazın cevap verdiğini seçer. Hız da otomatik (önce 115200, sonra 9600).</span>
+        <label class="field__label" for="{{ $onek }}-seri">Seri portlar</label>
+        <textarea class="textarea input--mono" id="{{ $onek }}-seri" name="seri_portlar" rows="2" placeholder="boş: otomatik&#10;COM3&#10;COM9">{{ $deger['seri_portlar'] }}</textarea>
+        <span class="field__hint">Satır başına bir port. Birden çok kablo takılıysa her biri ayrı switch kurar: her porta aynı anda bir iş. Boşsa ajan USB-seri dönüştürücüyü kendisi bulur (tek kablo). Hız otomatik.</span>
     </div>
     <div class="field">
         <label class="field__label" for="{{ $onek }}-dizin">Ajan dizini</label>

@@ -21,8 +21,13 @@ class ConsoleJob extends Model
     /** Ajanın üzerinde çalışabildiği durumlar. */
     public const ACIK = ['bekliyor', 'calisiyor'];
 
-    /** Bir PC'de tek açık iş: konsol kablosu bir tane. */
-    public const PC_MESGUL = 'Bu PC\'de açık bir iş var; konsol kablosu bir tane. Önce onu kapatın.';
+    /** Bir seri portta tek açık iş: o kablo bir switch'e takılı. */
+    public static function portMesgul(string $port): string
+    {
+        return $port === ''
+            ? 'Bu PC\'de açık bir iş var; konsol kablosu bir tane. Önce onu kapatın ya da PC\'ye başka bir seri port tanımlayın.'
+            : "Bu PC'de {$port} üzerinde açık bir iş var. Önce onu kapatın ya da başka bir port seçin.";
+    }
 
     /** @var array<string, array{0: string, 1: BadgeVariant}> durum => [etiket, renk] */
     public const DURUMLAR = [
@@ -66,7 +71,7 @@ class ConsoleJob extends Model
     ];
 
     protected $fillable = [
-        'pc_id', 'islem', 'ad', 'goruntu_etiket', 'goruntu_adres', 'beklenen_surum',
+        'pc_id', 'seri_port', 'acik_port', 'islem', 'ad', 'goruntu_etiket', 'goruntu_adres', 'beklenen_surum',
         'yapilandirma_turu', 'yedek_cihaz', 'yedek_dosya', 'yedek_metni', 'gecici_goruntu', 'yama', 'yama_ozeti', 'uplink_arayuz', 'adres_turu', 'cihaz_ip', 'gecit', 'root_parola',
         'durum', 'asama', 'son_mesaj', 'ajan_token_id', 'olusturan_id', 'cikti_bayt',
     ];
@@ -155,6 +160,8 @@ class ConsoleJob extends Model
     {
         $this->forceFill([
             'durum' => $durum,
+            /* Port boşalır: aynı porta yeni iş açılabilsin (unique pc_id + acik_port). */
+            'acik_port' => null,
             'son_mesaj' => $mesaj === null ? $this->son_mesaj : mb_substr($mesaj, 0, 500),
             'root_parola' => null,
             /* Yama parola özetleri taşır; yalnız iş sürerken gerekiyordu. */

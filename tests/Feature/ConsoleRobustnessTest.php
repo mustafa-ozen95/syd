@@ -53,7 +53,7 @@ final class ConsoleRobustnessTest extends TestCase
 
     private function acikIs(ConsolePc $pc, User $kim, array $ek = []): ConsoleJob
     {
-        return ConsoleJob::create(['pc_id' => $pc->id, 'ad' => 'sw-a', 'olusturan_id' => $kim->id] + $ek);
+        return ConsoleJob::create(['pc_id' => $pc->id, 'ad' => 'sw-a', 'olusturan_id' => $kim->id, 'acik_port' => ''] + $ek);
     }
 
     /** @param  callable(): bool  $basarili */
@@ -91,7 +91,7 @@ final class ConsoleRobustnessTest extends TestCase
         $this->acikIs($pc, $yonetici);
 
         $this->expectException(ValidationException::class);
-        app(JobOpener::class)->ac($pc, ['pc_id' => $pc->id, 'ad' => 'sw-b', 'olusturan_id' => $yonetici->id]);
+        app(JobOpener::class)->ac($pc, ['pc_id' => $pc->id, 'ad' => 'sw-b', 'olusturan_id' => $yonetici->id, 'acik_port' => '']);
     }
 
     #[Test]

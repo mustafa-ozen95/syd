@@ -41,9 +41,9 @@ class ConsolePage
             'yetki' => $yetki,
             'satirlar' => $this->isSatirlari(),
             'pcSecenekleri' => ConsolePc::query()->orderBy('ad')->pluck('ad', 'uuid')->all(),
-            /* PC değişince adres alanları onun kaydıyla dolar (console-form.js). */
-            'pcAdresleri' => ConsolePc::query()->get(['uuid', 'cihaz_ip', 'gecit'])
-                ->mapWithKeys(fn (ConsolePc $p): array => [$p->uuid => ['ip' => (string) $p->cihaz_ip, 'gecit' => (string) $p->gecit]])->all(),
+            /* PC değişince adres ve port seçenekleri onun kaydıyla dolar (console-form.js). */
+            'pcAdresleri' => ConsolePc::query()->get(['uuid', 'cihaz_ip', 'gecit', 'seri_port', 'seri_portlar'])
+                ->mapWithKeys(fn (ConsolePc $p): array => [$p->uuid => ['ip' => (string) $p->cihaz_ip, 'gecit' => (string) $p->gecit, 'portlar' => $p->portlar()]])->all(),
             'adresTurleri' => ConsoleJob::ADRES_TURLERI,
             'islemler' => ConsoleJob::ISLEMLER,
             'goruntuSecenekleri' => $this->goruntuler->secenekler(),
@@ -53,6 +53,7 @@ class ConsolePage
             'ozellestirTumu' => Gate::allows('konsol:ozellestir'),
             'ekleAcik' => $form === 'ekle',
             'ekleDeger' => $ekleDeger = $this->isGirdisi($form === 'ekle'),
+            'portSecenekleri' => self::portSecenekleri(ConsolePc::query()->where('uuid', $ekleDeger['pc'])->first() ?? ConsolePc::query()->orderBy('ad')->first()),
             'ozGorunur' => $ekleDeger['ad'] !== '' && (Gate::allows('konsol:ozellestir') || ConfigSablonu::query()->where('ad', $ekleDeger['ad'])->exists()),
             /* Seçili cihazın yedekleri: hatayla dönen formda dolu gelsin; sonrası console-form.js. */
             'yedekDosyalari' => $yetki['ekle'] && $ekleDeger['ad'] !== '' ? $this->yedekSecenekleri($ekleDeger['ad']) : [],
@@ -137,7 +138,7 @@ class ConsolePage
             ->get()
             ->map(fn (ConsoleJob $is): array => [
                 'is' => $is,
-                'pc' => $is->pc?->ad ?? '—',
+                'pc' => ($is->pc?->ad ?? '—').($is->seri_port ? ' · '.$is->seri_port : ''),
                 'goruntu' => $is->islemOzeti(),
                 'yapilandirma' => $is->yapilandirmaOzeti(),
                 'durum' => $is->durumEtiketi(),
@@ -153,7 +154,7 @@ class ConsolePage
         return ConsolePc::query()->with('jeton')->orderBy('ad')->get()->map(fn (ConsolePc $pc): array => [
             'pc' => $pc,
             'platform' => ConsolePc::PLATFORMLAR[$pc->platform]['etiket'] ?? $pc->platform,
-            'seriPort' => $pc->seri_port ?: 'otomatik',
+            'seriPort' => implode(', ', $pc->portlar()) ?: 'otomatik',
             'ajan' => $pc->ajanKuruluMu() ? 'Kurulu' : 'Kurulu değil',
             'ajanSon' => $pc->jeton?->last_used_at?->diffForHumans() ?? '—',
             'ajanMesaj' => $pc->ajan_mesaj,
@@ -168,9 +169,10 @@ class ConsolePage
     {
         $deger = [];
 
-        foreach (['ad', 'platform', 'adres', 'gorunen_adres', 'port', 'kullanici', 'seri_port', 'cihaz_ip', 'gecit', 'dizin'] as $alan) {
+        foreach (['ad', 'platform', 'adres', 'gorunen_adres', 'port', 'kullanici', 'cihaz_ip', 'gecit', 'dizin'] as $alan) {
             $deger[$alan] = $hatali ? (string) old($alan, '') : (string) ($pc?->{$alan} ?? '');
         }
+        $deger['seri_portlar'] = $hatali ? (string) old('seri_portlar', '') : implode("\n", $pc?->portlar() ?? []);
 
         $deger['platform'] = $deger['platform'] ?: 'windows';
 
@@ -195,7 +197,7 @@ class ConsolePage
     {
         $deger = [];
 
-        foreach (['pc', 'islem', 'ad', 'goruntu', 'yedek_dosya', 'adres_turu', 'cihaz_ip', 'gecit'] as $alan) {
+        foreach (['pc', 'seri_port', 'islem', 'ad', 'goruntu', 'yedek_dosya', 'adres_turu', 'cihaz_ip', 'gecit'] as $alan) {
             $deger[$alan] = $hatali ? (string) old($alan, '') : '';
         }
 
@@ -211,5 +213,20 @@ class ConsolePage
         $deger['gecit'] = $deger['gecit'] ?: (string) $pc?->gecit;
 
         return $deger;
+    }
+
+    /**
+     * Port seçim kutusu: tek portta "otomatik" + o port, çok portta yalnız
+     * portlar (seçmek şart), hiç yoksa yalnız otomatik. console-form.js aynı
+     * kuralı PC değişince uygular.
+     *
+     * @return array<string, string>
+     */
+    public static function portSecenekleri(?ConsolePc $pc): array
+    {
+        $portlar = $pc?->portlar() ?? [];
+        $secenek = array_combine($portlar, $portlar);
+
+        return count($portlar) > 1 ? $secenek : ['' => 'Otomatik'] + $secenek;
     }
 }

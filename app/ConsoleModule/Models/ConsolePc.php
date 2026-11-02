@@ -21,7 +21,7 @@ class ConsolePc extends Model
     ];
 
     protected $fillable = [
-        'ad', 'platform', 'adres', 'gorunen_adres', 'port', 'kullanici', 'parola', 'seri_port',
+        'ad', 'platform', 'adres', 'gorunen_adres', 'port', 'kullanici', 'parola', 'seri_port', 'seri_portlar',
         'cihaz_ip', 'gecit', 'dizin', 'ssh_parmak_izi', 'jeton_id', 'son_kurulum_at', 'ajan_mesaj',
         'ajan_deneme_sayisi', 'ajan_sonraki_deneme_at',
     ];
@@ -34,6 +34,7 @@ class ConsolePc extends Model
             'parola' => 'encrypted',
             'port' => 'integer',
             'son_kurulum_at' => 'immutable_datetime',
+            'seri_portlar' => 'array',
             'ajan_deneme_sayisi' => 'integer',
             'ajan_sonraki_deneme_at' => 'immutable_datetime',
         ];
@@ -81,6 +82,17 @@ class ConsolePc extends Model
     }
 
     /** Ajan kurulu mu: panel kurduğunda jeton bağlanır, kaldırınca çözülür. */
+    /**
+     * PC'nin seri portları. Liste yoksa eski tek port; o da yoksa boş
+     * (ajan USB-seri dönüştürücüyü kendisi bulur).
+     *
+     * @return list<string>
+     */
+    public function portlar(): array
+    {
+        return array_values(array_filter((array) ($this->seri_portlar ?: [$this->seri_port]), fn ($p): bool => (string) $p !== ''));
+    }
+
     public function ajanKuruluMu(): bool
     {
         return $this->jeton_id !== null;
