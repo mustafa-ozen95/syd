@@ -32,6 +32,12 @@ type Job struct {
 	// ResumeStage: iş daha önce bu ajanla başlamışsa vardığı aşama (ajan ya
 	// da PC iş ortasında yeniden başladı); ilk alışta boş.
 	ResumeStage string `json:"resume_stage"`
+	// Patch: yedeğin üstüne AYNI commit'te uygulanacak set/delete satırları
+	// var ("Yapılandırmayı özelleştir"); Panel.patch ile alınır.
+	Patch bool `json:"patch"`
+	// UplinkInterface: özelleştirmede verilen uplink; commit sonrası cihazda
+	// var mı diye bakılır.
+	UplinkInterface string `json:"uplink_interface"`
 }
 
 // Panelin "iş artık yok" yanıtı: iptal edildi ya da silindi.
@@ -125,6 +131,16 @@ func (p *Panel) configuration(ctx context.Context, uuid string) (string, error) 
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	return string(b), err
+}
+
+func (p *Panel) patch(ctx context.Context, uuid string) (string, error) {
+	resp, err := p.request(ctx, http.MethodGet, "/api/v1/console/jobs/"+uuid+"/patch", nil)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	return string(b), err
 }
 

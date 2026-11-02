@@ -31,7 +31,14 @@ type fakeDevice struct {
 	installerFailure bool
 	// loadReply: ^D sonrası cihazın cevabı; boşsa "load complete".
 	loadReply string
-	out       chan string
+	// setMode: "load set terminal" girişi; patched o girişin satırları,
+	// patchReply onun ^D cevabı. missingIf: cihazda olmayan arayüz.
+	setMode    bool
+	patched    []string
+	patchReply string
+	missingIf  string
+	committed  bool
+	out        chan string
 }
 
 func newFake(t *testing.T, state string) *fakeDevice {
@@ -146,6 +153,12 @@ func (c *fakeDevice) handleByte(b byte) {
 	case "yukleme":
 		if b == 0x04 {
 			c.state = "conf"
+			if c.setMode && c.patchReply != "" {
+				c.setMode = false
+				c.emitLocked(c.patchReply)
+				return
+			}
+			c.setMode = false
 			if c.loadReply != "" {
 				c.emitLocked(c.loadReply)
 				return
@@ -192,6 +205,8 @@ func (c *fakeDevice) lineReceived(s string) {
 			c.emitLocked("Reboot the system ? [yes,no] (no) ")
 		case "show version | no-more":
 			c.emitLocked("Hostname: sw1\r\nModel: ex2200-24t-4g\r\nJUNOS Base OS boot [12.3R12.4]\r\nroot> ")
+		case "show interfaces terse " + c.missingIf + " | no-more":
+			c.emitLocked("error: device " + c.missingIf + " not found\r\n\r\nroot@sw1> ")
 		case "configure":
 			c.state = "conf"
 			c.emitLocked("Entering configuration mode\r\n\r\n[edit]\r\nroot# ")
@@ -292,13 +307,22 @@ func (c *fakeDevice) lineReceived(s string) {
 		case "load override terminal":
 			c.state = "yukleme"
 			c.emitLocked("[Type ^D at a new line to end input]\r\n")
+		case "load set terminal":
+			c.state = "yukleme"
+			c.setMode = true
+			c.emitLocked("[Type ^D at a new line to end input]\r\n")
 		case "commit and-quit":
+			c.committed = true
 			c.state = "cli"
 			c.emitLocked("commit complete\r\nExiting configuration mode\r\n\r\nroot@sw1> ")
 		default:
 			c.emitLocked("[edit]\r\nroot# ")
 		}
 	case "yukleme":
+		if c.setMode {
+			c.patched = append(c.patched, s)
+			return
+		}
 		c.loaded = append(c.loaded, s)
 	case "kurucu":
 		if s == "exit" {
@@ -695,5 +719,60 @@ func TestResumeFromConfiguration(t *testing.T) {
 	}
 	if c.installed != "" || len(c.loaded) == 0 {
 		t.Errorf("yalnız yükleme beklendi: kurulan=%q yüklenen=%q", c.installed, c.loaded)
+	}
+}
+
+// Özelleştirme yedekle aynı adaya "load set terminal" ile eklenir, sonra tek commit.
+func TestLoadAppliesPatchBeforeCommit(t *testing.T) {
+	c := newFake(t, "cli")
+	job := Job{Configuration: true, LoadCommand: "load override terminal", LoadOnly: true, Patch: true}
+	a, events := newTestFlow(t, c, job)
+	a.patch = func(context.Context) (string, error) {
+		return "set system host-name piga\ndelete system archival\n", nil
+	}
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	if err := a.LoadOnly(ctx); err != nil {
+		t.Fatalf("yükleme: %v\nolaylar: %v", err, *events)
+	}
+	if strings.Join(c.patched, "\n") != "set system host-name piga\ndelete system archival" || !c.committed {
+		t.Errorf("yama: %q commit=%v", c.patched, c.committed)
+	}
+}
+
+// Yamada hata varsa yedek de commit edilmez: ikisi birden geri alınır.
+func TestPatchErrorRollsBack(t *testing.T) {
+	c := newFake(t, "cli")
+	c.patchReply = "\r\nterminal:1:(5) syntax error: hostname\r\nload complete (1 errors)\r\n\r\n[edit]\r\nroot# "
+	job := Job{Configuration: true, LoadCommand: "load override terminal", LoadOnly: true, Patch: true}
+	a, _ := newTestFlow(t, c, job)
+	a.patch = func(context.Context) (string, error) { return "set system hostname piga", nil }
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	err := a.LoadOnly(ctx)
+	if err == nil || !strings.Contains(err.Error(), "özelleştirme hatalı") || c.committed {
+		t.Fatalf("geri alma beklendi: %v commit=%v", err, c.committed)
+	}
+}
+
+// Cihazda olmayan uplink arayüzü commit sonrası uyarı verir.
+func TestMissingUplinkWarns(t *testing.T) {
+	c := newFake(t, "cli")
+	c.missingIf = "xe-0/1/0"
+	job := Job{Configuration: true, LoadCommand: "load override terminal", LoadOnly: true, Patch: true, UplinkInterface: "xe-0/1/0"}
+	a, events := newTestFlow(t, c, job)
+	a.patch = func(context.Context) (string, error) {
+		return "set interfaces xe-0/1/0 unit 0 family inet address 10.0.0.230/30", nil
+	}
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	if err := a.LoadOnly(ctx); err != nil {
+		t.Fatalf("yükleme: %v", err)
+	}
+	if !strings.Contains(strings.Join(*events, "\n"), "uyari: Uplink arayüzü xe-0/1/0 cihazda yok") {
+		t.Errorf("uyarı beklendi: %v", *events)
 	}
 }

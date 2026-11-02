@@ -115,6 +115,27 @@ class AgentApiController extends Controller
         ]);
     }
 
+    /**
+     * Yedeğin üstüne aynı commit'te uygulanacak set/delete satırları
+     * ("Yapılandırmayı özelleştir"). Parola özetleri taşır: yalnız işi
+     * üstlenen ajana ve iş açıkken verilir.
+     */
+    public function patch(ConsoleJob $job, ActivityRecorder $kayit): Response
+    {
+        $this->benimAcikIsim($job);
+
+        if ($job->yama === null) {
+            throw new ConflictHttpException('Bu işte özelleştirme yok.');
+        }
+
+        $kayit->kaydet('konsol_yama', "Konsol: özelleştirme ajana verildi: {$job->ad} · {$job->yama_ozeti} · {$this->ajan()->name}", $job);
+
+        return response($job->yama, 200, [
+            'Content-Type' => 'text/plain; charset=utf-8',
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+
     /** Ajanın kendisi: PC kurulurken panelden kendi jetonuyla indirir. */
     public function download(string $platform): BinaryFileResponse
     {

@@ -185,7 +185,7 @@ class ConsolePage
         ], $this->yedekler->yedekler($cihaz));
     }
 
-    /** @return array<string, string> */
+    /** @return array<string, mixed> */
     private function isGirdisi(bool $hatali): array
     {
         $deger = [];
@@ -194,6 +194,9 @@ class ConsolePage
             $deger[$alan] = $hatali ? (string) old($alan, '') : '';
         }
 
+        /* Özelleştirme hatayla dönerse yazılanlar geri gelsin; parolalar asla. */
+        $deger['ozellestir'] = $hatali && old('ozellestir') ? '1' : '';
+        $deger['oz'] = $hatali ? array_diff_key((array) old('ozellestirme', []), ['root_parola' => 1, 'admin_parola' => 1]) : [];
         $deger['adres_turu'] = $deger['adres_turu'] ?: 'sabit';
         $deger['islem'] = $deger['islem'] ?: 'kurulum';
 

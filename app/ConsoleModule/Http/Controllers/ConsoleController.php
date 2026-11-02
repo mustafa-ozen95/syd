@@ -6,9 +6,12 @@ namespace App\ConsoleModule\Http\Controllers;
 
 use App\ConsoleModule\Http\Requests\InputRequest;
 use App\ConsoleModule\Http\Requests\IsRequest;
+use App\ConsoleModule\Http\Requests\OnizlemeRequest;
+use App\ConsoleModule\Junos\PatchBuilder;
 use App\ConsoleModule\Models\ConsoleJob;
 use App\ConsoleModule\Services\ConsolePage;
 use App\ConsoleModule\Services\JobOpener;
+use App\ConsoleModule\Services\Ozellestirme;
 use App\Http\Controllers\Controller;
 use App\Services\ActivityRecorder;
 use Illuminate\Http\JsonResponse;
@@ -55,6 +58,25 @@ class ConsoleController extends Controller
     public function backups(Request $request, ConsolePage $sayfa): JsonResponse
     {
         return response()->json(['yedekler' => $sayfa->yedekSecenekleri($request->string('device')->value())]);
+    }
+
+    /** Özelleştirme bölümünün ön değerleri: seçilen yedekte ne var (console-form.js). */
+    public function fields(Request $request, Ozellestirme $ozellestirme): JsonResponse
+    {
+        return response()->json(['alanlar' => $ozellestirme->alanlar($request->string('device')->value(), $request->string('file')->value())]);
+    }
+
+    /** Ajanın yedeğin üstüne yazacağı satırlar; parola özetleri maskeli. */
+    public function preview(OnizlemeRequest $request, Ozellestirme $ozellestirme): JsonResponse
+    {
+        $cihaz = $request->string('ad')->value();
+        $dosya = $request->string('yedek_dosya')->value();
+        $oz = (array) $request->ozellestirme();
+
+        return response()->json([
+            'satirlar' => PatchBuilder::maskele($ozellestirme->yama($cihaz, $dosya, $oz)),
+            'ozet' => $ozellestirme->ozet($cihaz, $dosya, $oz),
+        ]);
     }
 
     /** Canlı ekranın yoklaması: verilen parçadan sonraki çıktı ve işin durumu. */

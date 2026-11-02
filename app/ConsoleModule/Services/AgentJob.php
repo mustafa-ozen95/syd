@@ -23,6 +23,10 @@ class AgentJob
             return [
                 'uuid' => $is->uuid,
                 'resume_stage' => $this->devamAsamasi($is),
+                'patch' => $is->yama !== null,
+                'uplink_interface' => (string) $is->uplink_arayuz,
+                'patch' => $is->yama !== null,
+                'uplink_interface' => (string) $is->uplink_arayuz,
                 'serial_port' => (string) $pc->seri_port,
                 'device_ip' => '',
                 'loader_commands' => [],
@@ -51,6 +55,8 @@ class AgentJob
         return [
             'uuid' => $is->uuid,
             'resume_stage' => $this->devamAsamasi($is),
+            'patch' => $is->yama !== null,
+            'uplink_interface' => (string) $is->uplink_arayuz,
             'serial_port' => (string) $pc->seri_port,
             'device_ip' => $ip,
             /* DHCP'de adres satırları yazılmaz; loader adresi kendisi alır. */

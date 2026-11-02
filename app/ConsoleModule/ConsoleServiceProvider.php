@@ -67,6 +67,11 @@ class ConsoleServiceProvider extends ServiceProvider
                     'ability' => 'konsol:ajan',
                     'description' => 'Yüklenecek yedeğin metni (text/plain). Her verilişi denetim kaydına yazılır.',
                 ],
+                'console.patch' => [
+                    'summary' => 'Konsol: özelleştirme yaması',
+                    'ability' => 'konsol:ajan',
+                    'description' => 'Yedeğin üstüne aynı commit\'te uygulanacak set/delete satırları (text/plain; "load set terminal"). Her verilişi denetim kaydına yazılır.',
+                ],
                 'console.agent' => [
                     'summary' => 'Konsol: ajanı indir',
                     'ability' => 'konsol:ajan',

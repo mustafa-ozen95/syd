@@ -88,6 +88,115 @@
     <span class="field__hint">En yenisi en üstte. Yükleme <code>load override terminal</code> + commit ile yapılır.</span>
 </div>
 
+{{--
+    Yapılandırmayı özelleştir: yalnız listeden cihaz seçiliyken. Alanlar seçilen yedekteki değerlerle
+    dolar (console-form.js, console.fields); değiştirilmeyen alana dokunulmaz. Önizleme ajanın yazacağı
+    satırların aynısıdır (console.preview).
+--}}
+<div @class(['stack', 'is-hidden' => $deger['ad'] === '']) data-console-backup>
+    <label class="checkbox">
+        <input type="checkbox" name="ozellestir" value="1" @checked($deger['ozellestir'] === '1') data-console-custom-toggle>
+        <span>Yapılandırmayı özelleştir (isteğe bağlı)</span>
+    </label>
+    <div @class(['stack', 'is-hidden' => $deger['ozellestir'] !== '1']) data-console-custom
+         data-fields-url="{{ route('console.fields') }}" data-preview-url="{{ route('console.preview') }}">
+        <span class="field__hint">Alanlar seçilen yedekteki değerlerle dolar. Değiştirmediğiniz alana dokunulmaz; değişiklikler yedekle aynı commit'te uygulanır, hata olursa ikisi birden geri alınır.</span>
+
+        <div class="field-row">
+            <div class="field">
+                <label class="field__label" for="oz-host">Makine adı (host-name)</label>
+                <input class="input input--mono" type="text" id="oz-host" name="ozellestirme[host_name]" value="{{ $deger['oz']['host_name'] ?? '' }}" maxlength="63" data-oz="host_name">
+            </div>
+            <div class="field">
+                <label class="field__label" for="oz-me0">me0 (yönetim) adresi</label>
+                <input class="input input--mono" type="text" id="oz-me0" name="ozellestirme[me0_adres]" value="{{ $deger['oz']['me0_adres'] ?? '' }}" maxlength="18" placeholder="198.51.100.16/24" data-oz="me0_adres">
+                <label class="checkbox"><input type="checkbox" name="ozellestirme[me0_kaldir]" value="1" @checked(! empty($deger['oz']['me0_kaldir']))><span>me0 adresini kaldır</span></label>
+            </div>
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label class="field__label" for="oz-uplink">Uplink arayüzü</label>
+                <input class="input input--mono" type="text" id="oz-uplink" name="ozellestirme[uplink_arayuz]" value="{{ $deger['oz']['uplink_arayuz'] ?? '' }}" maxlength="12" placeholder="xe-0/1/0" data-oz="uplink_arayuz">
+            </div>
+            <div class="field">
+                <label class="field__label" for="oz-uplink-ip">Uplink adresi / önek</label>
+                <input class="input input--mono" type="text" id="oz-uplink-ip" name="ozellestirme[uplink_adres]" value="{{ $deger['oz']['uplink_adres'] ?? '' }}" maxlength="18" placeholder="10.0.0.230/30" data-oz="uplink_adres">
+            </div>
+            <div class="field">
+                <label class="field__label" for="oz-uplink-gw">Varsayılan geçit</label>
+                <input class="input input--mono" type="text" id="oz-uplink-gw" name="ozellestirme[uplink_gecit]" value="{{ $deger['oz']['uplink_gecit'] ?? '' }}" maxlength="15" placeholder="10.0.0.229" data-oz="uplink_gecit">
+            </div>
+        </div>
+        <span class="field__hint">Uplink değişirse eski arayüz sıradan switch portuna döner; yeni arayüz VLAN'dan çıkarılır ve eski arayüzdeki çıkış filtresini (koruma) alır. Arayüz cihazda yoksa ajan commit sonrası uyarır.</span>
+
+        <div class="field-row">
+            <div class="field">
+                <label class="field__label" for="oz-vlan0">vlan.0 adresleri (müşteri geçitleri)</label>
+                <textarea class="textarea input--mono" id="oz-vlan0" name="ozellestirme[vlan0_adresleri]" rows="3" data-oz="vlan0_adresleri">{{ $deger['oz']['vlan0_adresleri'] ?? '' }}</textarea>
+            </div>
+            <div class="field">
+                <label class="field__label" for="oz-koru">koru (izin verilen kaynak bloklar)</label>
+                <textarea class="textarea input--mono" id="oz-koru" name="ozellestirme[koru]" rows="3" data-oz="koru">{{ $deger['oz']['koru'] ?? '' }}</textarea>
+            </div>
+        </div>
+
+        <div class="field-row">
+            <div class="field" data-oz-field="re_filter">
+                <label class="field__label" for="oz-re">RE_FILTER whitelist (switch'e erişim)</label>
+                <textarea class="textarea input--mono" id="oz-re" name="ozellestirme[re_filter]" rows="3" data-oz="re_filter">{{ $deger['oz']['re_filter'] ?? '' }}</textarea>
+            </div>
+            <div class="field" data-oz-field="me_filter">
+                <label class="field__label" for="oz-me">ME_FILTER whitelist (me0'a erişim)</label>
+                <textarea class="textarea input--mono" id="oz-me" name="ozellestirme[me_filter]" rows="3" data-oz="me_filter">{{ $deger['oz']['me_filter'] ?? '' }}</textarea>
+            </div>
+        </div>
+        <span class="field__hint">Listeler satır başına bir adres ya da blok. Boş bırakılan listeye dokunulmaz. Whitelist'e kendi erişim adresinizi eklemeyi unutmayın.</span>
+
+        <div class="field-row">
+            <div class="field">
+                <label class="field__label" for="oz-snmp-ad">SNMP adı</label>
+                <input class="input" type="text" id="oz-snmp-ad" name="ozellestirme[snmp_ad]" value="{{ $deger['oz']['snmp_ad'] ?? '' }}" maxlength="120" data-oz="snmp_ad">
+            </div>
+            <div class="field">
+                <label class="field__label" for="oz-snmp-aciklama">SNMP açıklaması</label>
+                <input class="input" type="text" id="oz-snmp-aciklama" name="ozellestirme[snmp_aciklama]" value="{{ $deger['oz']['snmp_aciklama'] ?? '' }}" maxlength="120" data-oz="snmp_aciklama">
+            </div>
+            <div class="field">
+                <label class="field__label" for="oz-snmp-c">SNMP community'leri</label>
+                <textarea class="textarea input--mono" id="oz-snmp-c" name="ozellestirme[snmp_communityler]" rows="2" data-oz="snmp_communityler">{{ $deger['oz']['snmp_communityler'] ?? '' }}</textarea>
+            </div>
+        </div>
+        <div class="row row--wrap">
+            <label class="checkbox"><input type="checkbox" name="ozellestirme[snmp_engine_kaldir]" value="1" @checked(! empty($deger['oz']['snmp_engine_kaldir']))><span>SNMP engine-id'yi kaldır</span></label>
+            <label class="checkbox"><input type="checkbox" name="ozellestirme[archival_kaldir]" value="1" @checked(! empty($deger['oz']['archival_kaldir']))><span>Yedekleme hedefini (archival) kaldır</span></label>
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label class="field__label" for="oz-root">Yeni root parolası</label>
+                <input class="input" type="password" id="oz-root" name="ozellestirme[root_parola]" maxlength="128" autocomplete="new-password">
+            </div>
+            <div class="field">
+                <label class="field__label" for="oz-admin">Yeni admin parolası</label>
+                <input class="input" type="password" id="oz-admin" name="ozellestirme[admin_parola]" maxlength="128" autocomplete="new-password">
+            </div>
+        </div>
+        <span class="field__hint">Boş bırakılırsa cihazın parolaları YEDEKTEKİLER olur. Yedeğin parolasını bilmiyorsanız burada belirleyin. Parola saklanmaz; cihaza yalnız özeti ($1$) gider, iş bitince o da silinir.</span>
+
+        <div class="field">
+            <label class="field__label" for="oz-ek">Ek set komutları (isteğe bağlı)</label>
+            <textarea class="textarea input--mono" id="oz-ek" name="ozellestirme[ek_komutlar]" rows="3" placeholder="set system ntp server 198.51.100.10">{{ $deger['oz']['ek_komutlar'] ?? '' }}</textarea>
+            <span class="field__hint">Satır başına bir set / delete komutu, en çok 50. Yanlış bir komut commit'i durdurur; yedek de geri alınır.</span>
+        </div>
+
+        <div class="stack">
+            <div><button type="button" class="btn btn--sm" data-console-preview>Önizle</button></div>
+            <pre class="code is-hidden" data-console-preview-out></pre>
+        </div>
+    </div>
+</div>
+
 <div class="field">
     <label class="field__label" for="console-root">Cihazın şu anki root parolası (isteğe bağlı)</label>
     <input class="input" type="password" id="console-root" name="root_parola" maxlength="128" autocomplete="new-password">

@@ -6,6 +6,10 @@
  * seçilince o cihazın yedekleri `data-url`ten çekilir, en yenisi seçili gelir. İlk görünüm sunucudan
  * doğru gelir, burada yalnız değişiklik izlenir.
  *
+ * "Yapılandırmayı özelleştir": alanlar seçilen yedekteki değerlerle dolar
+ * (`data-fields-url`); "Önizle" ajanın yazacağı satırları sunucudan alır
+ * (`data-preview-url`). Kurallar sunucuda; burada yalnız DOM.
+ *
  * Dinleyici belgede, bir kez kurulur: pencere yenilemesiz geçişte yeniden
  * çizilse de çalışır.
  */
@@ -24,7 +28,7 @@ async function fillBackups(deviceSelect) {
     const fileSelect = deviceSelect.form.querySelector('[data-console-backup-file]');
     const device = deviceSelect.value;
 
-    deviceSelect.form.querySelector('[data-console-backup]')?.classList.toggle('is-hidden', device === '');
+    deviceSelect.form.querySelectorAll('[data-console-backup]').forEach((el) => el.classList.toggle('is-hidden', device === ''));
 
     if (!fileSelect) {
         return;
@@ -60,6 +64,7 @@ async function fillBackups(deviceSelect) {
         fileSelect.replaceChildren(
             ...(backups.length ? backups.map((y) => makeOption(y.dosya, y.etiket)) : [makeOption('', 'Bu cihazın yedeği yok')]),
         );
+        fillCustom(deviceSelect.form);
     } catch {
         if (seq === requestNo) {
             fileSelect.replaceChildren(makeOption('', 'Liste alınamadı; cihazı yeniden seçin'));
@@ -71,9 +76,89 @@ async function fillBackups(deviceSelect) {
     }
 }
 
+/** Özelleştirme alanlarını seçilen yedekteki değerlerle doldurur. */
+async function fillCustom(form) {
+    const box = form.querySelector('[data-console-custom]');
+    const device = form.querySelector('[data-console-device]')?.value ?? '';
+    const file = form.querySelector('[data-console-backup-file]')?.value ?? '';
+
+    if (!box || box.classList.contains('is-hidden') || device === '' || file === '') {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${box.dataset.fieldsUrl}?device=${encodeURIComponent(device)}&file=${encodeURIComponent(file)}`, {
+            headers: { Accept: 'application/json' },
+        });
+        const { alanlar: fields } = await response.json();
+
+        if (!fields) {
+            return;
+        }
+        box.querySelectorAll('[data-oz]').forEach((input) => {
+            const value = fields[input.dataset.oz];
+            input.value = Array.isArray(value) ? value.join('\n') : (value ?? '');
+        });
+        /* Yedekte olmayan filtrenin listesi gösterilmez. */
+        box.querySelectorAll('[data-oz-field]').forEach((field) => {
+            field.classList.toggle('is-hidden', fields[field.dataset.ozField] === null);
+        });
+    } catch {
+        /* Alanlar boş kalır: boş alan "dokunma" demektir. */
+    }
+}
+
+async function preview(button) {
+    const box = button.closest('[data-console-custom]');
+    const out = box.querySelector('[data-console-preview-out]');
+    const body = new FormData(button.form);
+
+    out.classList.remove('is-hidden');
+    out.textContent = 'Hazırlanıyor…';
+
+    try {
+        const response = await fetch(box.dataset.previewUrl, {
+            method: 'POST',
+            body,
+            headers: {
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+            },
+        });
+        const data = await response.json();
+
+        if (response.status === 422) {
+            out.textContent = Object.values(data.errors ?? {}).flat().join('\n');
+        } else {
+            out.textContent = data.satirlar.length
+                ? `# ${data.ozet}\n${data.satirlar.join('\n')}`
+                : 'Değişiklik yok: alanlar yedektekiyle aynı.';
+        }
+    } catch {
+        out.textContent = 'Önizleme alınamadı.';
+    }
+}
+
 export function init() {
+    document.addEventListener('click', (event) => {
+        const button = event.target instanceof Element ? event.target.closest('[data-console-preview]') : null;
+
+        if (button) {
+            preview(button);
+        }
+    });
+
     document.addEventListener('change', (event) => {
         const target = event.target;
+
+        if (target instanceof HTMLInputElement && target.matches('[data-console-custom-toggle]') && target.form) {
+            target.form.querySelector('[data-console-custom]')?.classList.toggle('is-hidden', !target.checked);
+            if (target.checked) {
+                fillCustom(target.form);
+            }
+
+            return;
+        }
 
         if (!(target instanceof HTMLSelectElement) || !target.form) {
             return;
@@ -104,6 +189,8 @@ export function init() {
             }
         } else if (target.matches('[data-console-device]')) {
             fillBackups(target);
+        } else if (target.matches('[data-console-backup-file]')) {
+            fillCustom(target.form);
         }
     });
 }

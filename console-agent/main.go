@@ -263,6 +263,9 @@ func runJob(parent context.Context, panel *Panel, cfg *Config, job Job) (unsent 
 		configuration: func(c context.Context) (string, error) {
 			return panel.configuration(c, job.UUID)
 		},
+		patch: func(c context.Context) (string, error) {
+			return panel.patch(c, job.UUID)
+		},
 		addressInUse:   pingReplies,
 		bootTimeout:    10 * time.Minute,
 		installTimeout: time.Duration(minutes) * time.Minute,

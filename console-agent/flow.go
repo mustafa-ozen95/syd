@@ -114,6 +114,8 @@ type Flow struct {
 	notify Notifier
 	// configuration panelden yedek metnini alır; diske yazılmaz.
 	configuration func(ctx context.Context) (string, error)
+	// patch yedeğin üstüne uygulanacak set/delete satırlarını verir (Job.Patch).
+	patch func(ctx context.Context) (string, error)
 	// addressInUse kurulum adresine başka bir cihazın cevap verip
 	// vermediğini söyler (testte sahte).
 	addressInUse func(ip string) bool
@@ -713,6 +715,13 @@ func (a *Flow) loadConfiguration(ctx context.Context) error {
 		_ = a.command(ctx, "exit configuration-mode", 20*time.Second, reCli)
 		return fmt.Errorf("yapılandırma hatalı, geri alındı: %s", errorLines(reply))
 	}
+	if a.job.Patch {
+		if err := a.applyPatch(ctx); err != nil {
+			_ = a.command(ctx, "rollback 0", 20*time.Second, reConf)
+			_ = a.command(ctx, "exit configuration-mode", 20*time.Second, reCli)
+			return err
+		}
+	}
 
 	a.notify("yapilandirma", "Yüklendi; commit ediliyor.")
 	pos = a.k.Position()
@@ -732,7 +741,59 @@ func (a *Flow) loadConfiguration(ctx context.Context) error {
 		return fmt.Errorf("commit sonrası: %w", err)
 	}
 	a.notify("yapilandirma", "Yapılandırma commit edildi.")
+	a.checkUplink(ctx)
 	return nil
+}
+
+// applyPatch özelleştirmeyi (set/delete satırları) yedeğin yüklendiği AYNI
+// adaya `load set terminal` ile ekler: commit ikisini birden uygular, hata
+// olursa ikisi birden geri alınır. Olmayan bir şeyi silmek Junos'ta yalnız
+// "warning: statement not found" verir; hata sayılmaz.
+func (a *Flow) applyPatch(ctx context.Context) error {
+	text, err := a.patch(ctx)
+	if err != nil {
+		return fmt.Errorf("özelleştirme alınamadı: %w", err)
+	}
+	a.notify("yapilandirma", fmt.Sprintf("Özelleştirme ekleniyor (%d satır).", strings.Count(strings.TrimSpace(text), "\n")+1))
+	if err := a.command(ctx, "load set terminal", 20*time.Second, reLoadPrompt); err != nil {
+		return fmt.Errorf("load set terminal: %w", err)
+	}
+	pos := a.k.Position()
+	for _, line := range strings.Split(strings.ReplaceAll(text, "\r", ""), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if err := a.sendLine(ctx, line); err != nil {
+			return err
+		}
+	}
+	if err := a.send("\x04"); err != nil {
+		return err
+	}
+	if _, err := a.k.Wait(ctx, pos, 3*time.Minute, reLoaded, reConf); err != nil {
+		return fmt.Errorf("özelleştirme yüklenmedi: %w", err)
+	}
+	if reply := withoutEcho(clean(a.k.Text(pos)), text); reError.MatchString(reply) {
+		return fmt.Errorf("özelleştirme hatalı, yedek ve özelleştirme geri alındı: %s", errorLines(reply))
+	}
+	return nil
+}
+
+// checkUplink özelleştirmede verilen uplink arayüzünün cihazda olup
+// olmadığına bakar: Junos olmayan bir arayüzün yapılandırmasını sessizce
+// kabul eder (EX3200'ün 1G modülünde xe-0/1/0 yoktur) ve uplink hiç gelmez.
+func (a *Flow) checkUplink(ctx context.Context) {
+	ifname := a.job.UplinkInterface
+	if ifname == "" {
+		return
+	}
+	pos := a.k.Position()
+	if err := a.command(ctx, "show interfaces terse "+ifname+" | no-more", 30*time.Second, reCli); err != nil {
+		return
+	}
+	if out := clean(a.k.Text(pos)); strings.Contains(out, "not found") || strings.Contains(out, "error:") {
+		a.notify("uyari", "Uplink arayüzü "+ifname+" cihazda yok (modül takılı değil ya da bu hızı desteklemiyor); yapılandırma commit edildi ama uplink çalışmaz.")
+	}
 }
 
 // sendLine bir satırı yazar ve cihazın yankısını bekler: düşük hızda

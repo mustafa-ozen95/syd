@@ -9,6 +9,7 @@ use App\ConsoleModule\Contracts\ImageSource;
 use App\ConsoleModule\Models\ConsoleJob;
 use App\ConsoleModule\Models\ConsolePc;
 use App\ConsoleModule\Services\AgentJob;
+use App\ConsoleModule\Services\Ozellestirme;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -18,6 +19,8 @@ use Illuminate\Validation\Rule;
  */
 class IsRequest extends FormRequest
 {
+    use OzellestirmeAlanlari;
+
     public function authorize(): bool
     {
         return true; // rota kapısı soruyor (can:konsol:create)
@@ -62,7 +65,7 @@ class IsRequest extends FormRequest
                     }
                 }],
             'root_parola' => ['nullable', 'string', 'max:128'],
-        ];
+        ] + $this->ozellestirmeKurallari();
     }
 
     /** @return array<string, string> */
@@ -72,7 +75,7 @@ class IsRequest extends FormRequest
             'ad.required' => 'Yalnız yedek yüklemede yedeği yüklenecek cihazı seçin.',
             'cihaz_ip.regex' => 'Adres önekle yazılmalı: 198.51.100.120/24.',
             'yedek_dosya.required' => 'Yüklenecek yedeği seçin.',
-        ];
+        ] + $this->ozellestirmeIletileri();
     }
 
     /** @return array<string, mixed> */
@@ -112,6 +115,26 @@ class IsRequest extends FormRequest
             'yapilandirma_turu' => $cihaz !== '' ? 'yedek' : 'yok',
             'yedek_cihaz' => $cihaz ?: null,
             'yedek_dosya' => $cihaz !== '' ? $this->string('yedek_dosya')->value() : null,
+        ] + $this->yama($cihaz);
+    }
+
+    /**
+     * Yedeğin üstüne uygulanacak yama (yalnız listeden cihaz seçildiyse ve
+     * özelleştirme istendiyse). Parola özetleri burada üretilir; düz metin
+     * saklanmaz.
+     *
+     * @return array{yama: ?string, yama_ozeti: ?string, uplink_arayuz: ?string}
+     */
+    private function yama(string $cihaz): array
+    {
+        $oz = $cihaz === '' ? null : $this->ozellestirme();
+        $dosya = $this->string('yedek_dosya')->value();
+        $satirlar = $oz === null ? [] : app(Ozellestirme::class)->yama($cihaz, $dosya, $oz);
+
+        return [
+            'yama' => $satirlar === [] ? null : implode("\n", $satirlar),
+            'yama_ozeti' => $satirlar === [] ? null : mb_substr(app(Ozellestirme::class)->ozet($cihaz, $dosya, $oz), 0, 500),
+            'uplink_arayuz' => $satirlar === [] ? null : (($oz['uplink_arayuz'] ?? '') ?: null),
         ];
     }
 
