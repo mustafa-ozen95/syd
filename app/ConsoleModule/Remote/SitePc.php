@@ -9,6 +9,7 @@ use App\Models\ApiToken;
 use App\Models\User;
 use App\Services\Authorization\UserPermissionResolver;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Log;
 
 /**
  * KONSOL PC'LERİ — konsol kablosunun takılı olduğu, ajanın çalıştığı
@@ -75,11 +76,12 @@ class SitePc
             'serial_port' => (string) $pc->seri_port,
         ] + ($pem !== null ? ['ca_file' => 'panel.pem'] : []), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         $adres = "{$panel}/api/v1/console/agent/{$platform}";
+        $sure = (int) config('console.install_timeout');
 
         try {
             $sonuc = $pc->windowsMu()
-                ? $this->calistir($pc, $this->windowsKur($pc, $adres, $sha, $pem), ['CONSOLE_TOKEN' => $sir['plain'], 'CONSOLE_CONFIG' => $ajanAyari], 100)
-                : $this->calistir($pc, $this->linuxKur($pc, $adres, $sha, $sir['plain'], $ajanAyari, $pem), [$sir['plain']], 100);
+                ? $this->calistir($pc, $this->windowsKur($pc, $adres, $sha, $pem), ['CONSOLE_TOKEN' => $sir['plain'], 'CONSOLE_CONFIG' => $ajanAyari], $sure)
+                : $this->calistir($pc, $this->linuxKur($pc, $adres, $sha, $sir['plain'], $ajanAyari, $pem), [$sir['plain']], $sure);
         } catch (RemoteError $e) {
             $jeton->revoke();
 
@@ -358,6 +360,9 @@ class SitePc
             'ssl://'.$adres['host'].':'.($adres['port'] ?? 443), $kod, $hata, 5, STREAM_CLIENT_CONNECT, $baglam,
         );
         if ($soket === false) {
+            /* Dosyaya düşülür; vekil başka sertifika sunuyorsa PC indirmeyi reddeder: iz kalsın. */
+            Log::warning("Konsol: panelin sertifikasına bakılamadı ({$adres['host']}: {$hata}); dosyadaki kullanılıyor.");
+
             return null;
         }
         $sertifika = stream_context_get_params($soket)['options']['ssl']['peer_certificate'] ?? null;

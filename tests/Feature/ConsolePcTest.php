@@ -87,6 +87,12 @@ final class ConsolePcTest extends TestCase
             'cihaz_ip' => '198.51.100.120/24', 'gecit' => '198.51.100.1', 'dizin' => "C:\\x'; Remove-Item C:\\ -Recurse; '",
         ])->assertSessionHasErrors('dizin');
 
+        /* Loader komutu yalnız IPv4 alır; IPv6 geçit 500 yerine alan hatası verir. */
+        $this->actingAs($yonetici)->put(route('console.pc.update', $pc), [
+            'ad' => 'PC-01', 'platform' => 'windows', 'adres' => '198.51.100.16', 'kullanici' => 'OPERATÖR',
+            'cihaz_ip' => '198.51.100.120/24', 'gecit' => '2001:db8::1',
+        ])->assertSessionHasErrors('gecit');
+
         /* Parola boş bırakılırsa değişmez. */
         $this->actingAs($yonetici)->put(route('console.pc.update', $pc), [
             'ad' => 'PC-02', 'platform' => 'windows', 'adres' => '198.51.100.16', 'kullanici' => 'OPERATÖR',

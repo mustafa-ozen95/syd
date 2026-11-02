@@ -29,7 +29,9 @@ type fakeDevice struct {
 	// installerFailure: loader görüntüyü açar ama kurucu paketi indiremez
 	// (ör. TFTP blok boyu yüzünden).
 	installerFailure bool
-	out              chan string
+	// loadReply: ^D sonrası cihazın cevabı; boşsa "load complete".
+	loadReply string
+	out       chan string
 }
 
 func newFake(t *testing.T, state string) *fakeDevice {
@@ -144,6 +146,10 @@ func (c *fakeDevice) handleByte(b byte) {
 	case "yukleme":
 		if b == 0x04 {
 			c.state = "conf"
+			if c.loadReply != "" {
+				c.emitLocked(c.loadReply)
+				return
+			}
 			c.emitLocked("\r\nload complete\r\n\r\n[edit]\r\nroot# ")
 			return
 		}
@@ -596,5 +602,37 @@ func TestLoadOnlyWrongPassword(t *testing.T) {
 	}
 	if c.state == "acilis" || c.installed != "" {
 		t.Errorf("cihaz yeniden başlatılmamalıydı: %s", c.state)
+	}
+}
+
+// Yedekte "failed" geçen bir satır cihaz tarafından yankılanır; hata
+// sayılıp yükleme geri alınmamalı.
+func TestLoadIgnoresEchoedFailedWord(t *testing.T) {
+	c := newFake(t, "cli")
+	job := Job{Configuration: true, LoadCommand: "load override terminal", LoadOnly: true}
+	a, events := newTestFlow(t, c, job)
+	a.configuration = func(context.Context) (string, error) {
+		return "interfaces {\n    ge-0/0/1 {\n        description \"failed over\";\n    }\n}", nil
+	}
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	if err := a.LoadOnly(ctx); err != nil {
+		t.Fatalf("yükleme geri alınmamalıydı: %v\nolaylar: %v", err, *events)
+	}
+}
+
+// Junos'un kendi hata iletisi ise yüklemeyi geri aldırır.
+func TestLoadSyntaxErrorRollsBack(t *testing.T) {
+	c := newFake(t, "cli")
+	c.loadReply = "\r\nterminal:2:(5) syntax error: hostname\r\nload complete (1 errors)\r\n\r\n[edit]\r\nroot# "
+	job := Job{Configuration: true, LoadCommand: "load override terminal", LoadOnly: true}
+	a, _ := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	err := a.LoadOnly(ctx)
+	if err == nil || !strings.Contains(err.Error(), "geri alındı") || !strings.Contains(err.Error(), "syntax error") {
+		t.Fatalf("geri alma beklendi: %v", err)
 	}
 }

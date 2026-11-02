@@ -672,7 +672,7 @@ func (a *Flow) loadConfiguration(ctx context.Context) error {
 	if _, err := a.k.Wait(ctx, pos, 3*time.Minute, reLoaded, reConf); err != nil {
 		return fmt.Errorf("yükleme bitmedi: %w", err)
 	}
-	if reply := clean(a.k.Text(pos)); reError.MatchString(reply) {
+	if reply := withoutEcho(clean(a.k.Text(pos)), text); reError.MatchString(reply) {
 		_ = a.command(ctx, "rollback 0", 20*time.Second, reConf)
 		_ = a.command(ctx, "exit configuration-mode", 20*time.Second, reCli)
 		return fmt.Errorf("yapılandırma hatalı, geri alındı: %s", errorLines(reply))
@@ -734,6 +734,26 @@ func lastLines(output string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, " | ")
+}
+
+// withoutEcho cihazın yükleme sırasında geri yansıttığı yapılandırma
+// satırlarını çıkarır; hata yalnız kalanında (Junos'un kendi iletileri)
+// aranır. Yoksa yedekteki `description "failed over";` ya da
+// `events LOGIN_FAILED` gibi bir satır hata sayılıp yükleme geri alınıyordu.
+func withoutEcho(output, sent string) string {
+	echo := map[string]bool{}
+	for _, l := range strings.Split(strings.ReplaceAll(sent, "\r", ""), "\n") {
+		if t := strings.TrimSpace(l); t != "" {
+			echo[t] = true
+		}
+	}
+	var kept []string
+	for _, l := range strings.Split(output, "\n") {
+		if !echo[strings.TrimSpace(l)] {
+			kept = append(kept, l)
+		}
+	}
+	return strings.Join(kept, "\n")
 }
 
 func errorLines(output string) string {

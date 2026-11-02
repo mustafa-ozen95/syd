@@ -4,7 +4,7 @@ import { $, on } from '../lib/dom.js';
  * Form pencerelerini açıp kapatır.
  *
  * Açmak için: <button data-modal-open="blok-ekle">
- * Kapatmak için: data-modal-close, Escape veya zemine tıklama.
+ * Kapatmak için: data-modal-close (çarpı / Vazgeç). Zemin ve Escape kapatmaz.
  *
  * Sunucudan doğrulama hatasıyla dönen pencere kendini açar (bkz. init).
  */

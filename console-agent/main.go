@@ -82,13 +82,20 @@ func main() {
 	defer stop()
 
 	log.Printf("console-agent %s · panel %s", version, cfg.Panel)
+	// Bitirilen işler ve panele ulaşamayan sonuçları. Panel bir işi açık
+	// gösterse de ajan onu bir daha YÜRÜTMEZ: sonucu ("tamam"/"hata") ağ ya da
+	// panel kesintisinde kaybolan iş yeniden alınırsa, kurulumu bitmiş switch
+	// loader'a indirilip baştan formatlanıyordu. Sonuç her turda yeniden
+	// gönderilir, panel alınca (ya da işi kapatmışsa) düşer.
+	done := map[string]*finalEvent{}
 	for {
+		resendFinals(ctx, panel, done)
 		jobs, err := panel.jobs(ctx)
 		if err != nil && ctx.Err() == nil {
 			log.Printf("işler alınamadı: %v", err)
 		}
-		if len(jobs) > 0 {
-			runJob(ctx, panel, cfg, jobs[0])
+		if job, ok := nextJob(jobs, done); ok {
+			done[job.UUID] = runJob(ctx, panel, cfg, job)
 			continue
 		}
 		select {
@@ -142,13 +149,75 @@ func readConfig(path string) (*Config, error) {
 	return a, nil
 }
 
-// runJob bir işi baştan sona yürütür ve sonucunu panele bildirir.
-func runJob(parent context.Context, panel *Panel, cfg *Config, job Job) {
+// finalEvent panele henüz ulaşamamış "tamam" ya da "hata" bildirimidir.
+type finalEvent struct{ stage, message string }
+
+// finalRetries son bildirimin iş içinde kaç kez, hangi aralıklarla
+// deneneceğidir; ulaşamazsa ana döngü her turda yeniden dener.
+var finalRetries = []time.Duration{2 * time.Second, 5 * time.Second, 15 * time.Second, 30 * time.Second}
+
+// nextJob bu ajanın daha önce yürütmediği ilk iştir.
+func nextJob(jobs []Job, done map[string]*finalEvent) (Job, bool) {
+	for _, j := range jobs {
+		if _, ok := done[j.UUID]; !ok {
+			return j, true
+		}
+	}
+	return Job{}, false
+}
+
+// resendFinals panele ulaşamamış son bildirimleri yeniden gönderir.
+func resendFinals(ctx context.Context, panel *Panel, done map[string]*finalEvent) {
+	for uuid, f := range done {
+		if f == nil {
+			continue
+		}
+		nctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		err := panel.notify(nctx, uuid, f.stage, f.message)
+		cancel()
+		if err == nil || errors.Is(err, errConflict) {
+			log.Printf("[%s] %s bildirimi panele ulaştı", uuid, f.stage)
+			done[uuid] = nil
+		}
+	}
+}
+
+// deliverFinal son bildirimi panel alana (ya da işi kapatmış olana) kadar
+// birkaç kez dener; ulaşamazsa false.
+func deliverFinal(ctx context.Context, panel *Panel, uuid, stage, message string) bool {
+	for i := 0; ; i++ {
+		nctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		err := panel.notify(nctx, uuid, stage, message)
+		cancel()
+		if err == nil || errors.Is(err, errConflict) {
+			return true
+		}
+		log.Printf("[%s] %s bildirilemedi: %v", uuid, stage, err)
+		if i >= len(finalRetries) {
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(finalRetries[i]):
+		}
+	}
+}
+
+// runJob bir işi baştan sona yürütür ve sonucunu panele bildirir. Sonuç
+// panele ulaşamadıysa onu döndürür (ana döngü yeniden gönderir), yoksa nil.
+func runJob(parent context.Context, panel *Panel, cfg *Config, job Job) (unsent *finalEvent) {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 
 	notify := func(stage, message string) {
 		log.Printf("[%s] %s: %s", job.UUID, stage, message)
+		if stage == "tamam" || stage == "hata" {
+			if !deliverFinal(parent, panel, job.UUID, stage, message) {
+				unsent = &finalEvent{stage, message}
+			}
+			return
+		}
 		nctx, b := context.WithTimeout(parent, 20*time.Second)
 		defer b()
 		if err := panel.notify(nctx, job.UUID, stage, message); errors.Is(err, errConflict) {
@@ -162,7 +231,7 @@ func runJob(parent context.Context, panel *Panel, cfg *Config, job Job) {
 	k, port, err := openPort(ctx, firstNonEmpty(job.SerialPort, cfg.SerialPort))
 	if err != nil {
 		notify("hata", err.Error())
-		return
+		return unsent
 	}
 	defer k.line.Close()
 
@@ -175,7 +244,7 @@ func runJob(parent context.Context, panel *Panel, cfg *Config, job Job) {
 	speed, reply, err := detectSpeed(ctx, k)
 	if err != nil {
 		notify("hata", "Konsol hızı ayarlanamadı: "+err.Error())
-		return
+		return unsent
 	}
 	if reply {
 		notify("port", fmt.Sprintf("Konsol: %s · %d baud (cihaz cevap verdi).", port, speed))
@@ -221,6 +290,7 @@ func runJob(parent context.Context, panel *Panel, cfg *Config, job Job) {
 	}
 	cancel()
 	<-pumpDone
+	return unsent
 }
 
 func firstNonEmpty(s ...string) string {

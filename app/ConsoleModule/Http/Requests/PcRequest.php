@@ -36,7 +36,8 @@ class PcRequest extends FormRequest
                 : ['required', 'string', 'max:32', 'regex:/^[a-z_][a-z0-9_-]*$/'],
             'parola' => [$yeni ? 'required' : 'nullable', 'string', 'max:256'],
             'cihaz_ip' => ['required', 'string', 'regex:/^(\d{1,3}\.){3}\d{1,3}\/([8-9]|[12]\d|30)$/'],
-            'gecit' => ['required', 'ip'],
+            /* Loader komutu yalnız IPv4 alır; kolon da 15 karakter. */
+            'gecit' => ['required', 'ipv4'],
             'seri_port' => ['nullable', 'string', 'max:60', 'regex:/^(COM\d{1,3}|\/dev\/[A-Za-z0-9_.\/-]+)$/', 'not_regex:/\.\./'],
             'dizin' => ['nullable', 'string', 'max:120', $windows
                 ? 'regex:/^[A-Za-z]:\\\\[A-Za-z0-9 _.\\\\-]*$/'

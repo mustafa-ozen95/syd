@@ -63,6 +63,13 @@ return [
         'openssl_conf' => app_path('ConsoleModule/bin/openssl-legacy.cnf'),
         'timeout' => (int) env('CONSOLE_WINRM_TIMEOUT', 60),
     ],
+    /*
+    | Ajanın PC'ye kurulması (indirme + Windows'ta Add-Type derlemesi) için
+    | süre, saniye. Yavaş hatta aşılırsa jeton iptal edilir ve bir dakika
+    | sonra yeniden denenir.
+    */
+    'install_timeout' => (int) env('CONSOLE_INSTALL_TIMEOUT', 300),
+
     'ssh' => [
         'python' => env('CONSOLE_PYTHON', '/usr/bin/python3'),
         'runner' => app_path('ConsoleModule/bin/ssh-runner.py'),
