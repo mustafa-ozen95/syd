@@ -11,15 +11,17 @@ use App\ConsoleModule\Junos\PatchBuilder;
 /**
  * Seçilen yedek + formdaki özelleştirme → yedeğin üstüne uygulanacak yama.
  * Formun ön değerleri, ekrandaki önizleme ve işe yazılan yama buradan çıkar.
+ * Yedek ya listedeki bir cihazın dosyasıdır ya da bilgisayardan yüklenen
+ * metin ($metin verilirse o geçerlidir).
  */
 class Ozellestirme
 {
     public function __construct(private ConfigurationSource $yedekler, private PatchBuilder $uretici) {}
 
     /** @return array<string, mixed>|null yedek yoksa null */
-    public function alanlar(string $cihaz, string $dosya): ?array
+    public function alanlar(string $cihaz, string $dosya, ?string $metin = null): ?array
     {
-        $t = $this->agac($cihaz, $dosya);
+        $t = $this->agac($cihaz, $dosya, $metin);
 
         return $t === null ? null : $this->uretici->alanlar($t);
     }
@@ -28,24 +30,24 @@ class Ozellestirme
      * @param  array<string, mixed>  $oz  OzellestirmeAlanlari::ozellestirme()
      * @return list<string>
      */
-    public function yama(string $cihaz, string $dosya, array $oz): array
+    public function yama(string $cihaz, string $dosya, array $oz, ?string $metin = null): array
     {
-        $t = $this->agac($cihaz, $dosya);
+        $t = $this->agac($cihaz, $dosya, $metin);
 
         return $t === null ? [] : $this->uretici->satirlar($t, $oz);
     }
 
     /** @param  array<string, mixed>  $oz */
-    public function ozet(string $cihaz, string $dosya, array $oz): string
+    public function ozet(string $cihaz, string $dosya, array $oz, ?string $metin = null): string
     {
-        $t = $this->agac($cihaz, $dosya);
+        $t = $this->agac($cihaz, $dosya, $metin);
 
         return $t === null ? '' : $this->uretici->ozet($t, $oz);
     }
 
-    private function agac(string $cihaz, string $dosya): ?ConfigTree
+    private function agac(string $cihaz, string $dosya, ?string $metin): ?ConfigTree
     {
-        $metin = $cihaz === '' ? null : $this->yedekler->icerik($cihaz, $dosya !== '' ? $dosya : null);
+        $metin ??= $cihaz === '' ? null : $this->yedekler->icerik($cihaz, $dosya !== '' ? $dosya : null);
 
         return $metin === null ? null : ConfigTree::parse($metin);
     }

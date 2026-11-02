@@ -11,6 +11,7 @@ use App\ConsoleModule\Remote\SitePc;
 use App\Services\ActivityRecorder;
 use App\Services\Authorization\UserPermissionResolver;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * ANLIK AJAN — dakikada bir: ajan iş açılınca kurulur, iş bitince
@@ -42,6 +43,7 @@ class SyncAgentsCommand extends Command
     public function handle(SitePc $uzak, ActivityRecorder $kayit, UserPermissionResolver $yetki): int
     {
         $this->sessizIsleriKapat($kayit);
+        $this->geciciGoruntuleriSil();
 
         foreach (ConsolePc::query()->with('jeton')->orderBy('id')->get() as $pc) {
             $acik = $pc->isler()->acik()->orderBy('id')->get();
@@ -72,6 +74,24 @@ class SyncAgentsCommand extends Command
         }
 
         return ($jeton->last_used_at ?? $jeton->created_at) < $esik && ($pc->son_kurulum_at === null || $pc->son_kurulum_at < $esik);
+    }
+
+    /**
+     * Bilgisayardan seçilip yalnız bir iş için TFTP dizinine konan Junos
+     * dosyaları iş kapanınca silinir (bekleme süresi sonra: TFTP son paketi
+     * vermiş olsun). Dosya başka bir açık iş tarafından kullanılmıyorsa.
+     */
+    private function geciciGoruntuleriSil(): void
+    {
+        $kapali = ConsoleJob::query()->whereNotIn('durum', ConsoleJob::ACIK)->whereNotNull('gecici_goruntu')
+            ->where('updated_at', '<', now()->subSeconds(self::BEKLEME_SANIYE))->get();
+
+        foreach ($kapali as $is) {
+            if (! ConsoleJob::query()->acik()->where('gecici_goruntu', $is->gecici_goruntu)->exists()) {
+                Storage::disk('junos')->delete((string) $is->gecici_goruntu);
+            }
+            $is->forceFill(['gecici_goruntu' => null])->saveQuietly();
+        }
     }
 
     private function denemeZamaniMi(ConsolePc $pc): bool

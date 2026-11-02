@@ -40,6 +40,12 @@
     </div>
 </div>
 
+<div class="field">
+    <label class="field__label" for="console-backup-upload">ya da bilgisayardan yedek dosyası (isteğe bağlı)</label>
+    <input class="input" type="file" id="console-backup-upload" name="yedek_yukle" accept=".conf,.cfg,.txt,.gz" data-console-backup-upload>
+    <span class="field__hint">Seçilirse listedeki cihazın yerine bu dosya yüklenir (düz metin ya da .gz, en çok 8 MB). Yalnız bu işte kullanılır, iş bitince silinir.</span>
+</div>
+
 {{-- Kurulumun alanları (adres, görüntü): "Yalnız yedek"te gizli; console-form.js açar/kapar. --}}
 <div @class(['stack', 'is-hidden' => $deger['islem'] === 'yedek']) data-console-install>
 {{-- Switch'in loader'daki adresi; PC kaydındakiyle dolu gelir. DHCP'de adres satırları gönderilmez. --}}
@@ -75,6 +81,11 @@
     </select>
     <span class="field__hint">Liste Kurulum sayfasındaki tablodur. <code>--format</code> ile kurulur: cihazdaki yapılandırma silinir.</span>
 </div>
+<div class="field">
+    <label class="field__label" for="console-image-upload">ya da bilgisayardan Junos dosyası (isteğe bağlı)</label>
+    <input class="input" type="file" id="console-image-upload" name="goruntu_yukle" accept=".tgz" data-console-image-upload>
+    <span class="field__hint">Seçilirse listedeki görüntünün yerine bu dosya kurulur (.tgz). Yalnız bu iş için TFTP'ye konur, iş bitince silinir. Büyük dosyada "İşi aç" yükleme bitene kadar sürer.</span>
+</div>
 </div>
 
 {{-- Yalnız listeden bir cihaz seçilince görünür; console-form.js açar/kapar, o cihazın yedeklerini çeker. --}}
@@ -93,7 +104,7 @@
     dolar (console-form.js, console.fields); değiştirilmeyen alana dokunulmaz. Önizleme ajanın yazacağı
     satırların aynısıdır (console.preview).
 --}}
-<div @class(['stack', 'is-hidden' => $deger['ad'] === '']) data-console-backup>
+<div @class(['stack', 'is-hidden' => $deger['ad'] === '']) data-console-backup data-console-custom-wrap>
     <label class="checkbox">
         <input type="checkbox" name="ozellestir" value="1" @checked($deger['ozellestir'] === '1') data-console-custom-toggle>
         <span>Yapılandırmayı özelleştir (isteğe bağlı)</span>

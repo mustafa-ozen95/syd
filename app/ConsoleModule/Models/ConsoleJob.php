@@ -67,17 +67,18 @@ class ConsoleJob extends Model
 
     protected $fillable = [
         'pc_id', 'islem', 'ad', 'goruntu_etiket', 'goruntu_adres', 'beklenen_surum',
-        'yapilandirma_turu', 'yedek_cihaz', 'yedek_dosya', 'yama', 'yama_ozeti', 'uplink_arayuz', 'adres_turu', 'cihaz_ip', 'gecit', 'root_parola',
+        'yapilandirma_turu', 'yedek_cihaz', 'yedek_dosya', 'yedek_metni', 'gecici_goruntu', 'yama', 'yama_ozeti', 'uplink_arayuz', 'adres_turu', 'cihaz_ip', 'gecit', 'root_parola',
         'durum', 'asama', 'son_mesaj', 'ajan_token_id', 'olusturan_id', 'cikti_bayt',
     ];
 
-    protected $hidden = ['root_parola', 'yama'];
+    protected $hidden = ['root_parola', 'yama', 'yedek_metni'];
 
     protected function casts(): array
     {
         return [
             'root_parola' => 'encrypted',
             'yama' => 'encrypted',
+            'yedek_metni' => 'encrypted',
             'cikti_bayt' => 'integer',
         ];
     }
@@ -141,6 +142,7 @@ class ConsoleJob extends Model
         return match ($this->yapilandirma_turu) {
             'son_yedek' => "En son yedek · {$this->yedek_cihaz}",
             'yedek' => "Yedek · {$this->yedek_cihaz} · {$this->yedek_dosya}",
+            'dosya' => "Bilgisayardan yüklenen yedek · {$this->yedek_cihaz}",
             default => 'Yapılandırma yüklenmez',
         }.($this->yama_ozeti ? " · özelleştirildi: {$this->yama_ozeti}" : '');
     }
@@ -157,6 +159,8 @@ class ConsoleJob extends Model
             'root_parola' => null,
             /* Yama parola özetleri taşır; yalnız iş sürerken gerekiyordu. */
             'yama' => null,
+            /* Yüklenen yedek parola özetleri ve sırlar taşır; iş bitince gerekmez. */
+            'yedek_metni' => null,
         ])->save();
     }
 

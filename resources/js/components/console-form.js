@@ -29,6 +29,7 @@ async function fillBackups(deviceSelect) {
     const device = deviceSelect.value;
 
     deviceSelect.form.querySelectorAll('[data-console-backup]').forEach((el) => el.classList.toggle('is-hidden', device === ''));
+    showCustomWrap(deviceSelect.form);
 
     if (!fileSelect) {
         return;
@@ -76,20 +77,45 @@ async function fillBackups(deviceSelect) {
     }
 }
 
+const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content ?? '';
+
+/** Bilgisayardan seçilen yedek dosyası; yoksa null. */
+const uploadedBackup = (form) => form.querySelector('[data-console-backup-upload]')?.files?.[0] ?? null;
+
+/** Özelleştirme bölümü: listeden cihaz ya da bilgisayardan yedek seçiliyken. */
+function showCustomWrap(form) {
+    const device = form.querySelector('[data-console-device]')?.value ?? '';
+
+    form.querySelector('[data-console-custom-wrap]')?.classList.toggle('is-hidden', device === '' && !uploadedBackup(form));
+}
+
 /** Özelleştirme alanlarını seçilen yedekteki değerlerle doldurur. */
 async function fillCustom(form) {
     const box = form.querySelector('[data-console-custom]');
     const device = form.querySelector('[data-console-device]')?.value ?? '';
     const file = form.querySelector('[data-console-backup-file]')?.value ?? '';
+    const upload = uploadedBackup(form);
 
-    if (!box || box.classList.contains('is-hidden') || device === '' || file === '') {
+    if (!box || box.classList.contains('is-hidden') || (!upload && (device === '' || file === ''))) {
         return;
     }
 
     try {
-        const response = await fetch(`${box.dataset.fieldsUrl}?device=${encodeURIComponent(device)}&file=${encodeURIComponent(file)}`, {
-            headers: { Accept: 'application/json' },
-        });
+        let response;
+
+        if (upload) {
+            const body = new FormData();
+            body.append('yedek_yukle', upload);
+            response = await fetch(box.dataset.fieldsUrl, {
+                method: 'POST',
+                body,
+                headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrf() },
+            });
+        } else {
+            response = await fetch(`${box.dataset.fieldsUrl}?device=${encodeURIComponent(device)}&file=${encodeURIComponent(file)}`, {
+                headers: { Accept: 'application/json' },
+            });
+        }
         const { alanlar: fields } = await response.json();
 
         if (!fields) {
@@ -113,6 +139,9 @@ async function preview(button) {
     const out = box.querySelector('[data-console-preview-out]');
     const body = new FormData(button.form);
 
+    /* Junos dosyası önizlemeye gerekmez; yüzlerce MB gönderilmesin. */
+    body.delete('goruntu_yukle');
+
     out.classList.remove('is-hidden');
     out.textContent = 'Hazırlanıyor…';
 
@@ -120,10 +149,7 @@ async function preview(button) {
         const response = await fetch(box.dataset.previewUrl, {
             method: 'POST',
             body,
-            headers: {
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
-            },
+            headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrf() },
         });
         const data = await response.json();
 
@@ -150,6 +176,13 @@ export function init() {
 
     document.addEventListener('change', (event) => {
         const target = event.target;
+
+        if (target instanceof HTMLInputElement && target.matches('[data-console-backup-upload]') && target.form) {
+            showCustomWrap(target.form);
+            fillCustom(target.form);
+
+            return;
+        }
 
         if (target instanceof HTMLInputElement && target.matches('[data-console-custom-toggle]') && target.form) {
             target.form.querySelector('[data-console-custom]')?.classList.toggle('is-hidden', !target.checked);

@@ -6,12 +6,15 @@ namespace App\ConsoleModule\Http\Requests;
 
 use App\ConsoleModule\Contracts\ConfigurationSource;
 use App\ConsoleModule\Contracts\ImageSource;
+use App\ConsoleModule\Junos\YedekDosyasi;
 use App\ConsoleModule\Models\ConsoleJob;
 use App\ConsoleModule\Models\ConsolePc;
 use App\ConsoleModule\Services\AgentJob;
 use App\ConsoleModule\Services\Ozellestirme;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -20,6 +23,9 @@ use Illuminate\Validation\Rule;
 class IsRequest extends FormRequest
 {
     use OzellestirmeAlanlari;
+
+    /** Yüklenen Junos dosyasının TFTP'deki adı: payload() kaç kez çağrılırsa çağrılsın aynı. */
+    private ?string $geciciAd = null;
 
     public function authorize(): bool
     {
@@ -31,6 +37,9 @@ class IsRequest extends FormRequest
     {
         $cihaz = (string) $this->input('ad');
         $yalnizYedek = $this->input('islem') === 'yedek';
+        /* Bilgisayardan seçilen dosya, o iş için listedeki seçimin yerine geçer. */
+        $yedekYuklendi = $this->hasFile('yedek_yukle');
+        $goruntuYuklendi = $this->hasFile('goruntu_yukle');
 
         return [
             'islem' => ['nullable', Rule::in(array_keys(ConsoleJob::ISLEMLER))],
@@ -45,7 +54,7 @@ class IsRequest extends FormRequest
              * ayarında kalır; seçilirse o cihazın bir yedeği yüklenir. Yalnız
              * yedek yüklemede cihaz şart: yüklenecek başka bir şey yok.
              */
-            'ad' => [Rule::requiredIf($yalnizYedek), 'nullable', 'string', 'max:120', function (string $alan, mixed $deger, Closure $hata): void {
+            'ad' => [Rule::requiredIf($yalnizYedek && ! $yedekYuklendi), 'nullable', 'string', 'max:120', function (string $alan, mixed $deger, Closure $hata): void {
                 if ((string) $deger !== '' && ! in_array((string) $deger, app(ConfigurationSource::class)->cihazlar(), true)) {
                     $hata('Cihazı listeden seçin.');
                 }
@@ -53,18 +62,29 @@ class IsRequest extends FormRequest
             'adres_turu' => ['nullable', Rule::in(array_keys(ConsoleJob::ADRES_TURLERI))],
             'cihaz_ip' => ['nullable', 'string', 'regex:/^(\d{1,3}\.){3}\d{1,3}\/([8-9]|[12]\d|30)$/'],
             'gecit' => ['nullable', 'ip'],
-            'goruntu' => [Rule::requiredIf(! $yalnizYedek), 'nullable', 'string', function (string $alan, mixed $deger, Closure $hata) use ($yalnizYedek): void {
-                if (! $yalnizYedek && app(ImageSource::class)->bul((string) $deger) === null) {
+            'goruntu' => [Rule::requiredIf(! $yalnizYedek && ! $goruntuYuklendi), 'nullable', 'string', function (string $alan, mixed $deger, Closure $hata) use ($yalnizYedek, $goruntuYuklendi): void {
+                if (! $yalnizYedek && ! $goruntuYuklendi && app(ImageSource::class)->bul((string) $deger) === null) {
                     $hata('Görüntü listede yok.');
                 }
             }],
-            'yedek_dosya' => [Rule::requiredIf($cihaz !== ''), 'nullable', 'string', 'max:255',
-                function (string $alan, mixed $deger, Closure $hata) use ($cihaz): void {
-                    if ($cihaz !== '' && ! in_array((string) $deger, array_column(app(ConfigurationSource::class)->yedekler($cihaz), 'dosya'), true)) {
+            'yedek_dosya' => [Rule::requiredIf($cihaz !== '' && ! $yedekYuklendi), 'nullable', 'string', 'max:255',
+                function (string $alan, mixed $deger, Closure $hata) use ($cihaz, $yedekYuklendi): void {
+                    if ($cihaz !== '' && ! $yedekYuklendi && ! in_array((string) $deger, array_column(app(ConfigurationSource::class)->yedekler($cihaz), 'dosya'), true)) {
                         $hata('Bu yedek dosyası o cihazın klasöründe yok.');
                     }
                 }],
             'root_parola' => ['nullable', 'string', 'max:128'],
+            'yedek_yukle' => ['nullable', 'file', 'max:'.(YedekDosyasi::EN_BUYUK / 1024), function (string $alan, mixed $deger, Closure $hata): void {
+                if ($deger instanceof UploadedFile && YedekDosyasi::metin($deger) === null) {
+                    $hata('Dosya bir Junos yapılandırması değil (system bloğu yok) ya da 8 MB\'tan büyük.');
+                }
+            }],
+            /* Ad TFTP adresine ve loader komutuna yazılır: yalnız güvenli karakterler. */
+            'goruntu_yukle' => ['nullable', 'file', 'max:'.((int) config('junos.upload_max_mb') * 1024), function (string $alan, mixed $deger, Closure $hata): void {
+                if ($deger instanceof UploadedFile && preg_match('/^[A-Za-z0-9._-]{1,200}\.tgz$/', $deger->getClientOriginalName()) !== 1) {
+                    $hata('Junos dosyası .tgz olmalı ve adında yalnız harf, rakam, nokta, tire bulunmalı (ör. jinstall-ex-3200-12.3R12.4-domestic-signed.tgz).');
+                }
+            }],
         ] + $this->ozellestirmeKurallari();
     }
 
@@ -72,7 +92,8 @@ class IsRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'ad.required' => 'Yalnız yedek yüklemede yedeği yüklenecek cihazı seçin.',
+            'ad.required' => 'Yalnız yedek yüklemede yedeği yüklenecek cihazı seçin ya da bilgisayardan bir yedek dosyası seçin.',
+            'goruntu.required' => 'Junos görüntüsünü listeden seçin ya da bilgisayardan bir Junos dosyası seçin.',
             'cihaz_ip.regex' => 'Adres önekle yazılmalı: 198.51.100.120/24.',
             'yedek_dosya.required' => 'Yüklenecek yedeği seçin.',
         ] + $this->ozellestirmeIletileri();
@@ -82,8 +103,10 @@ class IsRequest extends FormRequest
     public function payload(): array
     {
         $yalnizYedek = $this->input('islem') === 'yedek';
-        $g = $yalnizYedek ? null : app(ImageSource::class)->bul((string) $this->input('goruntu'));
+        $g = $yalnizYedek ? null : ($this->yuklenenGoruntu() ?? app(ImageSource::class)->bul((string) $this->input('goruntu')));
         $cihaz = $this->string('ad')->value();
+        $yedekMetni = $this->hasFile('yedek_yukle') ? YedekDosyasi::metin($this->file('yedek_yukle')) : null;
+        $yedekAdi = $yedekMetni === null ? '' : mb_substr($this->file('yedek_yukle')->getClientOriginalName(), 0, 120);
 
         $pc = $this->pc();
         $dhcp = $this->input('adres_turu') === 'dhcp';
@@ -103,19 +126,46 @@ class IsRequest extends FormRequest
             'gecit' => $dhcp ? null : ($this->string('gecit')->trim()->value() ?: $pc->gecit),
             'goruntu_etiket' => $g['etiket'],
             'goruntu_adres' => $g['adres'],
+            'gecici_goruntu' => $g['gecici'] ?? null,
             'beklenen_surum' => AgentJob::surum($g['dosya']),
         ];
 
         return $kurulum + [
             'pc_id' => $pc->id,
             'islem' => $yalnizYedek ? 'yedek' : 'kurulum',
-            'ad' => $cihaz ?: 'Yeni cihaz',
+            'ad' => $cihaz ?: (pathinfo($yedekAdi, PATHINFO_FILENAME) ?: 'Yeni cihaz'),
             'root_parola' => $this->filled('root_parola') ? (string) $this->input('root_parola') : null,
-            /* Cihaz seçildiyse onun seçilen yedeği, seçilmediyse fabrika ayarı. */
-            'yapilandirma_turu' => $cihaz !== '' ? 'yedek' : 'yok',
-            'yedek_cihaz' => $cihaz ?: null,
-            'yedek_dosya' => $cihaz !== '' ? $this->string('yedek_dosya')->value() : null,
-        ] + $this->yama($cihaz);
+        ] + match (true) {
+            /* Bilgisayardan yüklenen yedek; metni işte (şifreli) durur. */
+            $yedekMetni !== null => ['yapilandirma_turu' => 'dosya', 'yedek_cihaz' => $yedekAdi, 'yedek_dosya' => null, 'yedek_metni' => $yedekMetni],
+            /* Listeden cihaz: onun seçilen yedeği. */
+            $cihaz !== '' => ['yapilandirma_turu' => 'yedek', 'yedek_cihaz' => $cihaz, 'yedek_dosya' => $this->string('yedek_dosya')->value()],
+            /* Hiçbiri: fabrika ayarında kalır. */
+            default => ['yapilandirma_turu' => 'yok', 'yedek_cihaz' => null, 'yedek_dosya' => null],
+        } + $this->yama($cihaz, $yedekMetni);
+    }
+
+    /**
+     * Bilgisayardan seçilen Junos dosyası yalnız bu iş için TFTP dizinine
+     * benzersiz bir adla konur (JobOpener yazar, iş kapanınca silinir).
+     *
+     * @return array{etiket: string, adres: string, dosya: string, gecici: string}|null
+     */
+    private function yuklenenGoruntu(): ?array
+    {
+        if (! $this->hasFile('goruntu_yukle')) {
+            return null;
+        }
+
+        $ad = $this->file('goruntu_yukle')->getClientOriginalName();
+        $this->geciciAd ??= 'konsol-'.Str::lower(Str::random(8)).'-'.$ad;
+
+        return [
+            'etiket' => 'Bilgisayardan · '.$ad,
+            'adres' => rtrim((string) config('junos.tftp'), '/').'/'.$this->geciciAd,
+            'dosya' => $ad,
+            'gecici' => $this->geciciAd,
+        ];
     }
 
     /**
@@ -125,15 +175,15 @@ class IsRequest extends FormRequest
      *
      * @return array{yama: ?string, yama_ozeti: ?string, uplink_arayuz: ?string}
      */
-    private function yama(string $cihaz): array
+    private function yama(string $cihaz, ?string $metin): array
     {
-        $oz = $cihaz === '' ? null : $this->ozellestirme();
+        $oz = $cihaz === '' && $metin === null ? null : $this->ozellestirme();
         $dosya = $this->string('yedek_dosya')->value();
-        $satirlar = $oz === null ? [] : app(Ozellestirme::class)->yama($cihaz, $dosya, $oz);
+        $satirlar = $oz === null ? [] : app(Ozellestirme::class)->yama($cihaz, $dosya, $oz, $metin);
 
         return [
             'yama' => $satirlar === [] ? null : implode("\n", $satirlar),
-            'yama_ozeti' => $satirlar === [] ? null : mb_substr(app(Ozellestirme::class)->ozet($cihaz, $dosya, $oz), 0, 500),
+            'yama_ozeti' => $satirlar === [] ? null : mb_substr(app(Ozellestirme::class)->ozet($cihaz, $dosya, $oz, $metin), 0, 500),
             'uplink_arayuz' => $satirlar === [] ? null : (($oz['uplink_arayuz'] ?? '') ?: null),
         ];
     }

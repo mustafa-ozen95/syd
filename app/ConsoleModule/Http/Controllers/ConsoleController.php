@@ -8,6 +8,7 @@ use App\ConsoleModule\Http\Requests\InputRequest;
 use App\ConsoleModule\Http\Requests\IsRequest;
 use App\ConsoleModule\Http\Requests\OnizlemeRequest;
 use App\ConsoleModule\Junos\PatchBuilder;
+use App\ConsoleModule\Junos\YedekDosyasi;
 use App\ConsoleModule\Models\ConsoleJob;
 use App\ConsoleModule\Services\ConsolePage;
 use App\ConsoleModule\Services\JobOpener;
@@ -17,6 +18,7 @@ use App\Services\ActivityRecorder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -43,7 +45,7 @@ class ConsoleController extends Controller
     public function store(IsRequest $request, JobOpener $acici): RedirectResponse
     {
         $pc = $request->pc();
-        $job = $acici->ac($pc, $request->payload() + ['olusturan_id' => Auth::id()]);
+        $job = $acici->ac($pc, $request->payload() + ['olusturan_id' => Auth::id()], $request->file('goruntu_yukle'));
         $job->olaylar()->create(['asama' => 'basladi', 'mesaj' => 'İş açıldı.', 'kaynak' => Auth::user()?->name]);
 
         $this->kayit->kaydet('konsol_is_ac', "Konsol işi açıldı: {$job->ad} · PC: {$pc->ad} · {$job->islemOzeti()} · {$job->adresOzeti()} · {$job->yapilandirmaOzeti()}"
@@ -63,7 +65,10 @@ class ConsoleController extends Controller
     /** Özelleştirme bölümünün ön değerleri: seçilen yedekte ne var (console-form.js). */
     public function fields(Request $request, Ozellestirme $ozellestirme): JsonResponse
     {
-        return response()->json(['alanlar' => $ozellestirme->alanlar($request->string('device')->value(), $request->string('file')->value())]);
+        /* Bilgisayardan seçilen yedek de olabilir (POST, dosyayla). */
+        $metin = $request->file('yedek_yukle') instanceof UploadedFile ? YedekDosyasi::metin($request->file('yedek_yukle')) : null;
+
+        return response()->json(['alanlar' => $ozellestirme->alanlar($request->string('device')->value(), $request->string('file')->value(), $metin)]);
     }
 
     /** Ajanın yedeğin üstüne yazacağı satırlar; parola özetleri maskeli. */
@@ -72,10 +77,11 @@ class ConsoleController extends Controller
         $cihaz = $request->string('ad')->value();
         $dosya = $request->string('yedek_dosya')->value();
         $oz = (array) $request->ozellestirme();
+        $metin = $request->yedekMetni();
 
         return response()->json([
-            'satirlar' => PatchBuilder::maskele($ozellestirme->yama($cihaz, $dosya, $oz)),
-            'ozet' => $ozellestirme->ozet($cihaz, $dosya, $oz),
+            'satirlar' => PatchBuilder::maskele($ozellestirme->yama($cihaz, $dosya, $oz, $metin)),
+            'ozet' => $ozellestirme->ozet($cihaz, $dosya, $oz, $metin),
         ]);
     }
 

@@ -104,8 +104,10 @@ class AgentApiController extends Controller
             throw new ConflictHttpException('Bu işte yapılandırma yüklenmiyor.');
         }
 
-        $metin = $kaynak->icerik($job->yedek_cihaz, $job->yapilandirma_turu === 'yedek' ? $job->yedek_dosya : null)
-            ?? throw new ConflictHttpException("{$job->yedek_cihaz} için yedek bulunamadı.");
+        $metin = $job->yapilandirma_turu === 'dosya'
+            ? ($job->yedek_metni ?? throw new ConflictHttpException('Yüklenen yedek artık yok.'))
+            : $kaynak->icerik($job->yedek_cihaz, $job->yapilandirma_turu === 'yedek' ? $job->yedek_dosya : null)
+                ?? throw new ConflictHttpException("{$job->yedek_cihaz} için yedek bulunamadı.");
 
         $kayit->kaydet('konsol_yapilandirma', "Konsol: yapılandırma ajana verildi: {$job->ad} · {$job->yapilandirmaOzeti()} · {$this->ajan()->name}", $job);
 
