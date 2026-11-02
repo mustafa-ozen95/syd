@@ -98,6 +98,25 @@ class UpdateCheck
     }
 
     /**
+     * Ekran için son sonuç. Sonuç başka bir sürümle alınmışsa (panel o
+     * zamandan beri güncellendi) "yeni sürüm var" artık doğru değil:
+     * operatörün düğmeye basmasını beklemeden yeniden sorulur. Sorgu GitHub'a
+     * tek istek; yalnız güncellemeden sonraki ilk açılışta olur.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function guncelSon(): ?array
+    {
+        $son = $this->son();
+
+        if ($son !== null && ($son['calisan'] ?? null) !== $this->surum()) {
+            return $this->denetle('sürüm değişti');
+        }
+
+        return $son;
+    }
+
+    /**
      * Uyarı şeridi için: son kontrol yeni sürüm bulduysa VE o kontrol şu an
      * çalışan sürümle yapıldıysa. Panel güncellendikten sonra eski sonuç
      * yeniden kontrol beklemeden susar.

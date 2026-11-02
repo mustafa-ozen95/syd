@@ -54,7 +54,7 @@ class UpdateController extends Controller implements HasMiddleware
 
     public function index(): View
     {
-        $son = $this->denetim->son();
+        $son = $this->denetim->guncelSon();
         $calisan = $this->denetim->surum();
 
         return view('settings.update', [

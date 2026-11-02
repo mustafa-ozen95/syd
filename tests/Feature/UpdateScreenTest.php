@@ -124,6 +124,20 @@ class UpdateScreenTest extends TestCase
             ->assertDontSee('Panelin yeni sürümü var.');
     }
 
+    public function test_guncellemeden_sonra_ekran_eski_sonucu_gostermez_yeniden_sorar(): void
+    {
+        app(UpdateCheck::class)->denetle('günlük tur');
+        config(['update.version' => self::SON]);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->get(route('admin.update.index'))
+            ->assertOk()
+            ->assertSee('sürüm değişti')
+            ->assertDontSee('Yeniden kontrol edin');
+
+        $this->assertSame(self::SON, app(UpdateCheck::class)->son()['calisan']);
+    }
+
     public function test_kontrol_edilemezse_sebep_gorunur(): void
     {
         // Testler ağa çıkmaz: GitHub'a ulaşılamıyormuş gibi.
