@@ -22,14 +22,17 @@ type Job struct {
 	LoaderCommands []string `json:"loader_commands"`
 	// UbootCommands U-Boot isteminde (=>) "boot"tan önce yazılır: EX2300 ve
 	// EX3400'de ağ ayarı U-Boot'ta yapılır (Juniper KB31462), loader'da değil.
-	UbootCommands   []string `json:"uboot_commands"`
-	InstallCommand  string   `json:"install_command"`
-	InstallMinutes  int      `json:"install_minutes"`
-	ExpectedVersion string   `json:"expected_version"`
-	Password        string   `json:"password"`
-	Configuration   bool     `json:"configuration"`
-	LoadCommand     string   `json:"load_command"`
-	DeleteFirst     bool     `json:"delete_first"`
+	UbootCommands []string `json:"uboot_commands"`
+	// CliInstall: loader'a inilmez, Junos çalışan cihazın CLI'sinden kurulur
+	// (QFX5100/QFX5110/EX4600'de loader yok).
+	CliInstall      bool   `json:"cli_install"`
+	InstallCommand  string `json:"install_command"`
+	InstallMinutes  int    `json:"install_minutes"`
+	ExpectedVersion string `json:"expected_version"`
+	Password        string `json:"password"`
+	Configuration   bool   `json:"configuration"`
+	LoadCommand     string `json:"load_command"`
+	DeleteFirst     bool   `json:"delete_first"`
 	// LoadOnly: Junos kurulmaz, yalnız yedek yüklenir (Flow.LoadOnly).
 	LoadOnly bool `json:"load_only"`
 	// ResumeStage: iş daha önce bu ajanla başlamışsa vardığı aşama (ajan ya

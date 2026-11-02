@@ -8,6 +8,11 @@
 //
 // İlerleme bir durum dosyasına yazılır; panel iş sayfasında gösterir
 // (belirsiz bir bekleme yerine).
+//
+// AYNI DİZİN HTTP'DEN DE (-http): Junos CLI'si ("request system software add")
+// TFTP'den değil HTTP/FTP/SCP'den çeker. QFX5100, QFX5110 ve EX4600'de
+// loader yok; bunlar CLI'den kurulur. Yalnız okuma, dizin listesi yok, yalnız
+// dizindeki .tgz dosyaları.
 package main
 
 import (
@@ -17,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -178,6 +184,7 @@ func main() {
 	root := flag.String("root", "/junos", "görüntülerin durduğu dizin (yalnız okunur)")
 	addr := flag.String("addr", ":69", "dinlenecek adres")
 	stateFile := flag.String("state", "/durum/tftp.json", "ilerleme dosyası")
+	httpAddr := flag.String("http", "", "dosyaları HTTP'den de ver (ör. :8069); boşsa kapalı")
 	flag.Parse()
 
 	s := &Server{root: *root, stateFile: *stateFile}
@@ -192,6 +199,13 @@ func main() {
 		}
 	}()
 
+	if *httpAddr != "" {
+		go func() {
+			log.Printf("junos-tftp: HTTP %s · dizin %s", *httpAddr, *root)
+			log.Fatal(http.ListenAndServe(*httpAddr, s.httpHandler()))
+		}()
+	}
+
 	srv := tftp.NewServer(s.readHandler, nil) // yazma yok
 	srv.EnableSinglePort()
 	// Tek port kipi blok boyunu 512'ye sabitliyor; istenen blksize'a OACK'te
@@ -202,4 +216,28 @@ func main() {
 	srv.SetTimeout(5 * time.Second)
 	log.Printf("junos-tftp: %s · dizin %s · tek port", *addr, *root)
 	log.Fatal(srv.ListenAndServe(*addr))
+}
+
+// httpHandler dizindeki .tgz dosyalarını verir; başka hiçbir şeyi değil:
+// dizin listesi, alt dizin, gizli dosya (yükleniyor-…) ya da üst dizin yok.
+func (s *Server) httpHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "yalnız okuma", http.StatusMethodNotAllowed)
+			return
+		}
+		name := strings.TrimPrefix(r.URL.Path, "/")
+		if name == "" || strings.ContainsAny(name, "/\\") || strings.HasPrefix(name, ".") || !strings.HasSuffix(name, ".tgz") {
+			http.NotFound(w, r)
+			return
+		}
+		path := filepath.Join(s.root, name)
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			http.NotFound(w, r)
+			return
+		}
+		log.Printf("HTTP: %s → %s (%d bayt)", name, r.RemoteAddr, info.Size())
+		http.ServeFile(w, r, path)
+	})
 }

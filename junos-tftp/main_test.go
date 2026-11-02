@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -129,5 +131,36 @@ func TestRequestedBlockSize(t *testing.T) {
 	}
 	if !bytes.HasPrefix(reply[:n], []byte{0, 6}) || !bytes.Contains(reply[:n], []byte("blksize\x001468\x00")) {
 		t.Fatalf("OACK beklenen blksize 1468 değil: %q", reply[:n])
+	}
+}
+
+// HTTP yalnız dizindeki .tgz'yi verir: dizin listesi, üst dizin, gizli dosya yok.
+func TestHTTPServesOnlyImages(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "jinstall-host-qfx-5-17.2R1.13-signed.tgz"), []byte("imaj"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(dir, ".yukleniyor-abc"), []byte("yarim"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "notlar.txt"), []byte("x"), 0o644)
+	h := (&Server{root: dir}).httpHandler()
+
+	for path, want := range map[string]int{
+		"/jinstall-host-qfx-5-17.2R1.13-signed.tgz": 200,
+		"/":                  404,
+		"/notlar.txt":        404,
+		"/.yukleniyor-abc":   404,
+		"/../etc/passwd.tgz": 404,
+		"/yok.tgz":           404,
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != want {
+			t.Errorf("%s: %d, beklenen %d", path, rec.Code, want)
+		}
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/jinstall-host-qfx-5-17.2R1.13-signed.tgz", nil))
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("PUT: %d", rec.Code)
 	}
 }

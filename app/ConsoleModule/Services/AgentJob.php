@@ -41,6 +41,32 @@ class AgentJob
             ];
         }
 
+        /* CLI'den kurulum: loader yok; görüntü TFTP sunucusunun HTTP'sinden. */
+        if ($is->clidenMi()) {
+            $adres = parse_url((string) $is->goruntu_adres);
+            $http = 'http://'.($adres['host'] ?? '').':'.(int) config('console.image_http_port').'/'.basename((string) ($adres['path'] ?? ''));
+
+            return [
+                'uuid' => $is->uuid,
+                'resume_stage' => $this->devamAsamasi($is),
+                'patch' => $is->yama !== null,
+                'uplink_interface' => (string) $is->uplink_arayuz,
+                'serial_port' => $this->port($is),
+                'device_ip' => '',
+                'loader_commands' => [],
+                'uboot_commands' => [],
+                'cli_install' => true,
+                'install_command' => strtr((string) config('console.cli_install_command'), ['{http}' => $http]),
+                'install_minutes' => (int) config('console.install_minutes'),
+                'expected_version' => (string) $is->beklenen_surum,
+                'password' => (string) $is->root_parola,
+                'configuration' => $is->yapilandirma_turu !== 'yok',
+                'load_command' => 'load override terminal',
+                'delete_first' => false,
+                'load_only' => false,
+            ];
+        }
+
         $dhcp = $is->adres_turu === 'dhcp';
         [$ip, $maske] = $dhcp ? ['', ''] : ConsolePc::adresCoz((string) ($is->cihaz_ip ?? $pc->cihaz_ip));
 
@@ -62,6 +88,7 @@ class AgentJob
             /* DHCP'de adres satırları yazılmaz; loader adresi kendisi alır. */
             'loader_commands' => self::komutlar('console.loader_commands', $yerler, $dhcp),
             'uboot_commands' => self::komutlar('console.uboot_commands', $yerler, $dhcp),
+            'cli_install' => false,
             'install_command' => strtr((string) config('console.install_command'), $yerler),
             'install_minutes' => (int) config('console.install_minutes'),
             'expected_version' => (string) $is->beklenen_surum,

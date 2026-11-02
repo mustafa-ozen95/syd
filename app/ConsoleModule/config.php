@@ -56,6 +56,14 @@ return [
     ],
     'install_command' => 'install --format {adres}',
 
+    /*
+    | CLI'den kurulum (QFX5100, QFX5110, EX4600: loader yok). Junos CLI'si
+    | TFTP'den çekmez; görüntü TFTP sunucusunun HTTP'sinden (junos-tftp -http)
+    | alınır. {http}: http://<tftp sunucusu>:<port>/<dosya>.
+    */
+    'cli_install_command' => 'request system software add {http} reboot',
+    'image_http_port' => (int) env('JUNOS_HTTP_PORT', 8069),
+
     /* TFTP sunucusunun ilerleme dosyası (compose: tftp-durum hacmi). */
     'tftp_state' => env('CONSOLE_TFTP_STATE', '/durum/tftp.json'),
 

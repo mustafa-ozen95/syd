@@ -14,7 +14,7 @@
             <option value="{{ $anahtar }}" @selected($deger['islem'] === $anahtar)>{{ $etiket }}</option>
         @endforeach
     </select>
-    <span class="field__hint">"Yalnız yedeği yükle"de cihaz yeniden başlatılmaz, Junos kurulmaz: ajan CLI'ye girer ve yedeği yükler.</span>
+    <span class="field__hint">"Yalnız yedeği yükle"de cihaz yeniden başlatılmaz, Junos kurulmaz: ajan CLI'ye girer ve yedeği yükler. "CLI'den kur" loader'ı olmayan QFX5100, QFX5110 ve EX4600 içindir: Junos çalışan cihazda <code>request system software add</code> ile kurulur, görüntü panelin HTTP'sinden çekilir.</span>
 </div>
 
 <div class="field-row">
@@ -60,6 +60,7 @@
 {{-- Kurulumun alanları (adres, görüntü): "Yalnız yedek"te gizli; console-form.js açar/kapar. --}}
 <div @class(['stack', 'is-hidden' => $deger['islem'] === 'yedek']) data-console-install>
 {{-- Switch'in loader'daki adresi; PC kaydındakiyle dolu gelir. DHCP'de adres satırları gönderilmez. --}}
+<div @class(['stack', 'is-hidden' => $deger['islem'] === 'cli']) data-console-loader>
 <div class="field-row">
     <div class="field">
         <label class="field__label" for="console-address-type">Switch'in adresi (loader)</label>
@@ -81,6 +82,7 @@
     </div>
 </div>
 <span class="field__hint">Sabit adreste ajan önce adrese ping atar; başka bir cihaz cevap verirse kurmaz. Aynı PC'de aynı anda kurulan switch'ler aynı loader adresini alamaz: ikinci işe başka bir adres verin (panel aynı adresi reddeder).</span>
+</div>
 
 <div class="field">
     <label class="field__label" for="console-image">Junos görüntüsü</label>

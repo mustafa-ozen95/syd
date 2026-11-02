@@ -76,7 +76,7 @@ class IsRequest extends FormRequest
             'cihaz_ip' => ['nullable', 'string', 'regex:/^(\d{1,3}\.){3}\d{1,3}\/([8-9]|[12]\d|30)$/', function (string $alan, mixed $deger, Closure $hata) use ($yalnizYedek): void {
                 $pc = $this->pcYaDaNull();
                 $adres = trim((string) $deger) ?: (string) $pc?->cihaz_ip;
-                if ($pc !== null && ! $yalnizYedek && $this->input('adres_turu') !== 'dhcp'
+                if ($pc !== null && ! $yalnizYedek && $this->input('islem') !== 'cli' && $this->input('adres_turu') !== 'dhcp'
                     && $pc->isler()->acik()->where('cihaz_ip', $adres)->exists()) {
                     $hata("Bu PC'de açık başka bir iş {$adres} loader adresini kullanıyor; bu switch'e başka bir adres verin.");
                 }
@@ -87,7 +87,7 @@ class IsRequest extends FormRequest
                     $g = app(ImageSource::class)->bul((string) $deger);
                     if ($g === null) {
                         $hata('Görüntü listede yok.');
-                    } elseif (($neden = AgentJob::konsoldanKurulamaz($g['dosya'])) !== null) {
+                    } elseif ($this->input('islem') !== 'cli' && ($neden = AgentJob::konsoldanKurulamaz($g['dosya'])) !== null) {
                         $hata($neden);
                     }
                 }
@@ -106,7 +106,7 @@ class IsRequest extends FormRequest
             }],
             /* Ad TFTP adresine ve loader komutuna yazılır: yalnız güvenli karakterler. */
             'goruntu_yukle' => ['nullable', 'file', 'max:'.((int) config('junos.upload_max_mb') * 1024), function (string $alan, mixed $deger, Closure $hata): void {
-                if ($deger instanceof UploadedFile && ($neden = AgentJob::konsoldanKurulamaz($deger->getClientOriginalName())) !== null) {
+                if ($deger instanceof UploadedFile && $this->input('islem') !== 'cli' && ($neden = AgentJob::konsoldanKurulamaz($deger->getClientOriginalName())) !== null) {
                     $hata($neden);
                 }
                 if ($deger instanceof UploadedFile && preg_match('/^[A-Za-z0-9._-]{1,200}\.tgz$/', $deger->getClientOriginalName()) !== 1) {
@@ -159,11 +159,16 @@ class IsRequest extends FormRequest
             'beklenen_surum' => AgentJob::surum($g['dosya']),
         ];
 
+        /* CLI'den kurulumda loader yok: adres verilmez. */
+        if ($this->input('islem') === 'cli') {
+            $kurulum = ['adres_turu' => 'sabit', 'cihaz_ip' => null, 'gecit' => null] + $kurulum;
+        }
+
         return $kurulum + [
             'pc_id' => $pc->id,
             'seri_port' => $this->secilenPort(),
             'acik_port' => $this->secilenPort(),
-            'islem' => $yalnizYedek ? 'yedek' : 'kurulum',
+            'islem' => $yalnizYedek ? 'yedek' : ($this->input('islem') === 'cli' ? 'cli' : 'kurulum'),
             'ad' => $cihaz ?: (pathinfo($yedekAdi, PATHINFO_FILENAME) ?: 'Yeni cihaz'),
             'root_parola' => $this->filled('root_parola') ? (string) $this->input('root_parola') : null,
         ] + match (true) {

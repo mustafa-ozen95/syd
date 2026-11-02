@@ -151,9 +151,12 @@ services:
     container_name: ${STACK_PREFIX:-syd}-tftp
     restart: unless-stopped
     entrypoint: ["/usr/local/bin/junos-tftp"]
-    command: ["-root", "/junos", "-addr", ":69", "-state", "/durum/tftp.json"]
+    # -http: aynı dizin HTTP'den de (Junos CLI'si TFTP'den çekmez; QFX5100/
+    # QFX5110/EX4600 CLI'den kurulur). Yalnız okuma, yalnız .tgz.
+    command: ["-root", "/junos", "-addr", ":69", "-state", "/durum/tftp.json", "-http", ":8069"]
     ports:
       - "${TFTP_PORT:-69}:69/udp"
+      - "${JUNOS_HTTP_PORT:-8069}:8069"
     volumes:
       - junos:/junos:ro
       - tftp-state:/durum

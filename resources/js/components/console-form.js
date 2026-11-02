@@ -221,6 +221,8 @@ export function init() {
             const onlyBackup = target.value === 'yedek';
 
             target.form.querySelector('[data-console-install]')?.classList.toggle('is-hidden', onlyBackup);
+            /* CLI'den kurulumda loader yok: adres alanları gizlenir. */
+            target.form.querySelector('[data-console-loader]')?.classList.toggle('is-hidden', target.value === 'cli');
             const image = target.form.querySelector('[data-console-image]');
 
             if (image) {

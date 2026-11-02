@@ -40,6 +40,8 @@ type fakeDevice struct {
 	committed  bool
 	uboot      []string // U-Boot'ta yazılanlar
 	pingFails  bool
+	cliFail    bool // request system software add hata verir
+	ztpNoise   bool // show version isteminden sonra ZTP satırı düşer
 	out        chan string
 }
 
@@ -207,8 +209,26 @@ func (c *fakeDevice) lineReceived(s string) {
 			c.emitLocked("Reboot the system ? [yes,no] (no) ")
 		case "show version | no-more":
 			c.emitLocked("Hostname: sw1\r\nModel: ex2200-24t-4g\r\nJUNOS Base OS boot [12.3R12.4]\r\nroot> ")
+			if c.ztpNoise {
+				c.ztpNoise = false
+				c.emitLocked("\r\nAuto Image Upgrade: DHCP Client Bound interfaces: vme.0\r\n")
+			}
 		case "show interfaces terse " + c.missingIf + " | no-more":
 			c.emitLocked("error: device " + c.missingIf + " not found\r\n\r\nroot@sw1> ")
+		case "request system software add http://198.51.100.250:8069/jinstall-host-qfx-5-17.2R1.13-signed.tgz reboot":
+			c.installed = "cli"
+			if c.cliFail {
+				c.emitLocked("Fetching package...\r\nerror: could not fetch package\r\nroot@sw1> ")
+				return
+			}
+			c.state = "kuruluyor"
+			c.emitLocked("Installing package ...\r\nRebooting ...\r\nShutdown NOW!\r\n")
+			c.after(300*time.Millisecond, func() {
+				c.mu.Lock()
+				defer c.mu.Unlock()
+				c.state = "login"
+				c.emitLocked("\r\nqfx5100 (ttyd0)\r\n\r\nlogin: ")
+			})
 		case "configure":
 			c.state = "conf"
 			c.emitLocked("Entering configuration mode\r\n\r\n[edit]\r\nroot# ")
@@ -830,5 +850,56 @@ func TestUbootPingFailureStops(t *testing.T) {
 	err := a.Install(ctx)
 	if err == nil || !strings.Contains(err.Error(), "ulaşılamıyor") || c.installed != "" {
 		t.Fatalf("ping hatası beklendi: %v kurulan=%q", err, c.installed)
+	}
+}
+
+var cliJob = Job{
+	CliInstall:      true,
+	InstallCommand:  "request system software add http://198.51.100.250:8069/jinstall-host-qfx-5-17.2R1.13-signed.tgz reboot",
+	ExpectedVersion: "12.3R12.4",
+	Configuration:   true,
+	LoadCommand:     "load override terminal",
+}
+
+// QFX5100/EX4600: loader yok; Junos CLI'den kurulur, cihaz yeniden açılınca
+// girilir, sürüm doğrulanır, yapılandırma yüklenir.
+func TestCliInstall(t *testing.T) {
+	c := newFake(t, "cli")
+	a, events := newTestFlow(t, c, cliJob)
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	if err := a.CliInstall(ctx); err != nil {
+		t.Fatalf("kurulum: %v\nolaylar: %v", err, *events)
+	}
+	if c.installed != "cli" || len(c.loaderSettings) != 0 || len(c.loaded) == 0 {
+		t.Errorf("CLI kurulumu: kurulan=%q loader=%v yüklenen=%q", c.installed, c.loaderSettings, c.loaded)
+	}
+}
+
+func TestCliInstallFailureStops(t *testing.T) {
+	c := newFake(t, "cli")
+	c.cliFail = true
+	a, _ := newTestFlow(t, c, cliJob)
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	err := a.CliInstall(ctx)
+	if err == nil || !strings.Contains(err.Error(), "could not fetch") {
+		t.Fatalf("hata beklendi: %v", err)
+	}
+}
+
+// İstemden sonra konsola ZTP satırı düşse de komut tamamlanır.
+func TestZtpNoiseAfterPrompt(t *testing.T) {
+	c := newFake(t, "cli")
+	c.ztpNoise = true
+	job := Job{Configuration: true, LoadCommand: "load override terminal", LoadOnly: true}
+	a, events := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 60*time.Second)
+	defer stop()
+
+	if err := a.LoadOnly(ctx); err != nil {
+		t.Fatalf("ZTP gürültüsünde yükleme: %v\nolaylar: %v", err, *events)
 	}
 }

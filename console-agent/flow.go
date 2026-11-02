@@ -276,8 +276,37 @@ func (a *Flow) command(ctx context.Context, line string, timeout time.Duration, 
 	if err := a.send(line + "\r"); err != nil {
 		return err
 	}
-	_, err := a.k.Wait(ctx, pos, timeout, patterns...)
+	first := timeout
+	if onlyPrompts(patterns) && first > promptRetryAfter {
+		first = promptRetryAfter
+	}
+	_, err := a.k.Wait(ctx, pos, first, patterns...)
+	if errors.Is(err, errTimeout) && onlyPrompts(patterns) {
+		// İstem geldi ama arkasından konsola başka satır düştü (EX2300,
+		// EX3400, QFX'te ZTP: "Auto Image Upgrade: …"): istem artık son satır
+		// değil. Enter yeni bir istem çizdirir. Evet/hayır sorusunda
+		// yapılmaz: Enter "hayır" demek olurdu.
+		pos = a.k.Position()
+		if err := a.send("\r"); err != nil {
+			return err
+		}
+		_, err = a.k.Wait(ctx, pos, timeout, patterns...)
+	}
 	return err
+}
+
+// promptRetryAfter istem bu sürede görünmezse Enter'la yeniden istenir.
+const promptRetryAfter = 20 * time.Second
+
+// onlyPrompts beklenenlerin hepsi istem mi (CLI, yapılandırma, loader,
+// U-Boot); soru (evet/hayır) değil.
+func onlyPrompts(patterns []*regexp.Regexp) bool {
+	for _, p := range patterns {
+		if p != reCli && p != reConf && p != reLoader && p != reUboot {
+			return false
+		}
+	}
+	return len(patterns) > 0
 }
 
 // login giriş isteminden root olarak kabuğa ya da CLI'ye geçer.
@@ -337,8 +366,10 @@ func menuChoice(text string) string {
 	return ""
 }
 
-// reUbootAlive U-Boot ping cevabı: "host 192.0.2.5 is alive".
-var reUbootAlive = regexp.MustCompile(`(?i)is alive`)
+// reUbootDead U-Boot ping'in başarısız cevabı ("ping failed; host … is not
+// alive", "No ethernet found"). Başarılı cevabın biçimi her U-Boot sürümünde
+// aynı değil (belgeyle doğrulanamadı): yalnız açık hata durdurur.
+var reUbootDead = regexp.MustCompile(`(?i)(not alive|ping failed|no ethernet found|timeout)`)
 
 // ubootSetup U-Boot isteminde ağ değişkenlerini yazar (bir kez): EX2300 ve
 // EX3400'de TFTP kurulumu bu değişkenlerle yapılır, loader'ın "set ipaddr"i
@@ -355,7 +386,7 @@ func (a *Flow) ubootSetup(ctx context.Context) error {
 		if err := a.command(ctx, line, 20*time.Second, reUboot); err != nil {
 			return fmt.Errorf("U-Boot komutu (%s): %w", line, err)
 		}
-		if strings.HasPrefix(line, "ping ") && !reUbootAlive.MatchString(clean(a.k.Text(pos))) {
+		if strings.HasPrefix(line, "ping ") && reUbootDead.MatchString(clean(a.k.Text(pos))) {
 			return fmt.Errorf("U-Boot'tan TFTP sunucusuna ulaşılamıyor (%s): yönetim portu kablosunu, adresi ve geçidi kontrol edin", line)
 		}
 	}
@@ -494,6 +525,12 @@ func (a *Flow) Install(ctx context.Context) error {
 			return fmt.Errorf("loader komutu (%s): %w", line, err)
 		}
 		if reply := replyLines(a.k.Text(pos), line); reLoaderError.MatchString(reply) {
+			// Ağ U-Boot'ta kurulduysa (EX2300/EX3400) loader'ın "set"i gerekmez;
+			// bu loader'larda çalışıp çalışmadığı belgede yok: uyarıp geçilir.
+			if a.ubootDone {
+				a.notify("bilgi", "Loader komutu reddetti ("+line+"); ağ ayarı U-Boot'ta yapıldığı için devam ediliyor.")
+				continue
+			}
 			return fmt.Errorf("loader komutu reddetti (%s): %s", line, reply)
 		}
 	}
@@ -557,6 +594,39 @@ func (a *Flow) afterLogin(ctx context.Context) error {
 	}
 	a.logout(ctx)
 	return nil
+}
+
+// reCliInstallFail "request system software add" başarısız: ağdan çekilemedi
+// ya da paket reddedildi; cihaz yeniden başlamaz.
+var reCliInstallFail = regexp.MustCompile(`(?i)(error:|fetch: |failed to|not enough space|validation failed|aborting)`)
+
+// reRebooting yazılım eklendi, cihaz yeniden başlıyor.
+var reRebooting = regexp.MustCompile(`(?i)(shutdown now|system going down|rebooting|reboot the system)`)
+
+// CliInstall Junos'u çalışan cihazın CLI'sinden kurar: `request system
+// software add <adres> reboot`. QFX5100, QFX5110 ve EX4600'de loader istemi
+// yoktur (Juniper kurtarma belgesi); orada tek yol budur. Cihaz yeniden
+// başlayınca kurulum yolundaki gibi girilir, sürüm doğrulanır, istenmişse
+// yapılandırma yüklenir.
+func (a *Flow) CliInstall(ctx context.Context) error {
+	a.notify("kurulum", "Cihazın CLI'sine giriliyor.")
+	if err := a.reachCli(ctx); err != nil {
+		return err
+	}
+	a.notify("kurulum", "Kurulum başladı: "+a.job.InstallCommand)
+	pos := a.k.Position()
+	if err := a.send(a.job.InstallCommand + "\r"); err != nil {
+		return err
+	}
+	i, err := a.k.Wait(ctx, pos, a.installTimeout, reRebooting, reCliInstallFail)
+	if err != nil {
+		return fmt.Errorf("yazılım eklenemedi: %w: %s", err, lastLines(a.k.Text(pos), 6))
+	}
+	if i == 1 {
+		return fmt.Errorf("yazılım eklenemedi: %s", lastLines(a.k.Text(pos), 8))
+	}
+	a.notify("kurulum", "Yazılım eklendi; cihaz yeniden başlıyor.")
+	return a.finishInstall(ctx, a.k.Position())
 }
 
 // LoadOnly yalnız yedeği yükler: Junos'u kurulu cihazın CLI'sine girilir,

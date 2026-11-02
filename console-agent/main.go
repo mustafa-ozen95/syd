@@ -320,6 +320,8 @@ func runJob(parent context.Context, panel *Panel, cfg *Config, job Job) (unsent 
 	switch {
 	case job.LoadOnly:
 		err = flow.LoadOnly(ctx)
+	case job.CliInstall && job.ResumeStage == "":
+		err = flow.CliInstall(ctx)
 	case job.ResumeStage != "":
 		err = flow.Resume(ctx)
 	default:

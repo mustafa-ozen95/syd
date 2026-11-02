@@ -42,6 +42,7 @@ class ConsoleJob extends Model
     public const ISLEMLER = [
         'kurulum' => 'Junos kur (sonra istenirse yedeği yükle)',
         'yedek' => 'Yalnız yedeği yükle (Junos kurulu cihaz)',
+        'cli' => 'Junos\'u CLI\'den kur (QFX5100/QFX5110/EX4600; cihaz çalışıyor olmalı)',
     ];
 
     public const ADRES_TURLERI = [
@@ -121,16 +122,26 @@ class ConsoleJob extends Model
         return $this->islem === 'yedek';
     }
 
+    /** Junos çalışan cihazın CLI'sinden kurulur: loader'a inilmez. */
+    public function clidenMi(): bool
+    {
+        return $this->islem === 'cli';
+    }
+
     /** Kurulan görüntü ya da "Yalnız yedek", ekranda. */
     public function islemOzeti(): string
     {
-        return $this->yalnizYedekMi() ? 'Yalnız yedek yükleme' : (string) $this->goruntu_etiket;
+        return match (true) {
+            $this->yalnizYedekMi() => 'Yalnız yedek yükleme',
+            $this->clidenMi() => 'CLI\'den kurulum · '.$this->goruntu_etiket,
+            default => (string) $this->goruntu_etiket,
+        };
     }
 
     /** Switch'in loader'daki adresi, ekranda. */
     public function adresOzeti(): string
     {
-        if ($this->yalnizYedekMi()) {
+        if ($this->yalnizYedekMi() || $this->clidenMi()) {
             return 'Adres verilmez';
         }
 
