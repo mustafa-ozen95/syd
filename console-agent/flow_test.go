@@ -42,6 +42,8 @@ type fakeDevice struct {
 	pingFails  bool
 	cliFail    bool // request system software add hata verir
 	ztpNoise   bool // show version isteminden sonra ZTP satırı düşer
+	ztpDeleted bool // delete chassis auto-image-upgrade
+	ztpStopped bool // request system autoinstallation stop
 	out        chan string
 }
 
@@ -229,6 +231,9 @@ func (c *fakeDevice) lineReceived(s string) {
 				c.state = "login"
 				c.emitLocked("\r\nqfx5100 (ttyd0)\r\n\r\nlogin: ")
 			})
+		case "request system autoinstallation stop":
+			c.ztpStopped = true
+			c.emitLocked("root> ")
 		case "configure":
 			c.state = "conf"
 			c.emitLocked("Entering configuration mode\r\n\r\n[edit]\r\nroot# ")
@@ -347,7 +352,22 @@ func (c *fakeDevice) lineReceived(s string) {
 			c.state = "yukleme"
 			c.setMode = true
 			c.emitLocked("[Type ^D at a new line to end input]\r\n")
+		case "delete chassis auto-image-upgrade":
+			c.ztpDeleted = true
+			c.emitLocked("\r\n[edit]\r\nroot# ")
+		case "exit configuration-mode":
+			c.state = "cli"
+			c.emitLocked("Exiting configuration mode\r\n\r\nroot> ")
+		case "rollback 0":
+			c.ztpDeleted = false
+			c.emitLocked("load complete\r\n\r\n[edit]\r\nroot# ")
 		case "commit and-quit":
+			// Fabrika ayarı (root parolası yok, yapılandırma yüklenmedi):
+			// Junos hiçbir commit'i kabul etmez.
+			if c.password == "" && len(c.loaded) == 0 {
+				c.emitLocked("[edit]\r\n  'system'\r\n    Missing mandatory statement: 'root-authentication'\r\nerror: commit failed: (missing statements)\r\n\r\n[edit]\r\nroot# ")
+				return
+			}
 			c.committed = true
 			c.state = "cli"
 			c.emitLocked("commit complete\r\nExiting configuration mode\r\n\r\nroot@sw1> ")
@@ -901,5 +921,48 @@ func TestZtpNoiseAfterPrompt(t *testing.T) {
 
 	if err := a.LoadOnly(ctx); err != nil {
 		t.Fatalf("ZTP gürültüsünde yükleme: %v\nolaylar: %v", err, *events)
+	}
+}
+
+// Fabrika ayarında bırakılan cihaz: root parolası yok, commit reddedilir;
+// aday geri alınır, ZTP bu açılış için durdurulur, kurulum başarılı biter.
+func TestFactoryInstallStopsZtpWithoutCommit(t *testing.T) {
+	c := newFake(t, "loader")
+	job := sampleJob
+	job.Configuration = false
+	a, events := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 60*time.Second)
+	defer stop()
+
+	if err := a.Install(ctx); err != nil {
+		t.Fatalf("kurulum: %v\nolaylar: %v", err, *events)
+	}
+	if c.committed || c.ztpDeleted || !c.ztpStopped {
+		t.Fatalf("commit=%v silindi=%v durduruldu=%v\nolaylar: %v\nkonsol: %q", c.committed, c.ztpDeleted, c.ztpStopped, *events, a.k.Text(0))
+	}
+	if !strings.Contains(strings.Join(*events, "\n"), "ZTP bu açılış için durduruldu") {
+		t.Errorf("olaylar: %v", *events)
+	}
+}
+
+// Parolalı cihaz: ZTP kalıcı kapatılır (delete + commit).
+func TestInstallWithPasswordDeletesZtp(t *testing.T) {
+	c := newFake(t, "login")
+	c.password = "gizli"
+	job := sampleJob
+	job.Password = "gizli"
+	job.Configuration = false
+	a, events := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 60*time.Second)
+	defer stop()
+
+	if err := a.Install(ctx); err != nil {
+		t.Fatalf("kurulum: %v\nolaylar: %v", err, *events)
+	}
+	if !c.committed || !c.ztpDeleted || c.ztpStopped {
+		t.Fatalf("commit=%v silindi=%v durduruldu=%v\nolaylar: %v\nkonsol: %q", c.committed, c.ztpDeleted, c.ztpStopped, *events, a.k.Text(0))
+	}
+	if !strings.Contains(strings.Join(*events, "\n"), "ZTP (otomatik kurulum) kapatıldı") {
+		t.Errorf("olaylar: %v", *events)
 	}
 }

@@ -21,7 +21,7 @@ class ConsolePc extends Model
     ];
 
     protected $fillable = [
-        'ad', 'platform', 'adres', 'gorunen_adres', 'port', 'kullanici', 'parola', 'seri_port', 'seri_portlar',
+        'ad', 'platform', 'adres', 'gorunen_adres', 'port', 'kullanici', 'parola', 'seri_port', 'seri_portlar', 'port_bilgileri', 'portlar_at',
         'cihaz_ip', 'gecit', 'dizin', 'ssh_parmak_izi', 'jeton_id', 'son_kurulum_at', 'ajan_mesaj',
         'ajan_deneme_sayisi', 'ajan_sonraki_deneme_at',
     ];
@@ -35,6 +35,8 @@ class ConsolePc extends Model
             'port' => 'integer',
             'son_kurulum_at' => 'immutable_datetime',
             'seri_portlar' => 'array',
+            'port_bilgileri' => 'array',
+            'portlar_at' => 'immutable_datetime',
             'ajan_deneme_sayisi' => 'integer',
             'ajan_sonraki_deneme_at' => 'immutable_datetime',
         ];
@@ -81,10 +83,10 @@ class ConsolePc extends Model
         return [$ip, long2ip($onek === 0 ? 0 : (0xFFFFFFFF << (32 - $onek)) & 0xFFFFFFFF)];
     }
 
-    /** Ajan kurulu mu: panel kurduğunda jeton bağlanır, kaldırınca çözülür. */
     /**
-     * PC'nin seri portları. Liste yoksa eski tek port; o da yoksa boş
-     * (ajan USB-seri dönüştürücüyü kendisi bulur).
+     * PC'nin seri portları (kablo kimlikleri; eski kayıtlarda COM adı). Liste
+     * yoksa eski tek port; o da yoksa boş (ajan USB-seri dönüştürücüyü
+     * kendisi bulur).
      *
      * @return list<string>
      */
@@ -93,6 +95,15 @@ class ConsolePc extends Model
         return array_values(array_filter((array) ($this->seri_portlar ?: [$this->seri_port]), fn ($p): bool => (string) $p !== ''));
     }
 
+    /** Ekranda port: "COM9 · USB Serial Port"; algılanmamışsa olduğu gibi. */
+    public function portEtiketi(string $port): string
+    {
+        $bilgi = ($this->port_bilgileri ?? [])[$port] ?? null;
+
+        return $bilgi === null ? $port : trim($bilgi['com'].' · '.$bilgi['ad'], ' ·');
+    }
+
+    /** Ajan kurulu mu: panel kurduğunda jeton bağlanır, kaldırınca çözülür. */
     public function ajanKuruluMu(): bool
     {
         return $this->jeton_id !== null;

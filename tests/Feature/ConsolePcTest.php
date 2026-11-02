@@ -171,8 +171,9 @@ final class ConsolePcTest extends TestCase
         Process::fake(function (PendingProcess $p) use (&$istekler) {
             $istekler[] = json_decode((string) $p->input, true);
 
-            return count($istekler) === 1
-                ? Process::result($this->basarili('linux-pc · Debian 12 · root', 'SHA256:abc'))
+            /* Sına iki komut: bağlantı ve port okuma. */
+            return count($istekler) <= 2
+                ? Process::result($this->basarili(count($istekler) === 1 ? 'linux-pc · Debian 12 · root' : '', 'SHA256:abc'))
                 : Process::result((string) json_encode(['ok' => true, 'status' => 1, 'stdout' => '', 'stderr' => base64_encode('İndirilen dosyanın sağlaması tutmadı'), 'fingerprint' => 'SHA256:abc']));
         });
 
@@ -183,10 +184,10 @@ final class ConsolePcTest extends TestCase
         $this->actingAs($yonetici)->post(route('console.pc.islem', [$pc, 'install']))
             ->assertSessionHas('pcSonuc', fn (array $s): bool => $s['hata'] === true && str_contains($s['metin'], 'sağlaması tutmadı'));
 
-        $this->assertSame('SHA256:abc', $istekler[1]['fingerprint'], 'ikinci bağlantı kayıtlı izle doğrulanmalı');
-        $this->assertSame(2222, $istekler[1]['port']);
-        $this->assertStringContainsString("-H @<(printf 'Authorization: Bearer %s' \"\$JETON\")", $istekler[1]['script'], 'jeton curl argümanına girmemeli');
-        $this->assertStringContainsString(str_repeat('a', 64).'  $d/console-agent.new', $istekler[1]['script']);
+        $this->assertSame('SHA256:abc', $istekler[2]['fingerprint'], 'ikinci bağlantı kayıtlı izle doğrulanmalı');
+        $this->assertSame(2222, $istekler[2]['port']);
+        $this->assertStringContainsString("-H @<(printf 'Authorization: Bearer %s' \"\$JETON\")", $istekler[2]['script'], 'jeton curl argümanına girmemeli');
+        $this->assertStringContainsString(str_repeat('a', 64).'  $d/console-agent.new', $istekler[2]['script']);
         $this->assertNull($pc->refresh()->jeton_id);
         $this->assertSame(1, ApiToken::count());
         $this->assertNotNull(ApiToken::sole()->revoked_at, 'başarısız kurulumun jetonu iptal edilmeli');
@@ -286,14 +287,16 @@ final class ConsolePcTest extends TestCase
         $yonetici = User::factory()->admin()->create();
         $pc = $this->pc('windows');
 
-        Process::fake(fn () => Process::result($this->basarili(
-            "@@GOREV\nRunning\n@@SURUM\nconsole-agent 4407025754bc\n@@PORTLAR\nUSB Serial Port (COM3)\n"
-            ."@@KAYIT\nconsole-agent başladı\n",
-        )));
+        $cagri = 0;
+        Process::fake(function () use (&$cagri) {
+            return Process::result($this->basarili(++$cagri === 1
+                ? "@@GOREV\nRunning\n@@SURUM\nconsole-agent 4407025754bc\n@@KAYIT\nconsole-agent başladı\n"
+                : "FTDIBUS\\VID_0403+PID_6001+A50285BIA\\0000|COM3|USB Serial Port\n"));
+        });
 
         $this->actingAs($yonetici)->post(route('console.pc.islem', [$pc, 'status']))
             ->assertSessionHas('pcSonuc', fn (array $s): bool => $s['durum']['gorev'] === 'Running'
-                && $s['durum']['portlar'] === ['USB Serial Port (COM3)'] && $s['durum']['kayit'] === ['console-agent başladı']);
+                && $s['durum']['portlar'] === ['COM3 · USB Serial Port'] && $s['durum']['kayit'] === ['console-agent başladı']);
     }
 
     #[Test]

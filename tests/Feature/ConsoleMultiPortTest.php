@@ -11,6 +11,7 @@ use App\Models\ApiToken;
 use App\Models\JunosImage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -94,20 +95,37 @@ final class ConsoleMultiPortTest extends TestCase
     }
 
     #[Test]
-    public function pc_formunda_portlar_satir_satir_girilir(): void
+    public function portlar_pcden_kablo_kimligiyle_algilanir_elle_yazilmaz(): void
     {
         $yonetici = User::factory()->admin()->create();
+        $pc = $this->pc(['COM9']);
+        $ftdi = 'FTDIBUS\\VID_0403+PID_6001+A50285BIA\\0000';
+        $cikti = "Bağlantı tamam\n";
+        Process::fake(function () use (&$cikti) {
+            return Process::result((string) json_encode(['ok' => true, 'status' => 0, 'stdout' => base64_encode($cikti), 'stderr' => '']));
+        });
 
-        $this->actingAs($yonetici)->post(route('console.pc.store'), [
-            'ad' => 'PC-02', 'platform' => 'windows', 'adres' => '198.51.100.17', 'kullanici' => 'OPERATÖR', 'parola' => 'gizli-parola-123',
-            'cihaz_ip' => '198.51.100.130/24', 'gecit' => '198.51.100.1', 'seri_portlar' => "COM3\nCOM9\n",
-        ])->assertSessionHasNoErrors();
-        $pc = ConsolePc::sole();
-        $this->assertSame([['COM3', 'COM9'], 'COM3'], [$pc->portlar(), $pc->seri_port]);
+        /* Sına: önce bağlantı, sonra portlar (biri zararlı biçimde: alınmaz). */
+        $this->actingAs($yonetici)->post(route('console.pc.islem', [$pc, 'test']));
+        $cikti = "{$ftdi}|COM9|USB Serial Port\r\nUSB\\VID_067B&PID_2303\\5&2A3D6F1&0&2|COM4|Prolific USB-to-Serial Comm Port\r\nX;del C:\\|COM5|kötü\r\n";
+        $this->actingAs($yonetici)->post(route('console.pc.islem', [$pc, 'status']))
+            ->assertSessionHas('pcSonuc', fn (array $s): bool => in_array('COM9 · USB Serial Port', $s['durum']['portlar'], true));
 
+        $pc->refresh();
+        $this->assertSame([$ftdi, 'USB\\VID_067B&PID_2303\\5&2A3D6F1&0&2'], $pc->portlar());
+        $this->assertNotNull($pc->portlar_at);
+
+        /* İş formunda etiketle görünür, kimlikle gider. */
+        $this->actingAs($yonetici)->get(route('console.index'))->assertOk()
+            ->assertSee('COM9 · USB Serial Port')->assertSee(e($ftdi), false);
+        $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, $ftdi))->assertSessionHasNoErrors();
+        $this->assertSame($ftdi, ConsoleJob::sole()->seri_port);
+
+        /* Kaydet portları silmez; formdan gelen liste yok sayılır. */
         $this->actingAs($yonetici)->put(route('console.pc.update', $pc), [
-            'ad' => 'PC-02', 'platform' => 'windows', 'adres' => '198.51.100.17', 'kullanici' => 'OPERATÖR',
-            'cihaz_ip' => '198.51.100.130/24', 'gecit' => '198.51.100.1', 'seri_portlar' => 'COM3; del C:\\',
-        ])->assertSessionHasErrors('seri_portlar');
+            'ad' => 'PC-01', 'platform' => 'windows', 'adres' => '198.51.100.16', 'kullanici' => 'OPERATÖR',
+            'cihaz_ip' => '198.51.100.120/24', 'gecit' => '198.51.100.1', 'seri_portlar' => 'COM3; del C:\\',
+        ])->assertSessionHasNoErrors();
+        $this->assertCount(2, $pc->refresh()->portlar());
     }
 }

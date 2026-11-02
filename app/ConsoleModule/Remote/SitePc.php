@@ -32,17 +32,69 @@ class SitePc
 
     private const SERVIS = 'console-agent';
 
+    /** Seri port kimliği: COM9, /dev/serial/by-id/…, FTDIBUS\\VID_0403+PID_6001+A50285BIA\\0000. */
+    public const PORT_KIMLIGI = '/^[A-Za-z0-9\\\\&+_.:\/#{}-]{1,200}$/';
+
     public function __construct(
         private WinRm $winrm,
         private Ssh $ssh,
         private UserPermissionResolver $yetki,
     ) {}
 
+    /** Bağlantıyı sınar ve PC'ye takılı konsol kablolarını algılar (portlariAlgila). */
     public function sina(ConsolePc $pc): string
     {
-        return 'Bağlantı tamam: '.($pc->windowsMu()
+        $metin = 'Bağlantı tamam: '.($pc->windowsMu()
             ? $this->calistir($pc, '"$env:COMPUTERNAME · " + (Get-CimInstance Win32_OperatingSystem).Caption')
             : $this->calistir($pc, 'echo "$(hostname) · $(. /etc/os-release && echo "$PRETTY_NAME") · $(id -un)"'));
+        $portlar = $this->portlariAlgila($pc);
+
+        return $metin."\nKonsol portları: ".($portlar === [] ? 'yok (konsol kablosu takılı mı?)' : implode(', ', $portlar));
+    }
+
+    /**
+     * PC'ye takılı seri portları KABLO KİMLİĞİYLE okur ve PC'ye yazar; iş
+     * formundaki port listesi buradan gelir, elle yazılmaz.
+     *
+     * Kimlik COM numarası DEĞİLDİR: Windows kablo başka USB girişine takılınca
+     * ona yeni numara veriyor. Windows'ta aygıt örneğinin kimliği (FTDI gibi
+     * seri numaralı kablolarda girişten bağımsız), Linux'ta /dev/serial/by-id
+     * yolu. Ajan işi alınca kimliğin o anki COM numarasını kendisi bulur.
+     *
+     * @return list<string> ekranda gösterilecek etiketler
+     */
+    public function portlariAlgila(ConsolePc $pc): array
+    {
+        $metin = $pc->windowsMu()
+            ? $this->calistir($pc, <<<'PS'
+                Get-CimInstance Win32_PnPEntity | ForEach-Object {
+                    if ($_.Name -match '\((COM\d+)\)') { $_.PNPDeviceID + '|' + $Matches[1] + '|' + ($_.Name -replace '\s*\(COM\d+\)', '') }
+                }
+                PS)
+            : $this->calistir($pc, <<<'SH'
+                for p in /dev/serial/by-id/*; do [ -e "$p" ] && echo "$p|$(readlink -f "$p")|$(basename "$p")"; done
+                [ -d /dev/serial/by-id ] || for p in /dev/ttyUSB* /dev/ttyACM*; do [ -e "$p" ] && echo "$p|$p|USB-seri"; done
+                true
+                SH);
+
+        $bilgi = [];
+        foreach (preg_split('/\r?\n/', $metin) ?: [] as $satir) {
+            [$kimlik, $com, $ad] = array_map('trim', explode('|', $satir, 3)) + ['', '', ''];
+            /* Kimlik ajan.json'a ve forma gider: yalnız güvenli biçim. */
+            if (preg_match(self::PORT_KIMLIGI, $kimlik) === 1 && ! str_contains($kimlik, '..')) {
+                $bilgi[$kimlik] = ['com' => mb_substr($com, 0, 40), 'ad' => mb_substr($ad, 0, 80)];
+            }
+        }
+        ksort($bilgi);
+
+        $pc->forceFill([
+            'seri_portlar' => array_keys($bilgi),
+            'seri_port' => array_key_first($bilgi) ?? '',
+            'port_bilgileri' => $bilgi,
+            'portlar_at' => now(),
+        ])->save();
+
+        return array_map(fn (string $k): string => $pc->portEtiketi($k), array_keys($bilgi));
     }
 
     /**
@@ -151,7 +203,8 @@ class SitePc
     }
 
     /**
-     * Görev/servis, sürüm, seri portlar ve kaydın son satırları.
+     * Görev/servis, sürüm, seri portlar (algılanıp PC'ye yazılır) ve kaydın
+     * son satırları.
      *
      * @return array{gorev: string, surum: string, portlar: list<string>, kayit: list<string>}
      */
@@ -163,17 +216,15 @@ class SitePc
                 $log = Join-Path $d 'agent.log'
                 "@@GOREV"; if ($t) { [string]$t.State } else { 'kurulu değil' }
                 "@@SURUM"; if (Test-Path $exe) { [string](& $exe -version) }
-                "@@PORTLAR"; Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match '\(COM\d+\)' } | ForEach-Object { $_.Name }
                 "@@KAYIT"; if (Test-Path $log) { Get-Content -Encoding UTF8 -Tail 40 $log }
                 PS)
             : $this->calistir($pc, 'd='.$this->kabukTirnak($pc->dizin)."\n".<<<'SH'
                 echo @@GOREV; systemctl is-active console-agent 2>/dev/null || true
                 echo @@SURUM; [ -x "$d/console-agent" ] && "$d/console-agent" -version || true
-                echo @@PORTLAR; for p in /dev/serial/by-id/*; do [ -e "$p" ] && echo "$(readlink -f "$p") · $(basename "$p")"; done; ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null || true
                 echo @@KAYIT; [ -f "$d/agent.log" ] && tail -n 40 "$d/agent.log" || true
                 SH);
 
-        $bolum = ['GOREV' => [], 'SURUM' => [], 'PORTLAR' => [], 'KAYIT' => []];
+        $bolum = ['GOREV' => [], 'SURUM' => [], 'KAYIT' => []];
         $simdiki = null;
 
         foreach (preg_split('/\r?\n/', $metin) ?: [] as $satir) {
@@ -187,7 +238,7 @@ class SitePc
         return [
             'gorev' => $bolum['GOREV'][0] ?? '',
             'surum' => $bolum['SURUM'][0] ?? '',
-            'portlar' => array_values(array_unique($bolum['PORTLAR'])),
+            'portlar' => $this->portlariAlgila($pc),
             'kayit' => $bolum['KAYIT'],
         ];
     }

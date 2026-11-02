@@ -10,7 +10,21 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
+
+// portNameFromRegistry aygıt örneğinin (Win32_PnPEntity.PNPDeviceID) o anki
+// COM adı: Enum\<kimlik>\Device Parameters\PortName. Ajan SYSTEM olarak
+// çalışır; anahtar okunabilir.
+func portNameFromRegistry(id string) (string, error) {
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SYSTEM\CurrentControlSet\Enum\`+id+`\Device Parameters`, registry.QUERY_VALUE)
+	if err != nil {
+		return "", err
+	}
+	defer k.Close()
+	name, _, err := k.GetStringValue("PortName")
+	return name, err
+}
 
 // Windows'ta port go.bug.st/serial ile DEĞİL, doğrudan açılır.
 //

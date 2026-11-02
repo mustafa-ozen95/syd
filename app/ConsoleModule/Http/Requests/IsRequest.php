@@ -55,7 +55,7 @@ class IsRequest extends FormRequest
              * seçmek şart: "otomatik" taramada ajan öbür işin kablosunu da
              * deneyebilirdi.
              */
-            'seri_port' => [Rule::requiredIf(fn (): bool => count($this->pcYaDaNull()?->portlar() ?? []) > 1), 'nullable', 'string', 'max:60',
+            'seri_port' => [Rule::requiredIf(fn (): bool => count($this->pcYaDaNull()?->portlar() ?? []) > 1), 'nullable', 'string', 'max:200',
                 function (string $alan, mixed $deger, Closure $hata): void {
                     if (! in_array((string) $deger, $this->pcYaDaNull()?->portlar() ?? [], true)) {
                         $hata('Bu port PC\'de tanımlı değil.');

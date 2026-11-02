@@ -115,3 +115,16 @@ func uuids(jobs []Job) string {
 	}
 	return strings.Join(s, ",")
 }
+
+// Eski kayıt (COM9) ve Linux yolu olduğu gibi açılır; takılı olmayan
+// kablonun kimliği açık bir hatayla döner, başka porta düşülmez.
+func TestResolvePort(t *testing.T) {
+	for _, id := range []string{"COM9", "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0"} {
+		if got, err := resolvePort(id); err != nil || got != id {
+			t.Errorf("%s → %q, %v", id, got, err)
+		}
+	}
+	if _, err := resolvePort(`FTDIBUS\VID_0403+PID_6001+ZZZZZZZZA\0000`); err == nil || !strings.Contains(err.Error(), "takılı değil") {
+		t.Errorf("takılı olmayan kablo: %v", err)
+	}
+}

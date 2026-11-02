@@ -251,7 +251,7 @@ export function init() {
 
                 portSelect.replaceChildren(
                     ...(ports.length > 1 ? [] : [makeOption('', 'Otomatik')]),
-                    ...ports.map((p) => makeOption(p, p)),
+                    ...ports.map((p) => makeOption(p.deger, p.etiket)),
                 );
             }
         } else if (target.matches('[data-console-device]')) {

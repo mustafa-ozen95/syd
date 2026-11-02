@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"time"
 
 	"go.bug.st/serial"
@@ -28,4 +29,9 @@ func openSerial(name string) (Line, error) {
 		return nil, err
 	}
 	return &serialLine{p: p}, nil
+}
+
+// Kayıt defteri yalnız Windows'ta; Linux'ta kimlik zaten açılabilir bir yol.
+func portNameFromRegistry(string) (string, error) {
+	return "", errors.New("kayıt defteri yok")
 }

@@ -293,9 +293,9 @@ func runJob(parent context.Context, panel *Panel, cfg *Config, job Job) (unsent 
 		return unsent
 	}
 	if reply {
-		notify("port", fmt.Sprintf("Konsol: %s · %d baud (cihaz cevap verdi).", port, speed))
+		notify("port", fmt.Sprintf("Konsol: %s · %d baud (cihaz cevap verdi).", k.device, speed))
 	} else {
-		notify("port", fmt.Sprintf("Konsol: %s · %d baud (cihaz henüz cevap vermedi; hız varsayılan).", port, speed))
+		notify("port", fmt.Sprintf("Konsol: %s · %d baud (cihaz henüz cevap vermedi; hız varsayılan).", k.device, speed))
 	}
 
 	minutes := job.InstallMinutes
@@ -366,12 +366,20 @@ func openPort(ctx context.Context, name string) (*Console, string, error) {
 		if !claimed.Claim(name) {
 			return nil, "", fmt.Errorf("%s başka bir işte kullanılıyor", name)
 		}
-		h, err := openSerial(name)
+		// Panel portu kablonun kimliğiyle verir; o anki COM adı burada bulunur.
+		dev, err := resolvePort(name)
 		if err != nil {
 			claimed.Release(name)
-			return nil, "", fmt.Errorf("%s açılamadı: %w", name, err)
+			return nil, "", err
 		}
-		return newConsole(h), name, nil
+		h, err := openSerial(dev)
+		if err != nil {
+			claimed.Release(name)
+			return nil, "", fmt.Errorf("%s açılamadı: %w", dev, err)
+		}
+		k := newConsole(h)
+		k.device = dev
+		return k, name, nil
 	}
 	all, err := portCandidates()
 	if err != nil {
@@ -400,6 +408,7 @@ func openPort(ctx context.Context, name string) (*Console, string, error) {
 			continue
 		}
 		k := newConsole(h)
+		k.device = a
 		if _, reply, err := detectSpeed(ctx, k); err == nil && reply {
 			return k, a, nil
 		}

@@ -591,9 +591,54 @@ func (a *Flow) afterLogin(ctx context.Context) error {
 		if err := a.loadConfiguration(ctx); err != nil {
 			return err
 		}
+	} else {
+		a.stopZtp(ctx)
 	}
 	a.logout(ctx)
 	return nil
+}
+
+// stopZtp fabrika ayarında bırakılan cihazda otomatik kurulumu (ZTP,
+// "Auto Image Upgrade") kapatır: yoksa cihaz DHCP'den görüntü arayıp konsola
+// durmadan satır basar, teslim alan teknisyen temiz bir istem görmez.
+//
+// Kalıcı yol `delete chassis auto-image-upgrade` + commit; ama Junos fabrika
+// ayarında root parolası olmadan HİÇBİR commit'i kabul etmez ("Missing
+// mandatory statement: 'root-authentication'"). O zaman aday geri alınır ve
+// ZTP yalnız bu açılış için durdurulur (`request system autoinstallation
+// stop`; komutu olmayan sürümde zararsızca reddedilir). Kurulum bu yüzden
+// hiçbir durumda başarısız sayılmaz: Junos kuruldu, ZTP yalnız gürültü.
+func (a *Flow) stopZtp(ctx context.Context) {
+	if err := a.command(ctx, "configure", 20*time.Second, reConf); err != nil {
+		a.notify("bilgi", "ZTP kapatılamadı (yapılandırma kipine girilemedi).")
+		return
+	}
+	pos := a.k.Position()
+	_ = a.command(ctx, "delete chassis auto-image-upgrade", 20*time.Second, reConf)
+	if strings.Contains(a.k.Text(pos), "statement not found") {
+		_ = a.command(ctx, "exit configuration-mode", 20*time.Second, reCli)
+		return // bu sürümün fabrika ayarında ZTP yok
+	}
+	pos = a.k.Position()
+	if err := a.send("commit and-quit\r"); err != nil {
+		return
+	}
+	i, err := a.k.Wait(ctx, pos, 3*time.Minute, reCommit, reError)
+	if err == nil && i == 0 {
+		_, _ = a.k.Wait(ctx, pos, time.Minute, reCli)
+		a.notify("bilgi", "ZTP (otomatik kurulum) kapatıldı.")
+		return
+	}
+	_ = a.command(ctx, "rollback 0", 20*time.Second, reConf)
+	_ = a.command(ctx, "exit configuration-mode", 20*time.Second, reCli)
+
+	pos = a.k.Position()
+	_ = a.command(ctx, "request system autoinstallation stop", 30*time.Second, reCli)
+	if reError.MatchString(a.k.Text(pos)) || strings.Contains(a.k.Text(pos), "unknown command") {
+		a.notify("bilgi", "ZTP kalıcı kapatılamadı: fabrika ayarında root parolası olmadan commit edilemiyor. İlk yapılandırmada `delete chassis auto-image-upgrade` ekleyin.")
+		return
+	}
+	a.notify("bilgi", "ZTP bu açılış için durduruldu. Kalıcı kapatmak için ilk yapılandırmada `delete chassis auto-image-upgrade` ekleyin (fabrika ayarında root parolası olmadan commit edilemiyor).")
 }
 
 // reCliInstallFail "request system software add" başarısız: ağdan çekilemedi

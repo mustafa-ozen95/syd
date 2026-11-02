@@ -42,8 +42,9 @@ class ConsolePage
             'satirlar' => $this->isSatirlari(),
             'pcSecenekleri' => ConsolePc::query()->orderBy('ad')->pluck('ad', 'uuid')->all(),
             /* PC değişince adres ve port seçenekleri onun kaydıyla dolar (console-form.js). */
-            'pcAdresleri' => ConsolePc::query()->get(['uuid', 'cihaz_ip', 'gecit', 'seri_port', 'seri_portlar'])
-                ->mapWithKeys(fn (ConsolePc $p): array => [$p->uuid => ['ip' => (string) $p->cihaz_ip, 'gecit' => (string) $p->gecit, 'portlar' => $p->portlar()]])->all(),
+            'pcAdresleri' => ConsolePc::query()->get(['uuid', 'cihaz_ip', 'gecit', 'seri_port', 'seri_portlar', 'port_bilgileri'])
+                ->mapWithKeys(fn (ConsolePc $p): array => [$p->uuid => ['ip' => (string) $p->cihaz_ip, 'gecit' => (string) $p->gecit,
+                    'portlar' => array_map(fn (string $k): array => ['deger' => $k, 'etiket' => $p->portEtiketi($k)], $p->portlar())]])->all(),
             'adresTurleri' => ConsoleJob::ADRES_TURLERI,
             'islemler' => ConsoleJob::ISLEMLER,
             'goruntuSecenekleri' => $this->goruntuler->secenekler(),
@@ -154,7 +155,7 @@ class ConsolePage
         return ConsolePc::query()->with('jeton')->orderBy('ad')->get()->map(fn (ConsolePc $pc): array => [
             'pc' => $pc,
             'platform' => ConsolePc::PLATFORMLAR[$pc->platform]['etiket'] ?? $pc->platform,
-            'seriPort' => implode(', ', $pc->portlar()) ?: 'otomatik',
+            'seriPort' => implode(', ', array_map($pc->portEtiketi(...), $pc->portlar())) ?: 'otomatik',
             'ajan' => $pc->ajanKuruluMu() ? 'Kurulu' : 'Kurulu değil',
             'ajanSon' => $pc->jeton?->last_used_at?->diffForHumans() ?? '—',
             'ajanMesaj' => $pc->ajan_mesaj,
@@ -172,7 +173,9 @@ class ConsolePage
         foreach (['ad', 'platform', 'adres', 'gorunen_adres', 'port', 'kullanici', 'cihaz_ip', 'gecit', 'dizin'] as $alan) {
             $deger[$alan] = $hatali ? (string) old($alan, '') : (string) ($pc?->{$alan} ?? '');
         }
-        $deger['seri_portlar'] = $hatali ? (string) old('seri_portlar', '') : implode("\n", $pc?->portlar() ?? []);
+        /* Portlar elle yazılmaz: "Sına" ya da "Durum" PC'den okur (SitePc::portlariAlgila). */
+        $deger['seri_portlar'] = implode("\n", array_map(fn (string $k): string => (string) $pc?->portEtiketi($k), $pc?->portlar() ?? []));
+        $deger['portlar_at'] = (string) $pc?->portlar_at?->format('d.m.Y H:i');
 
         $deger['platform'] = $deger['platform'] ?: 'windows';
 
@@ -225,7 +228,7 @@ class ConsolePage
     public static function portSecenekleri(?ConsolePc $pc): array
     {
         $portlar = $pc?->portlar() ?? [];
-        $secenek = array_combine($portlar, $portlar);
+        $secenek = array_combine($portlar, array_map(fn (string $k): string => (string) $pc?->portEtiketi($k), $portlar));
 
         return count($portlar) > 1 ? $secenek : ['' => 'Otomatik'] + $secenek;
     }

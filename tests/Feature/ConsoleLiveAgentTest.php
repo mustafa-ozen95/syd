@@ -92,16 +92,17 @@ final class ConsoleLiveAgentTest extends TestCase
         $is = ConsoleJob::sole();
 
         $this->artisan('console:agents')->assertSuccessful();
-        /* Önce bağlantı sınanır (jeton üretilmeden), sonra kurulur. */
-        $this->assertCount(2, $betikler);
-        $this->assertStringContainsString('systemctl enable', $betikler[1]);
-        $this->assertStringNotContainsString('firewall-cmd', $betikler[1], 'ajan dinlemez: güvenlik duvarına dokunulmaz');
+        /* Önce bağlantı sınanır ve portlar okunur (jeton üretilmeden), sonra kurulur. */
+        $this->assertCount(3, $betikler);
+        $this->assertStringContainsString('/dev/serial/by-id', $betikler[1]);
+        $this->assertStringContainsString('systemctl enable', $betikler[2]);
+        $this->assertStringNotContainsString('firewall-cmd', $betikler[2], 'ajan dinlemez: güvenlik duvarına dokunulmaz');
         $this->assertTrue($pc->refresh()->ajanKuruluMu());
         $jeton = ApiToken::findOrFail($pc->jeton_id);
 
         /* Kurulu ve iş açık: tekrar kurulmaz. */
         $this->artisan('console:agents');
-        $this->assertCount(2, $betikler);
+        $this->assertCount(3, $betikler);
 
         /* Bu PC'nin ajanı işi görür; PC'ye bağlı olmayan bir jeton görmez. */
         $sir = ApiToken::mint();
@@ -115,13 +116,13 @@ final class ConsoleLiveAgentTest extends TestCase
         $is->update(['durum' => 'tamam']);
         app(ApiTokenContext::class)->clear();
         $this->artisan('console:agents');
-        $this->assertCount(2, $betikler, 'ajan son adımı bildirebilsin diye bir dakika beklenir');
+        $this->assertCount(3, $betikler, 'ajan son adımı bildirebilsin diye bir dakika beklenir');
 
         $this->travel(2)->minutes();
         $this->artisan('console:agents');
-        $this->assertCount(3, $betikler);
-        $this->assertStringContainsString('systemctl disable --now console-agent', $betikler[2]);
-        $this->assertStringContainsString('rm -rf "$d"', $betikler[2]);
+        $this->assertCount(4, $betikler);
+        $this->assertStringContainsString('systemctl disable --now console-agent', $betikler[3]);
+        $this->assertStringContainsString('rm -rf "$d"', $betikler[3]);
         $this->assertFalse($pc->refresh()->ajanKuruluMu());
         $this->assertNotNull($jeton->refresh()->revoked_at);
     }

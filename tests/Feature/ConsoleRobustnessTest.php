@@ -147,7 +147,7 @@ final class ConsoleRobustnessTest extends TestCase
         /* Ajan sustu: yeniden kurulur, eski jeton iptal edilir. */
         $this->travel(10)->minutes();
         $this->artisan('console:agents');
-        $this->assertSame(2, $sayac, 'sınama + kurulum');
+        $this->assertSame(3, $sayac, 'sınama + port algılama + kurulum');
         $this->assertNotSame($eski->id, $pc->refresh()->jeton_id);
         $this->assertNotNull($eski->refresh()->revoked_at);
     }

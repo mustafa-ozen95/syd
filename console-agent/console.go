@@ -55,6 +55,8 @@ type Console struct {
 	readErr  error
 
 	speed int // portun şu anki hızı; yalnız akışın goroutine'i değiştirir
+
+	device string // açılan port (COM9, /dev/ttyUSB0); iş kablo kimliğiyle gelse de
 }
 
 const bufferLimit = 64 << 10

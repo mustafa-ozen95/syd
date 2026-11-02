@@ -67,8 +67,8 @@
 <div class="field-row">
     <div class="field">
         <label class="field__label" for="{{ $onek }}-seri">Seri portlar</label>
-        <textarea class="textarea input--mono" id="{{ $onek }}-seri" name="seri_portlar" rows="2" placeholder="boş: otomatik&#10;COM3&#10;COM9">{{ $deger['seri_portlar'] }}</textarea>
-        <span class="field__hint">Satır başına bir port. Birden çok kablo takılıysa her biri ayrı switch kurar: her porta aynı anda bir iş. Boşsa ajan USB-seri dönüştürücüyü kendisi bulur (tek kablo). Hız otomatik.</span>
+        <textarea class="textarea input--mono" id="{{ $onek }}-seri" rows="2" readonly placeholder="henüz algılanmadı">{{ $deger['seri_portlar'] }}</textarea>
+        <span class="field__hint">Elle yazılmaz: "Sına" ya da "Durum" PC'ye takılı konsol kablolarını okur. @if ($deger['portlar_at'] !== '') Son okuma: {{ $deger['portlar_at'] }}. @endif Kablo, COM numarasıyla değil kendi kimliğiyle tutulur; başka USB girişine takılınca da bulunur. Birden çok kablo takılıysa her biri ayrı switch kurar. Hız otomatik.</span>
     </div>
     <div class="field">
         <label class="field__label" for="{{ $onek }}-dizin">Ajan dizini</label>
