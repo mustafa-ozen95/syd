@@ -82,11 +82,31 @@ const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content ??
 /** Bilgisayardan seçilen yedek dosyası; yoksa null. */
 const uploadedBackup = (form) => form.querySelector('[data-console-backup-upload]')?.files?.[0] ?? null;
 
-/** Özelleştirme bölümü: listeden cihaz ya da bilgisayardan yedek seçiliyken. */
+/**
+ * Özelleştirme bölümü: config şablonu seçiliyse herkese; cihaz yedeği ya da
+ * yüklenen dosya seçiliyse yalnız yetkisi olana (data-serbest). Karar
+ * sunucuda da verilir; bu yalnız görünüm.
+ */
 function showCustomWrap(form) {
-    const device = form.querySelector('[data-console-device]')?.value ?? '';
+    const wrap = form.querySelector('[data-console-custom-wrap]');
+    const select = form.querySelector('[data-console-device]');
+    const device = select?.value ?? '';
+    const template = select?.selectedOptions[0]?.hasAttribute('data-sablon') ?? false;
+    const free = wrap?.dataset.serbest === '1';
 
-    form.querySelector('[data-console-custom-wrap]')?.classList.toggle('is-hidden', device === '' && !uploadedBackup(form));
+    const visible = (template && !uploadedBackup(form)) || (free && (device !== '' || uploadedBackup(form)));
+
+    wrap?.classList.toggle('is-hidden', !visible);
+
+    /* Gizlenen bölüm gönderilmesin: yetkisiz özelleştirme sunucuda reddedilir. */
+    if (!visible) {
+        const toggle = wrap?.querySelector('[data-console-custom-toggle]');
+
+        if (toggle) {
+            toggle.checked = false;
+        }
+        wrap?.querySelector('[data-console-custom]')?.classList.add('is-hidden');
+    }
 }
 
 /** Özelleştirme alanlarını seçilen yedekteki değerlerle doldurur. */

@@ -7,6 +7,9 @@ namespace App\ConsoleModule\Services;
 use App\ConsoleModule\Contracts\ConfigurationSource;
 use App\ConsoleModule\Junos\ConfigTree;
 use App\ConsoleModule\Junos\PatchBuilder;
+use App\Models\ConfigSablonu;
+use App\Models\User;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Seçilen yedek + formdaki özelleştirme → yedeğin üstüne uygulanacak yama.
@@ -43,6 +46,20 @@ class Ozellestirme
         $t = $this->agac($cihaz, $dosya, $metin);
 
         return $t === null ? '' : $this->uretici->ozet($t, $oz);
+    }
+
+    /**
+     * Bu kişi bu kaynakta özelleştirebilir mi: config şablonunda iş açan
+     * herkes; cihaz yedeğinde ya da bilgisayardan yüklenen dosyada yalnız
+     * "Yedekte özelleştirme" (konsol:ozellestir) yetkisi olan.
+     */
+    public static function serbestMi(?User $kim, string $cihaz, bool $yuklendi): bool
+    {
+        if ($kim !== null && Gate::forUser($kim)->allows('konsol:ozellestir')) {
+            return true;
+        }
+
+        return ! $yuklendi && $cihaz !== '' && ConfigSablonu::query()->where('ad', $cihaz)->exists();
     }
 
     private function agac(string $cihaz, string $dosya, ?string $metin): ?ConfigTree

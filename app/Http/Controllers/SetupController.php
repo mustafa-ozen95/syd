@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Models\ConfigSablonu;
 use App\Models\JunosImage;
 use App\Services\JunosImageService;
 use Illuminate\Support\Facades\Gate;
@@ -47,6 +48,16 @@ class SetupController extends Controller
             'konsolGorur' => Gate::allows('konsol:view'),
             'ekleAcik' => $hataliForm === 'ekle',
             'ekleDeger' => $hataliForm === 'ekle' ? $eskiGirdi() : [],
+            /* Config şablonları: aynı sayfa, aynı yetkiler. */
+            'sablonlar' => ConfigSablonu::query()->sirali()->get()->map(fn (ConfigSablonu $s): array => [
+                'sablon' => $s,
+                'boyut' => Number::fileSize($s->boyut, 1),
+                'guncellendi' => $s->updated_at?->format('d.m.Y H:i'),
+                'acik' => $acik = $hataliForm === 'sablon-'.$s->uuid,
+                'deger' => $acik ? ['ad' => old('ad'), 'sira' => old('sira')] : $s->only(['ad', 'sira']),
+            ]),
+            'sablonEkleAcik' => $hataliForm === 'sablon-ekle',
+            'sablonEkleDeger' => $hataliForm === 'sablon-ekle' ? ['ad' => old('ad'), 'sira' => old('sira')] : [],
         ]);
     }
 }

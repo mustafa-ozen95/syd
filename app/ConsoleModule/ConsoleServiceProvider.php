@@ -7,6 +7,7 @@ namespace App\ConsoleModule;
 use App\ConsoleModule\Commands\SyncAgentsCommand;
 use App\ConsoleModule\Contracts\ConfigurationSource;
 use App\ConsoleModule\Contracts\ImageSource;
+use App\ConsoleModule\Sources\SablonluKaynak;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull;
 use Illuminate\Foundation\Http\Middleware\TrimStrings;
@@ -38,9 +39,11 @@ class ConsoleServiceProvider extends ServiceProvider
 
         config([
             'permissions.actions.ajan' => 'Ajan olarak bağlan',
+            /* Cihaz yedeğinde "Yapılandırmayı özelleştir". Config şablonlarında iş açan herkes özelleştirebilir. */
+            'permissions.actions.ozellestir' => 'Yedekte özelleştirme',
             'permissions.resources.konsol' => [
                 'label' => 'Konsol kurulum',
-                'actions' => ['view', 'create', 'update', 'delete', 'ajan'],
+                'actions' => ['view', 'create', 'update', 'delete', 'ajan', 'ozellestir'],
             ],
             'api.endpoints' => (array) config('api.endpoints', []) + [
                 'console.jobs' => [
@@ -81,7 +84,8 @@ class ConsoleServiceProvider extends ServiceProvider
         ]);
 
         $this->app->bind(ImageSource::class, fn ($app) => $app->make(config('console.image_source')));
-        $this->app->bind(ConfigurationSource::class, fn ($app) => $app->make(config('console.configuration_source')));
+        /* Kurulum sayfasındaki config şablonları yedeklerin önünde listelenir. */
+        $this->app->bind(ConfigurationSource::class, fn ($app) => new SablonluKaynak($app->make(config('console.configuration_source'))));
     }
 
     public function boot(): void

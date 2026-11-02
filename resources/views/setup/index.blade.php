@@ -76,6 +76,55 @@
       </table>
     </section>
 
+    {{-- Config şablonları: Konsol'da cihaz listesinin en üstünde; yedek klasörlerinden ayrı (FTP eşitlemesi dokunmaz). --}}
+    <x-ui.panel title="Config şablonları" subtitle="Sıfır switch'e yüklenecek hazır yapılandırmalar. Konsol'da yeni iş açarken cihaz listesinin en üstünde görünür; yüklerken Yapılandırmayı özelleştir ile değiştirilebilir." flush>
+      @if ($yetki['ekle'])
+        <x-slot:actions>
+          <button type="button" class="btn btn--sm" data-modal-open="sablon-add"><x-icon name="plus" />Yeni şablon</button>
+        </x-slot:actions>
+      @endif
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Ad</th>
+            <th>Dosya</th>
+            <th>Boyut</th>
+            <th>Güncellendi</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @forelse ($sablonlar as $satir)
+            <tr>
+              <td data-label="Ad"><strong>{{ $satir['sablon']->ad }}</strong></td>
+              <td data-label="Dosya"><code>{{ $satir['sablon']->dosya }}</code></td>
+              <td data-label="Boyut">{{ $satir['boyut'] }}</td>
+              <td data-label="Güncellendi">{{ $satir['guncellendi'] }}</td>
+              <td>
+                <div class="table__row-actions">
+                  <a class="btn btn--sm" href="{{ route('setup.sablon.download', $satir['sablon']) }}"><x-icon name="download" />İndir</a>
+                  @if ($yetki['duzenle'])
+                    <button type="button" class="btn btn--sm" data-modal-open="sablon-edit-{{ $satir['sablon']->uuid }}"><x-icon name="edit" />Düzenle</button>
+                  @endif
+                  @if ($yetki['sil'])
+                    <x-ui.delete-form :action="route('setup.sablon.destroy', $satir['sablon'])"
+                                      confirm="{{ $satir['sablon']->ad }} şablonu silinecek; Konsol'daki listeden de kalkar."
+                                      title="Şablonu sil"
+                                      verify="{{ $satir['sablon']->ad }}"
+                                      reasonless />
+                  @endif
+                </div>
+              </td>
+            </tr>
+          @empty
+            <tr>
+              <td colspan="5" class="text-muted">Henüz şablon yok.</td>
+            </tr>
+          @endforelse
+        </tbody>
+      </table>
+    </x-ui.panel>
+
     {{--
       Pencereler `.page__inner`in İÇİNDE: yenilemesiz geçiş yalnız bu öğeyi
       değiştiriyor, dışarıdaki pencere hiç gelmezdi (bkz. kullanicilar).
@@ -103,6 +152,35 @@
             <input type="hidden" name="_form" value="duzenle-{{ $satir['goruntu']->id }}">
             <div class="modal__body stack">
               <x-setup.image-fields :onek="'goruntu-'.$satir['goruntu']->id" :deger="$satir['deger']" :hatali="$satir['acik']" :tftp="$tftp" :sinir="$yuklemeSiniri" duzenle />
+            </div>
+            <x-ui.modal-actions submit="Güncelle" />
+          </form>
+        </x-ui.modal>
+      @endforeach
+    @endif
+
+    @if ($yetki['ekle'])
+      <x-ui.modal id="sablon-add" title="Yeni config şablonu" :open="$sablonEkleAcik">
+        <form method="POST" action="{{ route('setup.sablon.store') }}" enctype="multipart/form-data">
+          @csrf
+          <input type="hidden" name="_form" value="sablon-ekle">
+          <div class="modal__body stack">
+            <x-setup.sablon-fields onek="sablon-yeni" :deger="$sablonEkleDeger" :hatali="$sablonEkleAcik" />
+          </div>
+          <x-ui.modal-actions submit="Ekle" />
+        </form>
+      </x-ui.modal>
+    @endif
+
+    @if ($yetki['duzenle'])
+      @foreach ($sablonlar as $satir)
+        <x-ui.modal id="sablon-edit-{{ $satir['sablon']->uuid }}" :title="$satir['sablon']->ad.' — düzenle'" :open="$satir['acik']">
+          <form method="POST" action="{{ route('setup.sablon.update', $satir['sablon']) }}" enctype="multipart/form-data">
+            @csrf
+            @method('PUT')
+            <input type="hidden" name="_form" value="sablon-{{ $satir['sablon']->uuid }}">
+            <div class="modal__body stack">
+              <x-setup.sablon-fields :onek="'sablon-'.$satir['sablon']->uuid" :deger="$satir['deger']" :hatali="$satir['acik']" duzenle />
             </div>
             <x-ui.modal-actions submit="Güncelle" />
           </form>

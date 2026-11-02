@@ -6,6 +6,7 @@ namespace App\ConsoleModule\Http\Requests;
 
 use App\ConsoleModule\Junos\Md5Crypt;
 use App\ConsoleModule\Junos\PatchBuilder;
+use App\ConsoleModule\Services\Ozellestirme;
 use Closure;
 
 /**
@@ -27,7 +28,11 @@ trait OzellestirmeAlanlari
         $oz = 'ozellestirme.';
 
         return [
-            'ozellestir' => ['nullable', 'boolean'],
+            'ozellestir' => ['nullable', 'boolean', function (string $alan, mixed $deger, Closure $hata): void {
+                if (filter_var($deger, FILTER_VALIDATE_BOOLEAN) && ! Ozellestirme::serbestMi($this->user(), (string) $this->input('ad'), $this->hasFile('yedek_yukle'))) {
+                    $hata('Bu yedekte özelleştirme yetkiniz yok; yalnız config şablonlarında özelleştirebilirsiniz.');
+                }
+            }],
             $oz.'host_name' => ['nullable', 'string', 'regex:/^[A-Za-z0-9][A-Za-z0-9.-]{0,62}$/'],
             $oz.'uplink_arayuz' => ['nullable', 'required_with:'.$oz.'uplink_adres', 'regex:/^(ge|xe|et)-\d{1,2}\/\d{1,2}\/\d{1,2}$/'],
             $oz.'uplink_adres' => ['nullable', 'required_with:'.$oz.'uplink_arayuz', $this->onekli()],

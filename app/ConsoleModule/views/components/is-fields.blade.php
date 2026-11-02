@@ -1,5 +1,5 @@
 @props(['deger', 'hatali' => false, 'pcler' => [], 'goruntuler' => [],
-         'yedekCihazlari' => [], 'yedekDosyalari' => [],
+         'yedekCihazlari' => [], 'yedekDosyalari' => [], 'sablonlar' => [], 'ozellestirTumu' => false, 'ozGorunur' => false,
          'pcAdresleri' => [], 'adresTurleri' => [], 'islemler' => []])
 
 {{-- Yeni işin alanları. Değerler hazır gelir (ConsolePage); hata yalnız gönderilen pencerede. --}}
@@ -33,7 +33,7 @@
         <select class="select" id="console-name" name="ad" data-console-device data-url="{{ route('console.backups') }}">
             <option value="" @selected($deger['ad'] === '')>Listede yok (fabrika ayarında kur)</option>
             @foreach ($yedekCihazlari as $cihaz)
-                <option value="{{ $cihaz }}" @selected($deger['ad'] === $cihaz)>{{ $cihaz }}</option>
+                <option value="{{ $cihaz }}" @selected($deger['ad'] === $cihaz) @isset($sablonlar[$cihaz]) data-sablon @endisset>{{ $cihaz }}</option>
             @endforeach
         </select>
         <span class="field__hint">Listeden seçilen cihazın yedeği kurulumdan sonra yüklenir; listede yoksa fabrika ayarında kalır.</span>
@@ -104,7 +104,8 @@
     dolar (console-form.js, console.fields); değiştirilmeyen alana dokunulmaz. Önizleme ajanın yazacağı
     satırların aynısıdır (console.preview).
 --}}
-<div @class(['stack', 'is-hidden' => $deger['ad'] === '']) data-console-backup data-console-custom-wrap>
+{{-- Config şablonunda herkes; cihaz yedeğinde ve yüklenen dosyada yalnız "Yedekte özelleştirme" yetkisi olan görür. --}}
+<div @class(['stack', 'is-hidden' => ! $ozGorunur]) data-console-custom-wrap data-serbest="{{ $ozellestirTumu ? '1' : '0' }}">
     <label class="checkbox">
         <input type="checkbox" name="ozellestir" value="1" @checked($deger['ozellestir'] === '1') data-console-custom-toggle>
         <span>Yapılandırmayı özelleştir (isteğe bağlı)</span>

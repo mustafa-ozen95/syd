@@ -7,11 +7,15 @@ namespace Tests\Feature;
 use App\ConsoleModule\Contracts\ConfigurationSource;
 use App\ConsoleModule\Models\ConsoleJob;
 use App\ConsoleModule\Models\ConsolePc;
+use App\ConsoleModule\Sources\SablonluKaynak;
 use App\Models\ActivityLog;
 use App\Models\ApiToken;
+use App\Models\ConfigSablonu;
 use App\Models\JunosImage;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -148,5 +152,42 @@ final class ConsoleCustomizeTest extends TestCase
         $this->actingAs($yonetici)->post(route('console.store'), ['ozellestir' => '0'] + $this->form($pc, ['host_name' => 'piga']))
             ->assertSessionHasNoErrors();
         $this->assertNull(ConsoleJob::sole()->yama);
+    }
+
+    /**
+     * Teknik: Konsol'da iş açar, yedeği listeden seçer; özelleştirme yalnız
+     * config şablonlarında. Yedekler sayfasına giremez.
+     */
+    #[Test]
+    public function ozellestirme_yetkisi_olmayan_yalniz_sablonda_ozellestirir(): void
+    {
+        Role::where('slug', 'teknik')->sole()->update(['yetkiler' => ['konsol' => ['view', 'create', 'ajan']]]);
+        $teknik = User::factory()->rol('teknik')->create();
+        $pc = $this->pc();
+        ConfigSablonu::create(['ad' => 'Sıfır Config', 'dosya' => 'sifir.conf', 'metin' => (string) file_get_contents(base_path('tests/Fixtures/junos/ornek-ex.conf')), 'boyut' => 1]);
+        $this->app->instance(ConfigurationSource::class, new SablonluKaynak($this->app->make(ConfigurationSource::class)));
+
+        /* Cihaz yedeği: seçip yükleyebilir ama özelleştiremez; alanlar gösterilmez. */
+        $this->actingAs($teknik)->post(route('console.store'), $this->form($pc, ['host_name' => 'x']))->assertSessionHasErrors('ozellestir');
+        $this->actingAs($teknik)->getJson(route('console.fields', ['device' => 'sw-a', 'file' => 'sw-a_1']))->assertOk()->assertJsonPath('alanlar', null);
+        $this->actingAs($teknik)->post(route('console.store'), ['ozellestir' => '0'] + $this->form($pc, []))->assertSessionHasNoErrors();
+        ConsoleJob::query()->delete();
+
+        /* Bilgisayardan yüklenen yedekte de özelleştiremez. */
+        $this->actingAs($teknik)->post(route('console.store'), [
+            'pc' => $pc->uuid, 'islem' => 'yedek', 'ad' => '', 'ozellestir' => '1', 'ozellestirme' => ['host_name' => 'x'],
+            'yedek_yukle' => UploadedFile::fake()->createWithContent('a.conf', (string) file_get_contents(base_path('tests/Fixtures/junos/ornek-ex.conf'))),
+        ])->assertSessionHasErrors('ozellestir');
+
+        /* Config şablonunda özelleştirir. */
+        $this->actingAs($teknik)->getJson(route('console.fields', ['device' => 'Sıfır Config', 'file' => 'sifir.conf']))->assertJsonPath('alanlar.host_name', 'sw-ornek.example.test');
+        $this->actingAs($teknik)->post(route('console.store'), [
+            'pc' => $pc->uuid, 'ad' => 'Sıfır Config', 'yedek_dosya' => 'sifir.conf', 'islem' => 'yedek', 'ozellestir' => '1',
+            'ozellestirme' => ['host_name' => 'piga', 'root_parola' => 'Yeni-Parola-1'],
+        ])->assertSessionHasNoErrors();
+        $this->assertStringContainsString('set system host-name piga', (string) ConsoleJob::sole()->yama);
+
+        /* Yedekleri ne görür ne indirir. */
+        $this->actingAs($teknik)->get(route('backup.index'))->assertRedirect(route('forbidden'));
     }
 }

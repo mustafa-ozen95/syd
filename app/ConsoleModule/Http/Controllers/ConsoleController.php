@@ -66,9 +66,17 @@ class ConsoleController extends Controller
     public function fields(Request $request, Ozellestirme $ozellestirme): JsonResponse
     {
         /* Bilgisayardan seçilen yedek de olabilir (POST, dosyayla). */
-        $metin = $request->file('yedek_yukle') instanceof UploadedFile ? YedekDosyasi::metin($request->file('yedek_yukle')) : null;
+        $yuklenen = $request->file('yedek_yukle');
+        $cihaz = $request->string('device')->value();
 
-        return response()->json(['alanlar' => $ozellestirme->alanlar($request->string('device')->value(), $request->string('file')->value(), $metin)]);
+        /* Yetkisi olmayana yedeğin değerleri gösterilmez (yalnız şablonlar). */
+        if (! Ozellestirme::serbestMi($request->user(), $cihaz, $yuklenen instanceof UploadedFile)) {
+            return response()->json(['alanlar' => null]);
+        }
+
+        $metin = $yuklenen instanceof UploadedFile ? YedekDosyasi::metin($yuklenen) : null;
+
+        return response()->json(['alanlar' => $ozellestirme->alanlar($cihaz, $request->string('file')->value(), $metin)]);
     }
 
     /** Ajanın yedeğin üstüne yazacağı satırlar; parola özetleri maskeli. */

@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\CenterLoginController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BackupController;
+use App\Http\Controllers\ConfigSablonController;
 use App\Http\Controllers\JunosImageController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SetupController;
@@ -86,6 +87,20 @@ Route::middleware('auth')->group(function () {
     Route::delete('/setup/image/{image}', [JunosImageController::class, 'destroy'])
         ->middleware('can:junos:delete')
         ->name('setup.image.destroy');
+
+    /* Config şablonları: Junos görüntüleriyle aynı yetkiler. */
+    Route::get('/setup/sablon/{sablon}/indir', [ConfigSablonController::class, 'download'])
+        ->middleware('can:junos:view')
+        ->name('setup.sablon.download');
+    Route::post('/setup/sablon', [ConfigSablonController::class, 'store'])
+        ->middleware('can:junos:create')
+        ->name('setup.sablon.store');
+    Route::put('/setup/sablon/{sablon}', [ConfigSablonController::class, 'update'])
+        ->middleware('can:junos:update')
+        ->name('setup.sablon.update');
+    Route::delete('/setup/sablon/{sablon}', [ConfigSablonController::class, 'destroy'])
+        ->middleware('can:junos:delete')
+        ->name('setup.sablon.destroy');
 
     Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/users', [UserController::class, 'index'])->name('users.index');

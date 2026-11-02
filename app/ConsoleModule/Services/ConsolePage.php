@@ -11,6 +11,7 @@ use App\ConsoleModule\Models\ConsoleJob;
 use App\ConsoleModule\Models\ConsoleOutput;
 use App\ConsoleModule\Models\ConsolePc;
 use App\ConsoleModule\Sources\TftpProgress;
+use App\Models\ConfigSablonu;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 
@@ -47,8 +48,12 @@ class ConsolePage
             'islemler' => ConsoleJob::ISLEMLER,
             'goruntuSecenekleri' => $this->goruntuler->secenekler(),
             'yedekCihazlari' => $yetki['ekle'] ? $this->yedekler->cihazlar() : [],
+            /* Şablonda herkes özelleştirir; yedekte yalnız konsol:ozellestir (console-form.js gösterir/gizler). */
+            'sablonlar' => array_flip(ConfigSablonu::query()->pluck('ad')->all()),
+            'ozellestirTumu' => Gate::allows('konsol:ozellestir'),
             'ekleAcik' => $form === 'ekle',
             'ekleDeger' => $ekleDeger = $this->isGirdisi($form === 'ekle'),
+            'ozGorunur' => $ekleDeger['ad'] !== '' && (Gate::allows('konsol:ozellestir') || ConfigSablonu::query()->where('ad', $ekleDeger['ad'])->exists()),
             /* Seçili cihazın yedekleri: hatayla dönen formda dolu gelsin; sonrası console-form.js. */
             'yedekDosyalari' => $yetki['ekle'] && $ekleDeger['ad'] !== '' ? $this->yedekSecenekleri($ekleDeger['ad']) : [],
             'platformlar' => array_map(fn (array $p): string => $p['etiket'], ConsolePc::PLATFORMLAR),

@@ -144,7 +144,7 @@
           <div class="modal__body stack">
             <x-console::is-fields :deger="$ekleDeger" :hatali="$ekleAcik" :pcler="$pcSecenekleri"
                                    :goruntuler="$goruntuSecenekleri"
-                                   :yedek-cihazlari="$yedekCihazlari" :yedek-dosyalari="$yedekDosyalari"
+                                   :yedek-cihazlari="$yedekCihazlari" :yedek-dosyalari="$yedekDosyalari" :sablonlar="$sablonlar" :ozellestir-tumu="$ozellestirTumu" :oz-gorunur="$ozGorunur"
                                    :pc-adresleri="$pcAdresleri" :adres-turleri="$adresTurleri" :islemler="$islemler" />
           </div>
           <x-ui.modal-actions submit="İşi aç" />
