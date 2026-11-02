@@ -34,24 +34,31 @@
           <tbody>
             @forelse ($satirlar as $satir)
               <tr>
+                {{-- Çok parçalı hücre tek blokta: dar ekranda kart satırı "etiket + değer" olarak kalır, parçalar yan yana sıkışmaz. --}}
                 <td data-label="Cihaz">
-                  <a href="{{ route('console.show', $satir['is']) }}"><strong>{{ $satir['is']->ad }}</strong></a>
-                  <div class="text-sm text-muted">PC: {{ $satir['pc'] }}</div>
+                  <div>
+                    <a href="{{ route('console.show', $satir['is']) }}"><strong>{{ $satir['is']->ad }}</strong></a>
+                    <div class="text-sm text-muted">PC: {{ $satir['pc'] }}</div>
+                  </div>
                 </td>
                 <td data-label="Görüntü" class="text-sm">
-                  {{ $satir['goruntu'] }}
-                  @if ($satir['yapilandirma'] !== '')
-                    <div class="text-muted">{{ $satir['yapilandirma'] }}</div>
-                  @endif
+                  <div>
+                    {{ $satir['goruntu'] }}
+                    @if ($satir['yapilandirma'] !== '')
+                      <div class="text-muted">{{ $satir['yapilandirma'] }}</div>
+                    @endif
+                  </div>
                 </td>
                 <td data-label="Durum">
-                  <x-ui.badge :variant="$satir['renk']">{{ $satir['durum'] }}</x-ui.badge>
-                  @if ($satir['bekliyor'])
-                    <x-ui.badge variant="yellow">Sizden bekleniyor</x-ui.badge>
-                  @endif
-                  @if ($satir['is']->son_mesaj)
-                    <div class="text-sm text-muted">{{ $satir['is']->son_mesaj }}</div>
-                  @endif
+                  <div>
+                    <x-ui.badge :variant="$satir['renk']">{{ $satir['durum'] }}</x-ui.badge>
+                    @if ($satir['bekliyor'])
+                      <x-ui.badge variant="yellow">Sizden bekleniyor</x-ui.badge>
+                    @endif
+                    @if ($satir['is']->son_mesaj)
+                      <div class="text-sm text-muted">{{ $satir['is']->son_mesaj }}</div>
+                    @endif
+                  </div>
                 </td>
                 <td data-label="Güncellendi" class="text-sm">{{ $satir['guncellendi'] }}</td>
               </tr>
@@ -103,14 +110,16 @@
             <tbody>
               @forelse ($pcler as $satir)
                 <tr>
-                  <td data-label="PC"><strong>{{ $satir['pc']->ad }}</strong><div class="text-sm text-muted">{{ $satir['platform'] }} · seri port {{ $satir['seriPort'] }}</div></td>
+                  <td data-label="PC"><div><strong>{{ $satir['pc']->ad }}</strong><div class="text-sm text-muted">{{ $satir['platform'] }} · seri port {{ $satir['seriPort'] }}</div></div></td>
                   <td data-label="Bağlantı" class="table__cell--mono text-sm">{{ $satir['pc']->kullanici.'@'.$satir['pc']->adres.':'.$satir['pc']->port }}</td>
                   <td data-label="Loader adresi" class="table__cell--mono text-sm">{{ $satir['pc']->cihaz_ip }} · gw {{ $satir['pc']->gecit }}</td>
                   <td data-label="Ajan" class="text-sm">
-                    <strong>{{ $satir['ajan'] }}</strong> · son bağlantı {{ $satir['ajanSon'] }}
-                    @if ($satir['ajanMesaj'])
-                      <div class="text-muted">{{ $satir['ajanMesaj'] }}</div>
-                    @endif
+                    <div>
+                      <strong>{{ $satir['ajan'] }}</strong> · son bağlantı {{ $satir['ajanSon'] }}
+                      @if ($satir['ajanMesaj'])
+                        <div class="text-muted">{{ $satir['ajanMesaj'] }}</div>
+                      @endif
+                    </div>
                   </td>
                   <td>
                     <div class="table__row-actions">

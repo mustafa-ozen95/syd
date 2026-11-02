@@ -170,3 +170,63 @@
         display: none;
     }
 }
+
+/*
+ * Dar ekranda tablo kartı: etiket solda TEK sütun, hücrenin bütün parçaları
+ * sağ sütunda ALT ALTA, sağa hizalı; uzun kelime kırılır.
+ *
+ * Şablonun kart görünümü (table.css) hücreyi esnek bir satır yapıyor
+ * (etiket + değer, aralarında boşluk). Hücrede birden çok parça varsa
+ * (iş: görüntü + yapılandırma, PC: ajan + ileti, API belgesi: yol + özet +
+ * açıklama) her parça ayrı ve dar bir sütuna sıkışıyor, satırlar kayık
+ * görünüyordu; boşluksuz uzun değerler (API yolu, dosya adı) kartı ekrandan
+ * taşırıyordu. Izgara bunu her tabloda, görünümlere dokunmadan düzeltir.
+ * Etiket genişliği şablondakiyle aynı (6.5rem).
+ */
+@media (max-width: 720px) {
+    .table td[data-label] {
+        display: grid;
+        grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr);
+        column-gap: var(--space-4);
+        /* Şablonun `gap`i ızgarada satır arası da olur; etiketin kapladığı boş satırlar boşluk açmasın. */
+        row-gap: 0;
+        align-items: baseline;
+        text-align: right;
+        overflow-wrap: anywhere;
+    }
+
+    .table td[data-label]::before {
+        grid-column: 1;
+        grid-row: 1 / span 20;
+        align-self: start;
+    }
+
+    .table td[data-label] > * {
+        grid-column: 2;
+        justify-self: end;
+        min-width: 0;
+        max-width: 100%;
+    }
+}
+
+/*
+ * Ayarlar → API jetonları listesi (settings/api).
+ *
+ * Satır dört parçalı (ad, durum, sahip/kural özeti, Düzenle) ama sütun
+ * tanımı yoktu: parçalar alt alta diziliyor, satırlar arasında çizgi yoktu ve
+ * Düzenle bir alttaki jetona aitmiş gibi duruyordu. İki sütun: solda ad ve
+ * özet, sağda durum ve Düzenle; satırlar çizgiyle ayrılır.
+ */
+.ayar-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    border-bottom: 1px solid var(--color-line);
+}
+
+.ayar-row > :nth-child(odd) {
+    grid-column: 1;
+}
+
+.ayar-row > :nth-child(even) {
+    grid-column: 2;
+    justify-self: end;
+}
