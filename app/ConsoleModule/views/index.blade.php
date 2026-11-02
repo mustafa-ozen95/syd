@@ -120,7 +120,7 @@
                           <button type="submit" class="btn btn--sm">{{ $etiket }}</button>
                         </form>
                       @endforeach
-                      <button type="button" class="btn btn--sm" data-modal-open="console-pc-{{ $satir['pc']->id }}"><x-icon name="edit" />Düzenle</button>
+                      <button type="button" class="btn btn--sm" data-modal-open="console-pc-{{ $satir['pc']->uuid }}"><x-icon name="edit" />Düzenle</button>
                       <x-ui.delete-form :action="route('console.pc.destroy', $satir['pc'])" :confirm="$satir['silOnay']"
                                         title="PC'yi sil" :verify="$satir['pc']->ad" reasonless />
                     </div>
@@ -165,13 +165,13 @@
       </x-ui.modal>
 
       @foreach ($pcler as $satir)
-        <x-ui.modal id="console-pc-{{ $satir['pc']->id }}" :title="$satir['pc']->ad.' — düzenle'" :open="$satir['acik']" wide>
+        <x-ui.modal id="console-pc-{{ $satir['pc']->uuid }}" :title="$satir['pc']->ad.' — düzenle'" :open="$satir['acik']" wide>
           <form method="POST" action="{{ route('console.pc.update', $satir['pc']) }}">
             @csrf
             @method('PUT')
-            <input type="hidden" name="_form" value="pc-{{ $satir['pc']->id }}">
+            <input type="hidden" name="_form" value="pc-{{ $satir['pc']->uuid }}">
             <div class="modal__body stack">
-              <x-console::pc-fields :onek="'pc-'.$satir['pc']->id" :deger="$satir['deger']" :hatali="$satir['acik']" :platformlar="$platformlar" />
+              <x-console::pc-fields :onek="'pc-'.$satir['pc']->uuid" :deger="$satir['deger']" :hatali="$satir['acik']" :platformlar="$platformlar" />
             </div>
             <x-ui.modal-actions submit="Güncelle" />
           </form>

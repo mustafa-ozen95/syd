@@ -29,6 +29,9 @@ type Job struct {
 	DeleteFirst     bool     `json:"delete_first"`
 	// LoadOnly: Junos kurulmaz, yalnız yedek yüklenir (Flow.LoadOnly).
 	LoadOnly bool `json:"load_only"`
+	// ResumeStage: iş daha önce bu ajanla başlamışsa vardığı aşama (ajan ya
+	// da PC iş ortasında yeniden başladı); ilk alışta boş.
+	ResumeStage string `json:"resume_stage"`
 }
 
 // Panelin "iş artık yok" yanıtı: iptal edildi ya da silindi.

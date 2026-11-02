@@ -20,10 +20,10 @@
 <div class="field-row">
     <div class="field">
         <label class="field__label" for="console-pc">PC</label>
-        <select class="select" id="console-pc" name="pc_id" required data-console-pc>
-            @foreach ($pcler as $id => $ad)
-                <option value="{{ $id }}" data-ip="{{ $pcAdresleri[$id]['ip'] ?? '' }}" data-gateway="{{ $pcAdresleri[$id]['gecit'] ?? '' }}"
-                        @selected($deger['pc_id'] === (string) $id)>{{ $ad }}</option>
+        <select class="select" id="console-pc" name="pc" required data-console-pc>
+            @foreach ($pcler as $uuid => $ad)
+                <option value="{{ $uuid }}" data-ip="{{ $pcAdresleri[$uuid]['ip'] ?? '' }}" data-gateway="{{ $pcAdresleri[$uuid]['gecit'] ?? '' }}"
+                        @selected($deger['pc'] === $uuid)>{{ $ad }}</option>
             @endforeach
         </select>
         <span class="field__hint">Switch'in konsol kablosu bu PC'ye takılı olmalı.</span>

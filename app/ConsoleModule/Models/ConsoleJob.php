@@ -21,6 +21,9 @@ class ConsoleJob extends Model
     /** Ajanın üzerinde çalışabildiği durumlar. */
     public const ACIK = ['bekliyor', 'calisiyor'];
 
+    /** Bir PC'de tek açık iş: konsol kablosu bir tane. */
+    public const PC_MESGUL = 'Bu PC\'de açık bir iş var; konsol kablosu bir tane. Önce onu kapatın.';
+
     /** @var array<string, array{0: string, 1: BadgeVariant}> durum => [etiket, renk] */
     public const DURUMLAR = [
         'bekliyor' => ['Ajan bekleniyor', BadgeVariant::Gray],

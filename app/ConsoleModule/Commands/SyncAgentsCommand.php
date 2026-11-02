@@ -17,12 +17,19 @@ use Illuminate\Console\Command;
  * kaldırılır.
  *
  *   PC'de açık iş var, ajan yok      → kurulur
+ *   PC'de açık iş var, ajan sessiz   → yeniden kurulur (jeton süresi dolmuş,
+ *                                      PC formatlanmış, görev silinmiş: ajan
+ *                                      panele hiç gelmiyorsa ölüdür)
  *   PC'de açık iş yok, ajan kurulu   → kaldırılır (son iş kapandıktan
  *                                      BEKLEME süresi sonra: ajan son adımı
  *                                      bildirebilsin)
+ *   Açık iş uzun süredir sessiz      → "hata" ile kapanır; yoksa sonsuza dek
+ *                                      "Ajan bekleniyor"da kalırdı
  *
- * Kuyruk yerine eşitleme: bir deneme düşerse sonraki dakika yeniden dener;
- * panel yeniden başlasa da durum kendiliğinden toparlanır.
+ * Kuyruk yerine eşitleme: bir deneme düşerse yeniden dener; panel yeniden
+ * başlasa da durum kendiliğinden toparlanır. Düşen kurulum giderek seyrek
+ * denenir ve PC'ye ulaşılamıyorsa jeton ÜRETİLMEZ: kapalı bir PC için her
+ * dakika bir jeton üretilip iptal ediliyordu.
  */
 class SyncAgentsCommand extends Command
 {
@@ -34,17 +41,56 @@ class SyncAgentsCommand extends Command
 
     public function handle(SitePc $uzak, ActivityRecorder $kayit, UserPermissionResolver $yetki): int
     {
-        foreach (ConsolePc::query()->orderBy('id')->get() as $pc) {
+        $this->sessizIsleriKapat($kayit);
+
+        foreach (ConsolePc::query()->with('jeton')->orderBy('id')->get() as $pc) {
             $acik = $pc->isler()->acik()->orderBy('id')->get();
 
-            if ($acik->isNotEmpty() && ! $pc->ajanKuruluMu()) {
-                $this->kur($pc, $acik->first(), $uzak, $kayit, $yetki);
+            if ($acik->isNotEmpty() && (! $pc->ajanKuruluMu() || $this->ajanOluMu($pc))) {
+                if ($this->denemeZamaniMi($pc)) {
+                    $this->kur($pc, $acik->first(), $uzak, $kayit, $yetki);
+                }
             } elseif ($acik->isEmpty() && $pc->ajanKuruluMu() && $this->sonIsSoguduMu($pc)) {
                 $this->kaldir($pc, $uzak, $kayit);
             }
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Ajan her birkaç saniyede panele gelir (iş yoklaması, çıktı); jetonu
+     * dakikalardır kullanılmıyorsa ya da geçersizse ajan çalışmıyordur.
+     */
+    private function ajanOluMu(ConsolePc $pc): bool
+    {
+        $esik = now()->subMinutes((int) config('console.agent_stale_minutes'));
+        $jeton = $pc->jeton;
+
+        if ($jeton === null || ! $jeton->isUsable()) {
+            return true;
+        }
+
+        return ($jeton->last_used_at ?? $jeton->created_at) < $esik && ($pc->son_kurulum_at === null || $pc->son_kurulum_at < $esik);
+    }
+
+    private function denemeZamaniMi(ConsolePc $pc): bool
+    {
+        return $pc->ajan_sonraki_deneme_at === null || $pc->ajan_sonraki_deneme_at->isPast();
+    }
+
+    /** Uzun süredir haber gelmeyen açık iş kapanır; yerine yenisi açılabilsin. */
+    private function sessizIsleriKapat(ActivityRecorder $kayit): void
+    {
+        $dakika = (int) config('console.job_idle_minutes');
+
+        foreach (ConsoleJob::query()->acik()->where('updated_at', '<', now()->subMinutes($dakika))->get() as $is) {
+            $mesaj = "Zaman aşımı: {$dakika} dakikadır ajandan haber yok. Cihazın durumunu konsoldan kontrol edip gerekirse işi yeniden açın.";
+            $is->olaylar()->create(['asama' => 'hata', 'mesaj' => $mesaj, 'kaynak' => 'Panel']);
+            $is->kapat('hata', $mesaj);
+            $kayit->kaydet('konsol_is_hata', "Konsol işi zaman aşımıyla kapandı: {$is->ad} · {$is->islemOzeti()}", $is);
+            $this->warn("{$is->ad}: {$mesaj}");
+        }
     }
 
     private function sonIsSoguduMu(ConsolePc $pc): bool
@@ -65,20 +111,38 @@ class SyncAgentsCommand extends Command
             return;
         }
 
+        if ($pc->ajanKuruluMu()) {
+            $this->sonuc($pc, $ilk, 'Ajan panele gelmiyor (çalışmıyor ya da jetonu geçersiz); yeniden kuruluyor.', true);
+        }
+
         try {
+            /* Önce bağlantı: PC'ye ulaşılamıyorsa jeton üretmenin anlamı yok. */
+            $uzak->sina($pc);
             $metin = $uzak->kur($pc, $kim);
         } catch (RemoteError $e) {
-            $this->sonuc($pc, $ilk, 'Ajan kurulamadı (bir dakika sonra yeniden denenecek): '.$e->getMessage(), true);
+            $dakika = $this->ertele($pc);
+            $this->sonuc($pc, $ilk, "Ajan kurulamadı ({$dakika} dakika sonra yeniden denenecek): ".$e->getMessage(), true);
 
             return;
         }
 
+        $pc->forceFill(['ajan_deneme_sayisi' => 0, 'ajan_sonraki_deneme_at' => null])->save();
         $this->sonuc($pc, null, $metin, false);
         $kayit->kaydet('konsol_pc_kur', "{$pc->ad}: ajan iş için kuruldu", $pc, $kim);
 
         foreach ($pc->isler()->acik()->get() as $is) {
             $is->olaylar()->create(['asama' => 'bilgi', 'mesaj' => "Ajan {$pc->ad} üzerinde kuruldu.", 'kaynak' => 'Panel']);
         }
+    }
+
+    /** Düşen kurulum giderek seyrek denenir: 1, 2, 4, 8, en çok 15 dakika. */
+    private function ertele(ConsolePc $pc): int
+    {
+        $sayi = $pc->ajan_deneme_sayisi + 1;
+        $dakika = min(2 ** ($sayi - 1), (int) config('console.agent_retry_max_minutes'));
+        $pc->forceFill(['ajan_deneme_sayisi' => $sayi, 'ajan_sonraki_deneme_at' => now()->addMinutes($dakika)])->save();
+
+        return $dakika;
     }
 
     private function kaldir(ConsolePc $pc, SitePc $uzak, ActivityRecorder $kayit): void

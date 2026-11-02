@@ -22,6 +22,7 @@ class AgentJob
         if ($is->yalnizYedekMi()) {
             return [
                 'uuid' => $is->uuid,
+                'resume_stage' => $this->devamAsamasi($is),
                 'serial_port' => (string) $pc->seri_port,
                 'device_ip' => '',
                 'loader_commands' => [],
@@ -49,6 +50,7 @@ class AgentJob
 
         return [
             'uuid' => $is->uuid,
+            'resume_stage' => $this->devamAsamasi($is),
             'serial_port' => (string) $pc->seri_port,
             'device_ip' => $ip,
             /* DHCP'de adres satırları yazılmaz; loader adresi kendisi alır. */
@@ -75,5 +77,16 @@ class AgentJob
     public static function surum(string $dosya): ?string
     {
         return preg_match('/(\d+\.\d+[RX]\d+(?:-S\d+)?(?:\.\d+)?)/', $dosya, $m) ? $m[1] : null;
+    }
+
+    /**
+     * Ajan işi yeniden alıyorsa (PC ya da ajan iş ortasında yeniden başladı)
+     * işin vardığı aşama; ilk alışta boş. Ajan buna göre loader'a inmeden
+     * kurulumun bitmesini bekler ya da yalnız yapılandırmayı yükler: yoksa
+     * kurulum sürerken cihaz yeniden loader'a indirilip baştan kuruluyordu.
+     */
+    private function devamAsamasi(ConsoleJob $is): string
+    {
+        return $is->durum === 'calisiyor' ? (string) $is->asama : '';
     }
 }

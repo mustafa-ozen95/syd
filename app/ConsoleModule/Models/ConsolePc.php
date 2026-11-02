@@ -8,6 +8,7 @@ use App\Models\ApiToken;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 /** Konsol kablosunun takılı olduğu PC; ajan burada çalışır (bkz. Uzak\SitePc). */
 class ConsolePc extends Model
@@ -22,6 +23,7 @@ class ConsolePc extends Model
     protected $fillable = [
         'ad', 'platform', 'adres', 'gorunen_adres', 'port', 'kullanici', 'parola', 'seri_port',
         'cihaz_ip', 'gecit', 'dizin', 'ssh_parmak_izi', 'jeton_id', 'son_kurulum_at', 'ajan_mesaj',
+        'ajan_deneme_sayisi', 'ajan_sonraki_deneme_at',
     ];
 
     protected $hidden = ['parola'];
@@ -32,7 +34,22 @@ class ConsolePc extends Model
             'parola' => 'encrypted',
             'port' => 'integer',
             'son_kurulum_at' => 'immutable_datetime',
+            'ajan_deneme_sayisi' => 'integer',
+            'ajan_sonraki_deneme_at' => 'immutable_datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        /* Adreste ve formda uuid görünür; sıralı birincil anahtar dışarı çıkmaz. */
+        static::creating(function (self $pc): void {
+            $pc->uuid ??= (string) Str::uuid();
+        });
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'uuid';
     }
 
     public function windowsMu(): bool

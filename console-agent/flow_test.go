@@ -636,3 +636,64 @@ func TestLoadSyntaxErrorRollsBack(t *testing.T) {
 		t.Fatalf("geri alma beklendi: %v", err)
 	}
 }
+
+// Ajan kurulum sürerken yeniden başladı: cihaz loader'a İNDİRİLMEZ, kurulum
+// komutu yeniden gönderilmez; kurulum bitince giriş ve yapılandırma yapılır.
+func TestResumeWaitsForRunningInstall(t *testing.T) {
+	c := newFake(t, "kuruluyor")
+	c.after(300*time.Millisecond, func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.state = "login"
+		c.emitLocked("Copyright (c) 1996-2017, Juniper Networks\r\nAmnesiac (ttyu0)\r\n\r\nlogin: ")
+	})
+	job := sampleJob
+	job.ResumeStage = "kurulum"
+	a, events := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	if err := a.Resume(ctx); err != nil {
+		t.Fatalf("devam: %v\nolaylar: %v", err, *events)
+	}
+	if c.installed != "" || len(c.loaderSettings) != 0 {
+		t.Errorf("kurulum yeniden başlatılmamalıydı: kurulan=%q loader=%v", c.installed, c.loaderSettings)
+	}
+	if len(c.loaded) == 0 {
+		t.Error("yapılandırma yüklenmeliydi")
+	}
+}
+
+// Kurulum ajan kapalıyken bitmiş: cihaz giriş isteminde sessiz bekliyor.
+func TestResumeAfterInstallFinished(t *testing.T) {
+	c := newFake(t, "login")
+	job := sampleJob
+	job.ResumeStage = "kurulum"
+	a, events := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	if err := a.Resume(ctx); err != nil {
+		t.Fatalf("devam: %v\nolaylar: %v", err, *events)
+	}
+	if c.installed != "" {
+		t.Errorf("kurulum yeniden başlatılmamalıydı: %q", c.installed)
+	}
+}
+
+// Yapılandırma aşamasında kalan iş: yalnız doğrulama ve yükleme yapılır.
+func TestResumeFromConfiguration(t *testing.T) {
+	c := newFake(t, "cli")
+	job := sampleJob
+	job.ResumeStage = "yapilandirma"
+	a, events := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	if err := a.Resume(ctx); err != nil {
+		t.Fatalf("devam: %v\nolaylar: %v", err, *events)
+	}
+	if c.installed != "" || len(c.loaded) == 0 {
+		t.Errorf("yalnız yükleme beklendi: kurulan=%q yüklenen=%q", c.installed, c.loaded)
+	}
+}

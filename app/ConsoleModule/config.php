@@ -70,6 +70,21 @@ return [
     */
     'install_timeout' => (int) env('CONSOLE_INSTALL_TIMEOUT', 300),
 
+    /*
+    | Ajan birkaç saniyede bir panele gelir; jetonu bu kadar dakika
+    | kullanılmazsa ajan ölü sayılır ve açık iş için yeniden kurulur.
+    */
+    'agent_stale_minutes' => (int) env('CONSOLE_AGENT_STALE_MINUTES', 5),
+
+    /* Düşen ajan kurulumu en seyrek kaç dakikada bir denenir (1, 2, 4, 8, …). */
+    'agent_retry_max_minutes' => (int) env('CONSOLE_AGENT_RETRY_MAX_MINUTES', 15),
+
+    /*
+    | Açık iş bu kadar dakika hiç ilerlemezse (olay, çıktı) "hata" ile kapanır.
+    | Kurulum sürerken ajan beş dakikada bir haber verir.
+    */
+    'job_idle_minutes' => (int) env('CONSOLE_JOB_IDLE_MINUTES', 120),
+
     'ssh' => [
         'python' => env('CONSOLE_PYTHON', '/usr/bin/python3'),
         'runner' => app_path('ConsoleModule/bin/ssh-runner.py'),

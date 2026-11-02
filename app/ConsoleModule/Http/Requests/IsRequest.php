@@ -31,9 +31,10 @@ class IsRequest extends FormRequest
 
         return [
             'islem' => ['nullable', Rule::in(array_keys(ConsoleJob::ISLEMLER))],
-            'pc_id' => ['required', 'integer', Rule::exists('konsol_pcleri', 'id'), function (string $alan, mixed $deger, Closure $hata): void {
-                if (ConsoleJob::query()->acik()->where('pc_id', (int) $deger)->exists()) {
-                    $hata('Bu PC\'de açık bir iş var; konsol kablosu bir tane. Önce onu kapatın.');
+            /* Formda uuid; açık iş denetimi burada ekranda iz bırakır, kilitli asıl denetim JobOpener'da. */
+            'pc' => ['required', 'uuid', Rule::exists('konsol_pcleri', 'uuid'), function (string $alan, mixed $deger, Closure $hata): void {
+                if (ConsoleJob::query()->acik()->whereHas('pc', fn ($q) => $q->where('uuid', (string) $deger))->exists()) {
+                    $hata(ConsoleJob::PC_MESGUL);
                 }
             }],
             /*
@@ -116,6 +117,6 @@ class IsRequest extends FormRequest
 
     public function pc(): ConsolePc
     {
-        return ConsolePc::query()->findOrFail($this->integer('pc_id'));
+        return ConsolePc::query()->where('uuid', $this->string('pc')->value())->firstOrFail();
     }
 }

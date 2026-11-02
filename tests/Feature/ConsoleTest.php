@@ -74,7 +74,7 @@ final class ConsoleTest extends TestCase
         $goruntu = JunosImage::query()->where('model', 'EX-2200')->firstOrFail();
 
         $this->actingAs($yonetici)->post(route('console.store'), [
-            'pc_id' => $pc->id, 'ad' => 'sw-a', 'goruntu' => (string) $goruntu->id,
+            'pc' => $pc->uuid, 'ad' => 'sw-a', 'goruntu' => (string) $goruntu->id,
             'yedek_dosya' => 'sw-a_2', 'root_parola' => 'eski-root',
         ])->assertSessionHasNoErrors();
 
@@ -83,8 +83,8 @@ final class ConsoleTest extends TestCase
         $this->assertStringNotContainsString('eski-root', (string) ConsoleJob::query()->getQuery()->value('root_parola'));
 
         /* Bir PC'de tek açık iş: kablo bir tane. */
-        $this->actingAs($yonetici)->post(route('console.store'), ['pc_id' => $pc->id, 'ad' => 'sw-b'])
-            ->assertSessionHasErrors('pc_id');
+        $this->actingAs($yonetici)->post(route('console.store'), ['pc' => $pc->uuid, 'ad' => 'sw-b'])
+            ->assertSessionHasErrors('pc');
 
         $jeton = $this->ajan($pc, $yonetici);
         $this->app['auth']->forgetGuards();
@@ -232,10 +232,10 @@ final class ConsoleTest extends TestCase
         $pc = $this->pc();
 
         /* Yalnız yedekte cihaz ve yedeği şart; görüntü ve adres gerekmez. */
-        $this->actingAs($yonetici)->post(route('console.store'), ['pc_id' => $pc->id, 'islem' => 'yedek', 'ad' => ''])
+        $this->actingAs($yonetici)->post(route('console.store'), ['pc' => $pc->uuid, 'islem' => 'yedek', 'ad' => ''])
             ->assertSessionHasErrors('ad')->assertSessionDoesntHaveErrors('goruntu');
         $this->actingAs($yonetici)->post(route('console.store'), [
-            'pc_id' => $pc->id, 'islem' => 'yedek', 'ad' => 'sw-a', 'yedek_dosya' => 'sw-a_2', 'goruntu' => '', 'cihaz_ip' => '',
+            'pc' => $pc->uuid, 'islem' => 'yedek', 'ad' => 'sw-a', 'yedek_dosya' => 'sw-a_2', 'goruntu' => '', 'cihaz_ip' => '',
         ])->assertSessionHasNoErrors();
 
         $is = ConsoleJob::sole();
@@ -360,7 +360,7 @@ final class ConsoleTest extends TestCase
     private function isGirdisi(ConsolePc $pc, string $ad): array
     {
         return [
-            'pc_id' => $pc->id, 'ad' => $ad,
+            'pc' => $pc->uuid, 'ad' => $ad,
             'goruntu' => (string) JunosImage::query()->where('model', 'EX-2200')->value('id'),
         ];
     }

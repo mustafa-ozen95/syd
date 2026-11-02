@@ -39,10 +39,10 @@ class ConsolePage
         return [
             'yetki' => $yetki,
             'satirlar' => $this->isSatirlari(),
-            'pcSecenekleri' => ConsolePc::query()->orderBy('ad')->pluck('ad', 'id')->all(),
+            'pcSecenekleri' => ConsolePc::query()->orderBy('ad')->pluck('ad', 'uuid')->all(),
             /* PC değişince adres alanları onun kaydıyla dolar (console-form.js). */
-            'pcAdresleri' => ConsolePc::query()->get(['id', 'cihaz_ip', 'gecit'])
-                ->mapWithKeys(fn (ConsolePc $p): array => [$p->id => ['ip' => (string) $p->cihaz_ip, 'gecit' => (string) $p->gecit]])->all(),
+            'pcAdresleri' => ConsolePc::query()->get(['uuid', 'cihaz_ip', 'gecit'])
+                ->mapWithKeys(fn (ConsolePc $p): array => [$p->uuid => ['ip' => (string) $p->cihaz_ip, 'gecit' => (string) $p->gecit]])->all(),
             'adresTurleri' => ConsoleJob::ADRES_TURLERI,
             'islemler' => ConsoleJob::ISLEMLER,
             'goruntuSecenekleri' => $this->goruntuler->secenekler(),
@@ -152,7 +152,7 @@ class ConsolePage
             'ajan' => $pc->ajanKuruluMu() ? 'Kurulu' : 'Kurulu değil',
             'ajanSon' => $pc->jeton?->last_used_at?->diffForHumans() ?? '—',
             'ajanMesaj' => $pc->ajan_mesaj,
-            'acik' => $acik = $form === 'pc-'.$pc->id,
+            'acik' => $acik = $form === 'pc-'.$pc->uuid,
             'deger' => $this->pcGirdisi($pc, $acik),
             'silOnay' => "{$pc->ad} listeden, işleri ve konsol kayıtları geçmişten silinecek.",
         ])->all();
@@ -190,7 +190,7 @@ class ConsolePage
     {
         $deger = [];
 
-        foreach (['pc_id', 'islem', 'ad', 'goruntu', 'yedek_dosya', 'adres_turu', 'cihaz_ip', 'gecit'] as $alan) {
+        foreach (['pc', 'islem', 'ad', 'goruntu', 'yedek_dosya', 'adres_turu', 'cihaz_ip', 'gecit'] as $alan) {
             $deger[$alan] = $hatali ? (string) old($alan, '') : '';
         }
 
@@ -198,7 +198,7 @@ class ConsolePage
         $deger['islem'] = $deger['islem'] ?: 'kurulum';
 
         /* Adres, seçili (ya da ilk) PC'nin kaydındakiyle dolu gelir. */
-        $pc = ConsolePc::query()->find($deger['pc_id'] ?: null) ?? ConsolePc::query()->orderBy('ad')->first();
+        $pc = ConsolePc::query()->where('uuid', $deger['pc'])->first() ?? ConsolePc::query()->orderBy('ad')->first();
         $deger['cihaz_ip'] = $deger['cihaz_ip'] ?: (string) $pc?->cihaz_ip;
         $deger['gecit'] = $deger['gecit'] ?: (string) $pc?->gecit;
 

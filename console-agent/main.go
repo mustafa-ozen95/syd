@@ -268,9 +268,12 @@ func runJob(parent context.Context, panel *Panel, cfg *Config, job Job) (unsent 
 		installTimeout: time.Duration(minutes) * time.Minute,
 		manualTimeout:  30 * time.Minute,
 	}
-	if job.LoadOnly {
+	switch {
+	case job.LoadOnly:
 		err = flow.LoadOnly(ctx)
-	} else {
+	case job.ResumeStage != "":
+		err = flow.Resume(ctx)
+	default:
 		err = flow.Install(ctx)
 	}
 

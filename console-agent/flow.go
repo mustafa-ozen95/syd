@@ -468,6 +468,37 @@ func (a *Flow) Install(ctx context.Context) error {
 	if err := a.send(a.job.InstallCommand + "\r"); err != nil {
 		return err
 	}
+	return a.finishInstall(ctx, pos)
+}
+
+// Resume iş ortasında yeniden başlayan ajanın devamıdır (Job.ResumeStage).
+// Kurulum komutu gönderildiyse cihaz loader'a İNDİRİLMEZ: yarım kalan
+// kurulumu baştan başlatmak hem saatler alır hem de bitmiş kurulumu siler.
+// Kurulumdan önceki aşamalarda baştan başlamak zararsızdır.
+func (a *Flow) Resume(ctx context.Context) error {
+	switch a.job.ResumeStage {
+	case "kurulum":
+		a.notify("bilgi", "Ajan yeniden başladı; kurulum sürüyordu, bitmesi bekleniyor (cihaz loader'a indirilmeyecek).")
+		pos := a.k.Position()
+		// Kurulum çoktan bitmişse cihaz istemde sessizce bekler: istemi görelim.
+		if err := a.send("\r"); err != nil {
+			return err
+		}
+		return a.finishInstall(ctx, pos)
+	case "dogrulama", "yapilandirma":
+		a.notify("bilgi", "Ajan yeniden başladı; Junos kurulmuştu, doğrulama ve yapılandırmadan devam ediliyor.")
+		if err := a.reachCli(ctx); err != nil {
+			return err
+		}
+		return a.afterLogin(ctx)
+	default:
+		return a.Install(ctx)
+	}
+}
+
+// finishInstall kurulumun bitmesini bekler, sonra girer, sürümü doğrular ve
+// istenmişse yapılandırmayı yükler.
+func (a *Flow) finishInstall(ctx context.Context, pos int64) error {
 	if err := a.watchInstall(ctx, pos); err != nil {
 		return err
 	}
@@ -476,6 +507,11 @@ func (a *Flow) Install(ctx context.Context) error {
 	if err := a.login(ctx); err != nil {
 		return fmt.Errorf("kurulumdan sonra giriş: %w", err)
 	}
+	return a.afterLogin(ctx)
+}
+
+// afterLogin CLI'deki cihazda sürümü doğrular, istenmişse yapılandırmayı yükler.
+func (a *Flow) afterLogin(ctx context.Context) error {
 	if err := a.verifyVersion(ctx); err != nil {
 		return err
 	}

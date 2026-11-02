@@ -8,6 +8,7 @@ use App\ConsoleModule\Http\Requests\InputRequest;
 use App\ConsoleModule\Http\Requests\IsRequest;
 use App\ConsoleModule\Models\ConsoleJob;
 use App\ConsoleModule\Services\ConsolePage;
+use App\ConsoleModule\Services\JobOpener;
 use App\Http\Controllers\Controller;
 use App\Services\ActivityRecorder;
 use Illuminate\Http\JsonResponse;
@@ -36,10 +37,10 @@ class ConsoleController extends Controller
         return view('console::is', $sayfa->is($job));
     }
 
-    public function store(IsRequest $request): RedirectResponse
+    public function store(IsRequest $request, JobOpener $acici): RedirectResponse
     {
         $pc = $request->pc();
-        $job = ConsoleJob::create($request->payload() + ['olusturan_id' => Auth::id()]);
+        $job = $acici->ac($pc, $request->payload() + ['olusturan_id' => Auth::id()]);
         $job->olaylar()->create(['asama' => 'basladi', 'mesaj' => 'İş açıldı.', 'kaynak' => Auth::user()?->name]);
 
         $this->kayit->kaydet('konsol_is_ac', "Konsol işi açıldı: {$job->ad} · PC: {$pc->ad} · {$job->islemOzeti()} · {$job->adresOzeti()} · {$job->yapilandirmaOzeti()}"

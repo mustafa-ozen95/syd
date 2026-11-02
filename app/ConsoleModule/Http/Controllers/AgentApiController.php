@@ -48,8 +48,13 @@ class AgentApiController extends Controller
 
         match ($asama) {
             'tamam', 'hata' => $job->kapat($asama, $mesaj),
-            'basladi' => $job->forceFill(['durum' => 'calisiyor', 'asama' => $asama, 'ajan_token_id' => $this->ajan()->id,
-                'son_mesaj' => $mesaj === null ? null : mb_substr($mesaj, 0, 500)])->save(),
+            /*
+             * Ajan yeniden başlayıp işi yeniden alınca aşama korunur: ajan
+             * kaldığı yerden devam eder (resume_stage); ikinci bir yeniden
+             * başlamada da nereden devam edeceğini bilsin.
+             */
+            'basladi' => $job->forceFill(['durum' => 'calisiyor', 'asama' => $job->durum === 'calisiyor' && $job->asama !== null ? $job->asama : $asama,
+                'ajan_token_id' => $this->ajan()->id, 'son_mesaj' => $mesaj === null ? null : mb_substr($mesaj, 0, 500)])->save(),
             default => $job->forceFill(['asama' => $asama, 'son_mesaj' => $mesaj === null ? $job->son_mesaj : mb_substr($mesaj, 0, 500)])->save(),
         };
 
