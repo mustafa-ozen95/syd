@@ -194,4 +194,28 @@ final class ConsoleRobustnessTest extends TestCase
         $this->withToken($sir['plain'])->postJson(route('api.v1.console.event', $is), ['stage' => 'basladi'])->assertOk();
         $this->assertSame(['calisiyor', 'kurulum'], [$is->refresh()->durum, $is->asama]);
     }
+
+    #[Test]
+    public function eski_iptal_ajan_jetonlari_silinir_elle_acilanlar_kalir(): void
+    {
+        $sahip = User::factory()->admin()->create();
+        $jeton = function (string $ad, ?\DateTimeInterface $iptal) use ($sahip): ApiToken {
+            $sir = ApiToken::mint();
+            $t = ApiToken::create(['name' => $ad, 'user_id' => $sahip->id, 'token_hash' => $sir['hash'], 'prefix' => $sir['prefix'],
+                'abilities' => ['konsol' => ['view']]]);
+            $t->forceFill(['revoked_at' => $iptal])->save();
+
+            return $t;
+        };
+        $eski = $jeton('Konsol ajanı · PC (198.51.100.1)', now()->subDays(8));
+        $yeni = $jeton('Konsol ajanı · PC (198.51.100.1)', now()->subDays(1));
+        $elle = $jeton('Entegrasyon', now()->subDays(30));
+        Process::fake();
+
+        $this->artisan('console:agents')->assertSuccessful();
+
+        $this->assertNull(ApiToken::find($eski->id), '7 günden eski iptal ajan jetonu silinir');
+        $this->assertNotNull(ApiToken::find($yeni->id));
+        $this->assertNotNull(ApiToken::find($elle->id), 'elle açılan jeton silinmez');
+    }
 }

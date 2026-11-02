@@ -25,6 +25,9 @@ use Illuminate\Support\Facades\Log;
  */
 class SitePc
 {
+    /** Ajan jetonlarının adı bununla başlar; iptal edilenler bir süre sonra silinir (console:agents). */
+    public const JETON_ONEKI = 'Konsol ajanı';
+
     private const GOREV = 'Konsol Ajani';
 
     private const SERVIS = 'console-agent';
@@ -59,7 +62,7 @@ class SitePc
         $panel = rtrim((string) config('app.url'), '/');
         $sir = ApiToken::mint();
         $jeton = ApiToken::create([
-            'name' => "Konsol ajanı · {$pc->ad} ({$pc->adres})",
+            'name' => self::JETON_ONEKI." · {$pc->ad} ({$pc->adres})",
             'user_id' => $kim->id,
             'created_by' => $kim->id,
             'token_hash' => $sir['hash'],

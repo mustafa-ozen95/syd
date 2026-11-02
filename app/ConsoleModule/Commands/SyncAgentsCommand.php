@@ -8,6 +8,7 @@ use App\ConsoleModule\Models\ConsoleJob;
 use App\ConsoleModule\Models\ConsolePc;
 use App\ConsoleModule\Remote\RemoteError;
 use App\ConsoleModule\Remote\SitePc;
+use App\Models\ApiToken;
 use App\Services\ActivityRecorder;
 use App\Services\Authorization\UserPermissionResolver;
 use Illuminate\Console\Command;
@@ -44,6 +45,7 @@ class SyncAgentsCommand extends Command
     {
         $this->sessizIsleriKapat($kayit);
         $this->geciciGoruntuleriSil();
+        $this->eskiAjanJetonlariniSil();
 
         foreach (ConsolePc::query()->with('jeton')->orderBy('id')->get() as $pc) {
             $acik = $pc->isler()->acik()->orderBy('id')->get();
@@ -92,6 +94,19 @@ class SyncAgentsCommand extends Command
             }
             $is->forceFill(['gecici_goruntu' => null])->saveQuietly();
         }
+    }
+
+    /**
+     * Ajan jetonu her kurulumda üretilir, ajan kaldırılınca iptal edilir.
+     * İptal edilmiş AJAN jetonları bir süre (kayıt için) durur, sonra silinir:
+     * Ayarlar → Jetonlar'da yüzlerce ölü satır birikmesin. Elle açılan API
+     * jetonlarına dokunulmaz.
+     */
+    private function eskiAjanJetonlariniSil(): void
+    {
+        ApiToken::query()->where('name', 'like', SitePc::JETON_ONEKI.'%')->whereNotNull('revoked_at')
+            ->where('revoked_at', '<', now()->subDays((int) config('console.agent_token_keep_days')))
+            ->delete();
     }
 
     private function denemeZamaniMi(ConsolePc $pc): bool

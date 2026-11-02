@@ -85,6 +85,9 @@ return [
     */
     'job_idle_minutes' => (int) env('CONSOLE_JOB_IDLE_MINUTES', 120),
 
+    /* İptal edilmiş ajan jetonu kaç gün sonra silinir (elle açılan jetonlar silinmez). */
+    'agent_token_keep_days' => (int) env('CONSOLE_AGENT_TOKEN_KEEP_DAYS', 7),
+
     'ssh' => [
         'python' => env('CONSOLE_PYTHON', '/usr/bin/python3'),
         'runner' => app_path('ConsoleModule/bin/ssh-runner.py'),
