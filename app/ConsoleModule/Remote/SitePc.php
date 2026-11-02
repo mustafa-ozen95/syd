@@ -306,9 +306,24 @@ class SitePc
             SH;
     }
 
-    /** Panelin sertifikası, YALNIZ kendinden imzalıysa (PEM). */
+    /**
+     * Panelin sertifikası, YALNIZ kendinden imzalıysa (PEM).
+     *
+     * Önce panelin adresinde GERÇEKTEN sunulan sertifikaya bakılır: önde bir
+     * ters vekil (Traefik) kendi sertifikasını sunuyorsa PC ona sabitlenmeli,
+     * dosyadakine değil; tutmazsa PC indirmeyi "güven ilişkisi kurulamadı"
+     * diye reddeder. Sunulan sertifika bir CA'dan geliyorsa sabitleme gerekmez.
+     * Adrese ulaşılamazsa dosyadaki kullanılır.
+     */
     public function kendindenImzaliSertifika(): ?string
     {
+        $sunulan = $this->sunulanSertifika();
+        if ($sunulan !== null) {
+            $bilgi = openssl_x509_parse($sunulan);
+
+            return $bilgi !== false && ($bilgi['subject'] ?? null) === ($bilgi['issuer'] ?? false) ? $sunulan : null;
+        }
+
         $yol = (string) config('console.panel_certificate');
         $pem = is_file($yol) ? (string) file_get_contents($yol) : '';
         $bilgi = $pem !== '' ? openssl_x509_parse($pem) : false;
@@ -319,6 +334,36 @@ class SitePc
 
         /* Yalnız ilk sertifika; özel anahtar ya da başka bir şey sızmasın. */
         return preg_match('/-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----/s', $pem, $m) ? $m[0] : null;
+    }
+
+    /** Panelin adresinde (app.url, https) sunulan sertifika (PEM); ulaşılamazsa null. */
+    private function sunulanSertifika(): ?string
+    {
+        if (! config('console.panel_certificate_probe', true)) {
+            return null;
+        }
+        $adres = parse_url((string) config('app.url'));
+        if (($adres['scheme'] ?? '') !== 'https' || ($adres['host'] ?? '') === '') {
+            return null;
+        }
+
+        $baglam = stream_context_create(['ssl' => [
+            'capture_peer_cert' => true,
+            'verify_peer' => false,
+            'verify_peer_name' => false,
+            'SNI_enabled' => true,
+            'peer_name' => $adres['host'],
+        ]]);
+        $soket = @stream_socket_client(
+            'ssl://'.$adres['host'].':'.($adres['port'] ?? 443), $kod, $hata, 5, STREAM_CLIENT_CONNECT, $baglam,
+        );
+        if ($soket === false) {
+            return null;
+        }
+        $sertifika = stream_context_get_params($soket)['options']['ssl']['peer_certificate'] ?? null;
+        fclose($soket);
+
+        return $sertifika !== null && openssl_x509_export($sertifika, $pem) ? $pem : null;
     }
 
     private function derOzeti(string $pem): string

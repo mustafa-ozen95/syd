@@ -67,18 +67,12 @@ export function init() {
         close(trigger.closest('[data-modal]'));
     });
 
-    // Zemine tıklamak kapatır; kutunun içine tıklamak kapatmaz.
-    on('click', '[data-modal]', (event, box) => {
-        if (event.target === box) {
-            close(box);
-        }
-    });
-
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-            close($('[data-modal]:not([hidden])'));
-        }
-    });
+    /*
+     * Pencere YALNIZ kapatma düğmesiyle (çarpı / Vazgeç) kapanır: zemine
+     * tıklamak ve Escape kapatmaz. Kutunun içindeki bir alanda seçime başlayıp
+     * fareyi zeminde bırakınca tarayıcı tıklamayı zemine sayıyor ve yarım
+     * doldurulmuş form kayboluyordu.
+     */
 
     $('[data-modal-opened]')?.removeAttribute('hidden');
 

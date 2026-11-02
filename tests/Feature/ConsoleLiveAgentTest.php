@@ -46,7 +46,7 @@ final class ConsoleLiveAgentTest extends TestCase
 
             public function yedekler(string $cihaz): array
             {
-                return [];
+                return $cihaz === 'SW-1' ? [['dosya' => 'SW-1_1', 'zaman' => 1767225600]] : [];
             }
 
             public function icerik(string $cihaz, ?string $dosya = null): ?string
@@ -84,7 +84,7 @@ final class ConsoleLiveAgentTest extends TestCase
         $this->assertSame([], $betikler);
 
         /* İş bir PC'ye atanmalı. */
-        $this->actingAs($yonetici)->post(route('console.store'), ['ad' => 'SW-1', 'goruntu' => $this->isGirdisi($pc, 'SW-1')['goruntu'], 'yapilandirma_turu' => 'yok'])
+        $this->actingAs($yonetici)->post(route('console.store'), ['ad' => 'SW-1', 'yedek_dosya' => 'SW-1_1', 'goruntu' => $this->isGirdisi($pc, 'SW-1')['goruntu']])
             ->assertSessionHasErrors('pc_id');
 
         $this->actingAs($yonetici)->post(route('console.store'), $this->isGirdisi($pc, 'SW-1'))
@@ -129,7 +129,7 @@ final class ConsoleLiveAgentTest extends TestCase
     private function isGirdisi(ConsolePc $pc, string $ad): array
     {
         return [
-            'pc_id' => $pc->id, 'ad' => $ad, 'yapilandirma_turu' => 'yok',
+            'pc_id' => $pc->id, 'ad' => $ad, 'yedek_dosya' => 'SW-1_1',
             'goruntu' => (string) JunosImage::query()->where('model', 'EX-2200')->value('id'),
         ];
     }

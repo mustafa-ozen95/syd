@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\ConsoleModule\Models\ConsolePc;
+use App\ConsoleModule\Remote\SitePc;
 use App\Models\ApiToken;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -220,6 +221,57 @@ final class ConsolePcTest extends TestCase
         $this->assertStringContainsString("<<'CONSOLE_PANEL_PEM'\n-----BEGIN CERTIFICATE-----", $linux);
         $this->assertStringContainsString('--cacert "$d/panel.pem"', $linux);
         $this->assertStringNotContainsString('PRIVATE KEY', $linux);
+    }
+
+    /**
+     * Önde bir vekil (Traefik) dosyadakinden BAŞKA bir sertifika sunuyorsa PC
+     * sunulana sabitlenmeli: dosyadakine sabitlenen PC indirmeyi "güven
+     * ilişkisi kurulamadı" diye reddediyordu.
+     */
+    #[Test]
+    public function pc_adreste_sunulan_sertifikaya_sabitlenir(): void
+    {
+        if (! is_executable('/usr/bin/openssl')) {
+            $this->markTestSkipped('openssl yok: sınama TLS sunucusu açılamıyor');
+        }
+
+        $sertifika = function (string $ad): array {
+            $anahtar = openssl_pkey_new(['private_key_bits' => 2048]);
+            openssl_x509_export(openssl_csr_sign(openssl_csr_new(['commonName' => $ad], $anahtar), null, $anahtar, 30), $pem);
+            openssl_pkey_export($anahtar, $ozel);
+
+            return [$pem, $ozel];
+        };
+        [$dosyadaki] = $sertifika('dosya.ornek.test');
+        [$sunulan, $sunulanAnahtar] = $sertifika('vekil.ornek.test');
+        file_put_contents($this->dizin.'/panel.crt', $dosyadaki);
+        file_put_contents($this->dizin.'/vekil.crt', $sunulan);
+        file_put_contents($this->dizin.'/vekil.key', $sunulanAnahtar);
+
+        $port = 20000 + random_int(0, 9999);
+        $sunucu = proc_open(['/usr/bin/openssl', 's_server', '-quiet', '-accept', (string) $port,
+            '-cert', $this->dizin.'/vekil.crt', '-key', $this->dizin.'/vekil.key'], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $borular);
+
+        try {
+            for ($i = 0; $i < 50 && @fsockopen('127.0.0.1', $port) === false; $i++) {
+                usleep(100_000);
+            }
+            config([
+                'app.url' => "https://127.0.0.1:{$port}",
+                'console.panel_certificate' => $this->dizin.'/panel.crt',
+                'console.panel_certificate_probe' => true,
+            ]);
+
+            $pem = app(SitePc::class)->kendindenImzaliSertifika();
+
+            $this->assertSame(openssl_x509_fingerprint($sunulan, 'sha256'), openssl_x509_fingerprint((string) $pem, 'sha256'));
+        } finally {
+            proc_terminate($sunucu);
+            proc_close($sunucu);
+            foreach (['panel.crt', 'vekil.crt', 'vekil.key'] as $f) {
+                @unlink($this->dizin.'/'.$f);
+            }
+        }
     }
 
     #[Test]

@@ -75,7 +75,7 @@ final class ConsoleTest extends TestCase
 
         $this->actingAs($yonetici)->post(route('console.store'), [
             'pc_id' => $pc->id, 'ad' => 'sw-a', 'goruntu' => (string) $goruntu->id,
-            'yapilandirma_turu' => 'son_yedek', 'yedek_cihaz' => 'sw-a', 'root_parola' => 'eski-root',
+            'yedek_dosya' => 'sw-a_2', 'root_parola' => 'eski-root',
         ])->assertSessionHasNoErrors();
 
         $is = ConsoleJob::sole();
@@ -128,7 +128,7 @@ final class ConsoleTest extends TestCase
         $this->yedekler();
         $yonetici = User::factory()->admin()->create();
         $pc = $this->pc();
-        $this->actingAs($yonetici)->post(route('console.store'), $this->isGirdisi($pc, 'sw-c'))
+        $this->actingAs($yonetici)->post(route('console.store'), ['yedek_dosya' => 'sw-a_2'] + $this->isGirdisi($pc, 'sw-a'))
             ->assertSessionHasNoErrors();
         $is = ConsoleJob::sole();
         $jeton = $this->ajan($pc, $yonetici);
@@ -200,24 +200,28 @@ final class ConsoleTest extends TestCase
         $this->actingAs($yonetici)->getJson(route('console.backups', ['device' => '../sw-a']))->assertOk()->assertJsonPath('yedekler', []);
         $this->actingAs(User::factory()->create())->getJson(route('console.backups', ['device' => 'sw-a']))->assertForbidden();
 
-        /* "En son yedek" Cihaz alanındaki adın yedeğidir; ayrı cihaz seçilmez. */
-        $this->actingAs($yonetici)->post(route('console.store'), ['yapilandirma_turu' => 'son_yedek'] + $this->isGirdisi($pc, 'sw-yok'))
-            ->assertSessionHasErrors('ad');
         $this->actingAs($yonetici)->get(route('console.index'))->assertOk()
             ->assertSee('<option value="sw-a"', false)->assertDontSee('list="console-devices"', false)
-            /* "Listede yok" boş değer: tarayıcı reddetmesin. */
-            ->assertSee('name="ad" data-console-device', false);
-        $this->actingAs($yonetici)->post(route('console.store'), ['yapilandirma_turu' => 'son_yedek'] + $this->isGirdisi($pc, 'sw-a'))
-            ->assertSessionHasNoErrors();
+            /* "Listede yok" boş değer: tarayıcı reddetmesin; ayrı "yapılandırma türü" seçimi yok. */
+            ->assertSee('name="ad" data-console-device', false)->assertSee('Listede yok (fabrika ayarında kur)')
+            ->assertDontSee('name="yapilandirma_turu"', false)->assertDontSee('name="yedek_cihaz"', false);
+
+        /* Listede olmayan ad kabul edilmez. */
+        $this->actingAs($yonetici)->post(route('console.store'), $this->isGirdisi($pc, 'sw-yok'))
+            ->assertSessionHasErrors('ad');
+
+        /* Listeden cihaz seçilince yedeği de seçilmeli ve o cihazın klasöründen olmalı. */
+        $this->actingAs($yonetici)->post(route('console.store'), $this->isGirdisi($pc, 'sw-a'))->assertSessionHasErrors('yedek_dosya');
+        $this->actingAs($yonetici)->post(route('console.store'), ['yedek_dosya' => 'sw-a_9'] + $this->isGirdisi($pc, 'sw-a'))->assertSessionHasErrors('yedek_dosya');
+        $this->actingAs($yonetici)->post(route('console.store'), ['yedek_dosya' => 'sw-a_1'] + $this->isGirdisi($pc, 'sw-a'))->assertSessionHasNoErrors();
         $is = ConsoleJob::sole();
-        $this->assertSame(['sw-a', null], [$is->yedek_cihaz, $is->yedek_dosya]);
+        $this->assertSame(['yedek', 'sw-a', 'sw-a_1'], [$is->yapilandirma_turu, $is->yedek_cihaz, $is->yedek_dosya]);
         $is->delete();
 
-        /* "Seçilen yedek": dosya o cihazın listesinden olmalı. */
-        $secilen = ['yapilandirma_turu' => 'yedek', 'yedek_cihaz' => 'sw-a'] + $this->isGirdisi($pc, 'sw-yeni');
-        $this->actingAs($yonetici)->post(route('console.store'), ['yedek_dosya' => 'sw-a_9'] + $secilen)->assertSessionHasErrors('yedek_dosya');
-        $this->actingAs($yonetici)->post(route('console.store'), ['yedek_dosya' => 'sw-a_1'] + $secilen)->assertSessionHasNoErrors();
-        $this->assertSame(['sw-a', 'sw-a_1'], [ConsoleJob::sole()->yedek_cihaz, ConsoleJob::sole()->yedek_dosya]);
+        /* "Listede yok": fabrika ayarında kalır, yedek sorulmaz. */
+        $this->actingAs($yonetici)->post(route('console.store'), ['yedek_dosya' => 'sw-a_1'] + $this->isGirdisi($pc, ''))->assertSessionHasNoErrors();
+        $is = ConsoleJob::sole();
+        $this->assertSame(['yok', null, null], [$is->yapilandirma_turu, $is->yedek_cihaz, $is->yedek_dosya]);
     }
 
     #[Test]
@@ -227,11 +231,11 @@ final class ConsoleTest extends TestCase
         $yonetici = User::factory()->admin()->create();
         $pc = $this->pc();
 
-        /* Yalnız yedekte yedek şart; görüntü ve adres gerekmez. */
-        $this->actingAs($yonetici)->post(route('console.store'), ['pc_id' => $pc->id, 'islem' => 'yedek', 'ad' => 'sw-a', 'yapilandirma_turu' => 'yok'])
-            ->assertSessionHasErrors('yapilandirma_turu')->assertSessionDoesntHaveErrors('goruntu');
+        /* Yalnız yedekte cihaz ve yedeği şart; görüntü ve adres gerekmez. */
+        $this->actingAs($yonetici)->post(route('console.store'), ['pc_id' => $pc->id, 'islem' => 'yedek', 'ad' => ''])
+            ->assertSessionHasErrors('ad')->assertSessionDoesntHaveErrors('goruntu');
         $this->actingAs($yonetici)->post(route('console.store'), [
-            'pc_id' => $pc->id, 'islem' => 'yedek', 'ad' => 'sw-a', 'yapilandirma_turu' => 'son_yedek', 'goruntu' => '', 'cihaz_ip' => '',
+            'pc_id' => $pc->id, 'islem' => 'yedek', 'ad' => 'sw-a', 'yedek_dosya' => 'sw-a_2', 'goruntu' => '', 'cihaz_ip' => '',
         ])->assertSessionHasNoErrors();
 
         $is = ConsoleJob::sole();
@@ -261,9 +265,7 @@ final class ConsoleTest extends TestCase
         $yonetici = User::factory()->admin()->create();
         $pc = $this->pc();
 
-        /* "En son yedek" cihazsız olmaz; yedeksiz yeni cihaz olur. */
-        $this->actingAs($yonetici)->post(route('console.store'), ['yapilandirma_turu' => 'son_yedek'] + $this->isGirdisi($pc, ''))
-            ->assertSessionHasErrors('ad');
+        /* Cihaz seçilmezse yedeksiz yeni cihaz olur. */
         $this->actingAs($yonetici)->post(route('console.store'), ['adres_turu' => 'dhcp'] + $this->isGirdisi($pc, ''))
             ->assertSessionHasNoErrors();
         $is = ConsoleJob::sole();
@@ -283,7 +285,7 @@ final class ConsoleTest extends TestCase
         $yonetici = User::factory()->admin()->create();
         $pc = $this->pc();
 
-        $this->actingAs($yonetici)->post(route('console.store'), ['cihaz_ip' => '198.51.100.150/23', 'gecit' => '198.51.100.254'] + $this->isGirdisi($pc, 'sw-a'))
+        $this->actingAs($yonetici)->post(route('console.store'), ['cihaz_ip' => '198.51.100.150/23', 'gecit' => '198.51.100.254', 'yedek_dosya' => 'sw-a_2'] + $this->isGirdisi($pc, 'sw-a'))
             ->assertSessionHasNoErrors();
         $jeton = $this->ajan($pc, $yonetici);
         $this->app['auth']->forgetGuards();
@@ -324,7 +326,7 @@ final class ConsoleTest extends TestCase
     {
         $this->yedekler();
         $yonetici = User::factory()->admin()->create();
-        $this->actingAs($yonetici)->post(route('console.store'), $this->isGirdisi($this->pc(), 'sw-a'))->assertSessionHasNoErrors();
+        $this->actingAs($yonetici)->post(route('console.store'), ['yedek_dosya' => 'sw-a_2'] + $this->isGirdisi($this->pc(), 'sw-a'))->assertSessionHasNoErrors();
         $is = ConsoleJob::sole();
         $dosya = basename((string) parse_url($is->goruntu_adres, PHP_URL_PATH));
         $yol = tempnam(sys_get_temp_dir(), 'tftp');
@@ -358,7 +360,7 @@ final class ConsoleTest extends TestCase
     private function isGirdisi(ConsolePc $pc, string $ad): array
     {
         return [
-            'pc_id' => $pc->id, 'ad' => $ad, 'yapilandirma_turu' => 'yok',
+            'pc_id' => $pc->id, 'ad' => $ad,
             'goruntu' => (string) JunosImage::query()->where('model', 'EX-2200')->value('id'),
         ];
     }

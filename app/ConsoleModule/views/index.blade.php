@@ -143,7 +143,7 @@
           <input type="hidden" name="_form" value="ekle">
           <div class="modal__body stack">
             <x-console::is-fields :deger="$ekleDeger" :hatali="$ekleAcik" :pcler="$pcSecenekleri"
-                                   :goruntuler="$goruntuSecenekleri" :yapilandirma-turleri="$yapilandirmaTurleri"
+                                   :goruntuler="$goruntuSecenekleri"
                                    :yedek-cihazlari="$yedekCihazlari" :yedek-dosyalari="$yedekDosyalari"
                                    :pc-adresleri="$pcAdresleri" :adres-turleri="$adresTurleri" :islemler="$islemler" />
           </div>

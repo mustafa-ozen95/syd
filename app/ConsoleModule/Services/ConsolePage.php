@@ -46,12 +46,11 @@ class ConsolePage
             'adresTurleri' => ConsoleJob::ADRES_TURLERI,
             'islemler' => ConsoleJob::ISLEMLER,
             'goruntuSecenekleri' => $this->goruntuler->secenekler(),
-            'yapilandirmaTurleri' => ConsoleJob::YAPILANDIRMA_TURLERI,
             'yedekCihazlari' => $yetki['ekle'] ? $this->yedekler->cihazlar() : [],
             'ekleAcik' => $form === 'ekle',
             'ekleDeger' => $ekleDeger = $this->isGirdisi($form === 'ekle'),
-            /* Seçilen yedeğin listesi: hatayla dönen formda dolu gelsin; sonrası console-form.js. */
-            'yedekDosyalari' => $yetki['ekle'] && $ekleDeger['yedek_cihaz'] !== '' ? $this->yedekSecenekleri($ekleDeger['yedek_cihaz']) : [],
+            /* Seçili cihazın yedekleri: hatayla dönen formda dolu gelsin; sonrası console-form.js. */
+            'yedekDosyalari' => $yetki['ekle'] && $ekleDeger['ad'] !== '' ? $this->yedekSecenekleri($ekleDeger['ad']) : [],
             'platformlar' => array_map(fn (array $p): string => $p['etiket'], ConsolePc::PLATFORMLAR),
             'pcler' => $yetki['pc'] ? $this->pcSatirlari($form) : [],
             'pcYeniAcik' => $form === 'pc-yeni',
@@ -191,12 +190,10 @@ class ConsolePage
     {
         $deger = [];
 
-        foreach (['pc_id', 'islem', 'ad', 'goruntu', 'yapilandirma_turu', 'yedek_cihaz', 'yedek_dosya', 'adres_turu', 'cihaz_ip', 'gecit'] as $alan) {
+        foreach (['pc_id', 'islem', 'ad', 'goruntu', 'yedek_dosya', 'adres_turu', 'cihaz_ip', 'gecit'] as $alan) {
             $deger[$alan] = $hatali ? (string) old($alan, '') : '';
         }
 
-        /* Varsayılan: yükleme yok, fabrika ayarında kalır. */
-        $deger['yapilandirma_turu'] = $deger['yapilandirma_turu'] ?: 'yok';
         $deger['adres_turu'] = $deger['adres_turu'] ?: 'sabit';
         $deger['islem'] = $deger['islem'] ?: 'kurulum';
 

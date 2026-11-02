@@ -74,4 +74,11 @@ return [
     | bırakılır ve bağlantılar ona sabitlenir.
     */
     'panel_certificate' => env('CONSOLE_PANEL_CERTIFICATE', storage_path('app/tls/syd.crt')),
+
+    /*
+    | Önce panelin adresinde (APP_URL) gerçekten sunulan sertifikaya bakılır;
+    | önde Traefik gibi bir vekil varsa PC'nin göreceği odur. Ulaşılamazsa
+    | yukarıdaki dosya kullanılır.
+    */
+    'panel_certificate_probe' => (bool) env('CONSOLE_PANEL_CERTIFICATE_PROBE', true),
 ];

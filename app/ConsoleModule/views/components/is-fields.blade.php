@@ -1,5 +1,5 @@
 @props(['deger', 'hatali' => false, 'pcler' => [], 'goruntuler' => [],
-         'yapilandirmaTurleri' => [], 'yedekCihazlari' => [], 'yedekDosyalari' => [],
+         'yedekCihazlari' => [], 'yedekDosyalari' => [],
          'pcAdresleri' => [], 'adresTurleri' => [], 'islemler' => []])
 
 {{-- Yeni işin alanları. Değerler hazır gelir (ConsolePage); hata yalnız gönderilen pencerede. --}}
@@ -30,13 +30,13 @@
     </div>
     <div class="field">
         <label class="field__label" for="console-name">Cihaz</label>
-        <select class="select" id="console-name" name="ad" data-console-device>
-            <option value="" @selected($deger['ad'] === '')>Listede yok (yeni cihaz)</option>
+        <select class="select" id="console-name" name="ad" data-console-device data-url="{{ route('console.backups') }}">
+            <option value="" @selected($deger['ad'] === '')>Listede yok (fabrika ayarında kur)</option>
             @foreach ($yedekCihazlari as $cihaz)
                 <option value="{{ $cihaz }}" @selected($deger['ad'] === $cihaz)>{{ $cihaz }}</option>
             @endforeach
         </select>
-        <span class="field__hint">"Cihazın en son yedeği" bu cihazın yedek klasöründen yüklenir.</span>
+        <span class="field__hint">Listeden seçilen cihazın yedeği kurulumdan sonra yüklenir; listede yoksa fabrika ayarında kalır.</span>
     </div>
 </div>
 
@@ -77,37 +77,15 @@
 </div>
 </div>
 
-{{-- "Seçilen yedek" dışında cihaz ve dosya gizli; değişince console-form.js açar/kapar, dosyaları çeker. --}}
-<div class="field-row">
-    <div class="field">
-        <label class="field__label" for="console-configuration">Yüklenecek yapılandırma</label>
-        <select class="select" id="console-configuration" name="yapilandirma_turu" data-console-configuration>
-            @foreach ($yapilandirmaTurleri as $anahtar => $etiket)
-                <option value="{{ $anahtar }}" @selected($deger['yapilandirma_turu'] === $anahtar)>{{ $etiket }}</option>
-            @endforeach
-        </select>
-        <span class="field__hint">Yükleme <code>load override terminal</code> + commit ile yapılır.</span>
-    </div>
-    <div @class(['field', 'is-hidden' => $deger['yapilandirma_turu'] !== 'yedek']) data-console-only="yedek">
-        <label class="field__label" for="console-backup-device">Yedeği yüklenecek cihaz</label>
-        <select class="select" id="console-backup-device" name="yedek_cihaz" data-console-backup-device data-url="{{ route('console.backups') }}">
-            <option value="" @selected($deger['yedek_cihaz'] === '')>—</option>
-            @foreach ($yedekCihazlari as $cihaz)
-                <option value="{{ $cihaz }}" @selected($deger['yedek_cihaz'] === $cihaz)>{{ $cihaz }}</option>
-            @endforeach
-        </select>
-    </div>
-</div>
-
-<div @class(['field', 'is-hidden' => $deger['yapilandirma_turu'] !== 'yedek']) data-console-only="yedek">
-    <label class="field__label" for="console-backup-file">Yedek</label>
+{{-- Yalnız listeden bir cihaz seçilince görünür; console-form.js açar/kapar, o cihazın yedeklerini çeker. --}}
+<div @class(['field', 'is-hidden' => $deger['ad'] === '']) data-console-backup>
+    <label class="field__label" for="console-backup-file">Yüklenecek yedek</label>
     <select class="select" id="console-backup-file" name="yedek_dosya" data-console-backup-file>
-        <option value="">{{ $yedekDosyalari === [] ? 'Önce cihazı seçin' : '— seçin —' }}</option>
         @foreach ($yedekDosyalari as $y)
             <option value="{{ $y['dosya'] }}" @selected($deger['yedek_dosya'] === $y['dosya'])>{{ $y['etiket'] }}</option>
         @endforeach
     </select>
-    <span class="field__hint">En yenisi en üstte.</span>
+    <span class="field__hint">En yenisi en üstte. Yükleme <code>load override terminal</code> + commit ile yapılır.</span>
 </div>
 
 <div class="field">

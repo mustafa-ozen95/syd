@@ -2,23 +2,15 @@
  * Konsol "Yeni iş" formu (app/ConsoleModule, is-fields.blade.php).
  *
  * "Yalnız yedeği yükle"de kurulum alanları (adres, görüntü) gizlenir, görüntü zorunlu olmaktan çıkar.
- * "Seçilen yedek" dışında yedek cihazı ve dosyası gizlenir; ilk görünüm sunucudan doğru gelir, burada
- * yalnız değişiklik izlenir. Yedek cihazı seçilince o cihazın yedekleri
- * `data-url`ten çekilip dosya kutusuna doldurulur.
+ * Cihaz "Listede yok" ise switch fabrika ayarında kalır ve yedek alanı gizlenir; listeden bir cihaz
+ * seçilince o cihazın yedekleri `data-url`ten çekilir, en yenisi seçili gelir. İlk görünüm sunucudan
+ * doğru gelir, burada yalnız değişiklik izlenir.
  *
  * Dinleyici belgede, bir kez kurulur: pencere yenilemesiz geçişte yeniden
  * çizilse de çalışır.
  */
 
 let requestNo = 0;
-
-function refreshVisibility(form) {
-    const configuration = form.querySelector('[data-console-configuration]')?.value;
-
-    form.querySelectorAll('[data-console-only]').forEach((field) => {
-        field.classList.toggle('is-hidden', field.dataset.consoleOnly !== configuration);
-    });
-}
 
 function makeOption(value, text) {
     const o = document.createElement('option');
@@ -30,16 +22,18 @@ function makeOption(value, text) {
 
 async function fillBackups(deviceSelect) {
     const fileSelect = deviceSelect.form.querySelector('[data-console-backup-file]');
+    const device = deviceSelect.value;
+
+    deviceSelect.form.querySelector('[data-console-backup]')?.classList.toggle('is-hidden', device === '');
 
     if (!fileSelect) {
         return;
     }
 
     const seq = ++requestNo;
-    const device = deviceSelect.value;
 
     if (device === '') {
-        fileSelect.replaceChildren(makeOption('', 'Önce cihazı seçin'));
+        fileSelect.replaceChildren();
 
         return;
     }
@@ -62,9 +56,9 @@ async function fillBackups(deviceSelect) {
             return;
         }
 
+        /* En yenisi en üstte ve seçili: çoğu zaman istenen odur. */
         fileSelect.replaceChildren(
-            makeOption('', backups.length ? '— seçin —' : 'Bu cihazın yedeği yok'),
-            ...backups.map((y) => makeOption(y.dosya, y.etiket)),
+            ...(backups.length ? backups.map((y) => makeOption(y.dosya, y.etiket)) : [makeOption('', 'Bu cihazın yedeği yok')]),
         );
     } catch {
         if (seq === requestNo) {
@@ -108,19 +102,7 @@ export function init() {
                 ip.value = selected.dataset.ip ?? '';
                 gatewayInput.value = selected.dataset.gateway ?? '';
             }
-        } else if (target.matches('[data-console-configuration]')) {
-            refreshVisibility(target.form);
-
-            /* "Seçilen yedek"e geçince cihaz boşsa "Cihaz" alanındaki ad önerilir. */
-            const deviceSelect = target.form.querySelector('[data-console-backup-device]');
-            const deviceName = target.form.querySelector('[data-console-device]')?.value;
-
-            if (target.value === 'yedek' && deviceSelect && deviceSelect.value === ''
-                && [...deviceSelect.options].some((o) => o.value === deviceName)) {
-                deviceSelect.value = deviceName;
-                fillBackups(deviceSelect);
-            }
-        } else if (target.matches('[data-console-backup-device]')) {
+        } else if (target.matches('[data-console-device]')) {
             fillBackups(target);
         }
     });

@@ -26,8 +26,7 @@ class IsRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        $yapilandirma = (string) $this->input('yapilandirma_turu');
-        $secilen = $yapilandirma === 'yedek';
+        $cihaz = (string) $this->input('ad');
         $yalnizYedek = $this->input('islem') === 'yedek';
 
         return [
@@ -38,11 +37,11 @@ class IsRequest extends FormRequest
                 }
             }],
             /*
-             * Cihaz listeden (yedek klasörleri) ya da boş: yedeği olmayan yeni
-             * bir switch de kurulabilir. "En son
-             * yedek" o cihazın yedeğidir, onda seçim şart.
+             * Cihaz listeden (yedek klasörleri) ya da boş. Boşsa switch fabrika
+             * ayarında kalır; seçilirse o cihazın bir yedeği yüklenir. Yalnız
+             * yedek yüklemede cihaz şart: yüklenecek başka bir şey yok.
              */
-            'ad' => [Rule::requiredIf($yapilandirma === 'son_yedek'), 'nullable', 'string', 'max:120', function (string $alan, mixed $deger, Closure $hata): void {
+            'ad' => [Rule::requiredIf($yalnizYedek), 'nullable', 'string', 'max:120', function (string $alan, mixed $deger, Closure $hata): void {
                 if ((string) $deger !== '' && ! in_array((string) $deger, app(ConfigurationSource::class)->cihazlar(), true)) {
                     $hata('Cihazı listeden seçin.');
                 }
@@ -55,19 +54,9 @@ class IsRequest extends FormRequest
                     $hata('Görüntü listede yok.');
                 }
             }],
-            'yapilandirma_turu' => ['required', Rule::in(array_keys(ConsoleJob::YAPILANDIRMA_TURLERI)), function (string $alan, mixed $deger, Closure $hata) use ($yalnizYedek): void {
-                if ($yalnizYedek && $deger === 'yok') {
-                    $hata('Yalnız yedek yüklemede yüklenecek yedeği seçin: cihazın en son yedeği ya da seçilen yedek.');
-                }
-            }],
-            'yedek_cihaz' => [Rule::requiredIf($secilen), 'nullable', 'string', 'max:120', function (string $alan, mixed $deger, Closure $hata) use ($secilen): void {
-                if ($secilen && ! in_array((string) $deger, app(ConfigurationSource::class)->cihazlar(), true)) {
-                    $hata('Bu cihazın yedeği yok.');
-                }
-            }],
-            'yedek_dosya' => [Rule::requiredIf($secilen), 'nullable', 'string', 'max:255',
-                function (string $alan, mixed $deger, Closure $hata) use ($secilen): void {
-                    if ($secilen && ! in_array((string) $deger, array_column(app(ConfigurationSource::class)->yedekler((string) $this->input('yedek_cihaz')), 'dosya'), true)) {
+            'yedek_dosya' => [Rule::requiredIf($cihaz !== ''), 'nullable', 'string', 'max:255',
+                function (string $alan, mixed $deger, Closure $hata) use ($cihaz): void {
+                    if ($cihaz !== '' && ! in_array((string) $deger, array_column(app(ConfigurationSource::class)->yedekler($cihaz), 'dosya'), true)) {
                         $hata('Bu yedek dosyası o cihazın klasöründe yok.');
                     }
                 }],
@@ -79,9 +68,8 @@ class IsRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'ad.required' => '"Cihazın en son yedeği" için cihazı seçin.',
+            'ad.required' => 'Yalnız yedek yüklemede yedeği yüklenecek cihazı seçin.',
             'cihaz_ip.regex' => 'Adres önekle yazılmalı: 198.51.100.120/24.',
-            'yedek_cihaz.required' => 'Yedeği yüklenecek cihazı seçin.',
             'yedek_dosya.required' => 'Yüklenecek yedeği seçin.',
         ];
     }
@@ -91,7 +79,7 @@ class IsRequest extends FormRequest
     {
         $yalnizYedek = $this->input('islem') === 'yedek';
         $g = $yalnizYedek ? null : app(ImageSource::class)->bul((string) $this->input('goruntu'));
-        $yapilandirma = (string) $this->input('yapilandirma_turu');
+        $cihaz = $this->string('ad')->value();
 
         $pc = $this->pc();
         $dhcp = $this->input('adres_turu') === 'dhcp';
@@ -117,15 +105,12 @@ class IsRequest extends FormRequest
         return $kurulum + [
             'pc_id' => $pc->id,
             'islem' => $yalnizYedek ? 'yedek' : 'kurulum',
-            'ad' => $this->string('ad')->value() ?: 'Yeni cihaz',
+            'ad' => $cihaz ?: 'Yeni cihaz',
             'root_parola' => $this->filled('root_parola') ? (string) $this->input('root_parola') : null,
-            'yapilandirma_turu' => $yapilandirma,
-            'yedek_cihaz' => match ($yapilandirma) {
-                'son_yedek' => $this->string('ad')->value(),
-                'yedek' => $this->string('yedek_cihaz')->value(),
-                default => null,
-            },
-            'yedek_dosya' => $yapilandirma === 'yedek' ? $this->string('yedek_dosya')->value() : null,
+            /* Cihaz seçildiyse onun seçilen yedeği, seçilmediyse fabrika ayarı. */
+            'yapilandirma_turu' => $cihaz !== '' ? 'yedek' : 'yok',
+            'yedek_cihaz' => $cihaz ?: null,
+            'yedek_dosya' => $cihaz !== '' ? $this->string('yedek_dosya')->value() : null,
         ];
     }
 
