@@ -113,6 +113,12 @@ return [
     /* İptal edilmiş ajan jetonu kaç gün sonra silinir (elle açılan jetonlar silinmez). */
     'agent_token_keep_days' => (int) env('CONSOLE_AGENT_TOKEN_KEEP_DAYS', 7),
 
+    /*
+     * Kurulum bitince cihazdan okunan yapılandırma (teslim anındaki hâl) kaç
+     * saat saklanır. Geçici kayıttır, yedek değildir: sonra silinir.
+     */
+    'final_config_keep_hours' => (int) env('CONSOLE_FINAL_CONFIG_KEEP_HOURS', 48),
+
     'ssh' => [
         'python' => env('CONSOLE_PYTHON', '/usr/bin/python3'),
         'runner' => app_path('ConsoleModule/bin/ssh-runner.py'),

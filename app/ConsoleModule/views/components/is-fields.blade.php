@@ -97,7 +97,11 @@
 <div class="field">
     <label class="field__label" for="console-image-upload">ya da bilgisayardan Junos dosyası (isteğe bağlı)</label>
     <input class="input" type="file" id="console-image-upload" name="goruntu_yukle" accept=".tgz" data-console-image-upload>
-    <span class="field__hint">Seçilirse listedeki görüntünün yerine bu dosya kurulur (.tgz). Yalnız bu iş için TFTP'ye konur, iş bitince silinir. Büyük dosyada "İşi aç" yükleme bitene kadar sürer.</span>
+    <span class="field__hint">Seçilirse listedeki görüntünün yerine bu dosya kurulur (.tgz). Yalnız bu iş için TFTP'ye konur, iş bitince silinir. Büyük dosyada "İşi aç" yükleme bitene kadar sürer. Dosya sonuna kadar açılarak denetlenir: yarım ya da bozuk dosyayla iş açılmaz.</span>
+</div>
+<div class="field">
+    <label class="field__label" for="console-image-hash">Junos dosyasının sağlaması (isteğe bağlı)</label>
+    <input class="input input--mono" type="text" id="console-image-hash" name="goruntu_saglama" value="{{ old('goruntu_saglama') }}" maxlength="64" autocomplete="off" placeholder="Juniper indirme sayfasındaki MD5 / SHA-1 / SHA-256">
 </div>
 </div>
 
@@ -230,4 +234,11 @@
         sizden cihazın elektriğini çekip takmanızı ister. Yalnız yedekte ajan bu parolayla girer (sıfır cihazda boş bırakın).
         Şifreli saklanır, iş bitince silinir.
     </span>
+</div>
+
+{{-- Ön kontrol: switch'e dokunmadan PC'yi, kabloyu ve adresi sınar (console.precheck; console-form.js). --}}
+<div class="field" data-console-precheck-box data-url="{{ route('console.precheck') }}">
+    <div><button type="button" class="btn btn--sm" data-console-precheck>Kontrol et</button></div>
+    <div class="stack is-hidden" data-console-precheck-out></div>
+    <span class="field__hint">İş açmadan önce: PC'ye ulaşılıyor mu, seçilen konsol kablosu takılı mı, switch'e verilecek adres boşta mı. Switch'e hiçbir şey gönderilmez.</span>
 </div>

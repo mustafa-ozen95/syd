@@ -157,7 +157,7 @@ final class SetupPageTest extends TestCase
 
         $this->actingAs($yonetici)->post(route('setup.image.store'), [
             'model' => 'EX-4300', 'surum' => '21.4', 'dosya' => '',
-            'goruntu' => UploadedFile::fake()->create('jinstall-ex-4300-21.4R3.15-signed.tgz', 300),
+            'goruntu' => UploadedFile::fake()->createWithContent('jinstall-ex-4300-21.4R3.15-signed.tgz', gzencode(str_repeat('junos', 60000))),
         ])->assertRedirect(route('setup.index'));
 
         $this->assertSame('jinstall-ex-4300-21.4R3.15-signed.tgz', JunosImage::where('model', 'EX-4300')->value('dosya'));
@@ -165,6 +165,27 @@ final class SetupPageTest extends TestCase
         $this->assertSame([], array_values(array_filter(
             Storage::disk('junos')->allFiles(), fn (string $f): bool => str_starts_with($f, '.yukleniyor-'),
         )), 'geçici dosya kalmaz');
+    }
+
+    /** Yarım, bozuk ya da sağlaması tutmayan görüntü TFTP'ye konmaz. */
+    #[Test]
+    public function bozuk_ya_da_saglamasi_tutmayan_goruntu_reddedilir(): void
+    {
+        $yonetici = User::factory()->admin()->create();
+        $tam = gzencode(str_repeat('junos', 60000));
+        $gonder = fn (string $icerik, string $saglama = '') => $this->actingAs($yonetici)->from(route('setup.index'))->post(route('setup.image.store'), [
+            'model' => 'EX-4300', 'surum' => '21.4', 'dosya' => 'jinstall-ex-4300-21.4R3.15-signed.tgz', 'saglama' => $saglama,
+            'goruntu' => UploadedFile::fake()->createWithContent('jinstall-ex-4300-21.4R3.15-signed.tgz', $icerik),
+        ]);
+
+        $gonder(substr($tam, 0, intdiv(strlen($tam), 2)))->assertSessionHasErrors(['goruntu' => 'Dosya eksik: gzip akışı yarıda bitiyor (yükleme ya da indirme tamamlanmamış). Yeniden indirip yükleyin.']);
+        $gonder('düz metin')->assertSessionHasErrors('goruntu');
+        $gonder($tam, str_repeat('0', 32))->assertSessionHasErrors('goruntu');
+        $gonder($tam, 'xyz')->assertSessionHasErrors('saglama');
+        $this->assertSame([], Storage::disk('junos')->allFiles());
+
+        $gonder($tam, strtoupper(hash('sha256', $tam)))->assertSessionHasNoErrors();
+        Storage::disk('junos')->assertExists('jinstall-ex-4300-21.4R3.15-signed.tgz');
     }
 
     /** Yüklenen dosyanın adı da komutun parçası olur: ad kuralı ona da işler. */
@@ -206,11 +227,11 @@ final class SetupPageTest extends TestCase
 
         $this->actingAs($yonetici)->put(route('setup.image.update', $g), [
             'model' => $g->model, 'surum' => '12.2', 'dosya' => 'jloader-ex-3242-12.2-signed.tgz', 'sira' => $g->sira,
-            'goruntu' => UploadedFile::fake()->createWithContent('herhangi.tgz', 'yeni'),
+            'goruntu' => UploadedFile::fake()->createWithContent('herhangi.tgz', gzencode('yeni')),
         ])->assertRedirect(route('setup.index'));
 
         Storage::disk('junos')->assertMissing('jloader-ex-3242-12.1R3-signed.tgz');
-        $this->assertSame('yeni', Storage::disk('junos')->get('jloader-ex-3242-12.2-signed.tgz'));
+        $this->assertSame(gzencode('yeni'), Storage::disk('junos')->get('jloader-ex-3242-12.2-signed.tgz'));
     }
 
     /** EX-4500 ile EX-4550 gibi iki satır aynı dosyayı gösterebilir. */

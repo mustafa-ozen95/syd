@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Setup;
 
+use App\Rules\JunosGoruntusu;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\UploadedFile;
 
@@ -41,7 +42,8 @@ class JunosImageRequest extends FormRequest
             'surum' => ['required', 'string', 'max:40', 'regex:/^[A-Za-z0-9][A-Za-z0-9._-]*$/'],
             'dosya' => ['required', 'string', 'max:200', 'regex:/^[A-Za-z0-9][A-Za-z0-9._+-]*$/'],
             'sira' => ['nullable', 'integer', 'between:0,9999'],
-            'goruntu' => ['nullable', 'file', 'max:'.(config('junos.upload_max_mb') * 1024)],
+            'goruntu' => ['nullable', 'file', 'max:'.(config('junos.upload_max_mb') * 1024), new JunosGoruntusu($this->input('saglama'))],
+            'saglama' => ['nullable', 'string', 'regex:'.JunosGoruntusu::SAGLAMA],
         ];
     }
 
@@ -52,6 +54,7 @@ class JunosImageRequest extends FormRequest
             'dosya.regex' => 'Dosya adında yalnızca harf, rakam, nokta, tire, alt çizgi ve artı olabilir; boşluk ve eğik çizgi olamaz.',
             'surum.regex' => 'Sürümde yalnızca harf, rakam, nokta, tire ve alt çizgi olabilir.',
             'model.regex' => 'Model adı harf ya da rakamla başlamalı.',
+            'saglama.regex' => 'Sağlama MD5 (32), SHA-1 (40) ya da SHA-256 (64) onaltılık karakter olmalı.',
             'goruntu.uploaded' => 'Dosya yüklenemedi (boyut sınırı aşılmış ya da bağlantı kopmuş olabilir).',
         ];
     }
@@ -59,7 +62,7 @@ class JunosImageRequest extends FormRequest
     /** @return array<string, string> */
     public function attributes(): array
     {
-        return ['model' => 'model', 'surum' => 'sürüm', 'dosya' => 'dosya adı', 'sira' => 'sıra', 'goruntu' => 'görüntü dosyası'];
+        return ['model' => 'model', 'surum' => 'sürüm', 'dosya' => 'dosya adı', 'sira' => 'sıra', 'goruntu' => 'görüntü dosyası', 'saglama' => 'sağlama'];
     }
 
     /** @return array{model: string, surum: string, dosya: string, sira: int} */

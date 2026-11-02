@@ -98,6 +98,23 @@ class SitePc
     }
 
     /**
+     * Adres PC'den ping'e cevap veriyor mu (iş açmadan önce: loader adresi
+     * boşta mı). Adres yalnız IPv4; komuta öyle girer.
+     */
+    public function pingCevapVeriyor(ConsolePc $pc, string $adres): bool
+    {
+        if (filter_var($adres, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+            throw new RemoteError("Geçersiz adres: {$adres}");
+        }
+
+        $cikti = $pc->windowsMu()
+            ? $this->calistir($pc, "if (Test-Connection -ComputerName '{$adres}' -Count 2 -Quiet) { 'CEVAP' } else { 'YOK' }")
+            : $this->calistir($pc, "ping -c 2 -W 1 {$adres} >/dev/null 2>&1 && echo CEVAP || echo YOK");
+
+        return str_contains($cikti, 'CEVAP');
+    }
+
+    /**
      * Ajanı kurar ya da günceller: PC dosyayı panelden yeni jetonla indirir,
      * sağlamayı doğrular, agent.json'ı yazar, açılışta başlayan bir görev/servis
      * kurar ve başlatır.

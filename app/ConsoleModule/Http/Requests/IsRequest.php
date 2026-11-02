@@ -11,6 +11,7 @@ use App\ConsoleModule\Models\ConsoleJob;
 use App\ConsoleModule\Models\ConsolePc;
 use App\ConsoleModule\Services\AgentJob;
 use App\ConsoleModule\Services\Ozellestirme;
+use App\Rules\JunosGoruntusu;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\UploadedFile;
@@ -105,7 +106,8 @@ class IsRequest extends FormRequest
                 }
             }],
             /* Ad TFTP adresine ve loader komutuna yazılır: yalnız güvenli karakterler. */
-            'goruntu_yukle' => ['nullable', 'file', 'max:'.((int) config('junos.upload_max_mb') * 1024), function (string $alan, mixed $deger, Closure $hata): void {
+            'goruntu_saglama' => ['nullable', 'string', 'regex:'.JunosGoruntusu::SAGLAMA],
+            'goruntu_yukle' => ['nullable', 'file', 'max:'.((int) config('junos.upload_max_mb') * 1024), new JunosGoruntusu($this->input('goruntu_saglama')), function (string $alan, mixed $deger, Closure $hata): void {
                 if ($deger instanceof UploadedFile && $this->input('islem') !== 'cli' && ($neden = AgentJob::konsoldanKurulamaz($deger->getClientOriginalName())) !== null) {
                     $hata($neden);
                 }
@@ -124,6 +126,7 @@ class IsRequest extends FormRequest
             'goruntu.required' => 'Junos görüntüsünü listeden seçin ya da bilgisayardan bir Junos dosyası seçin.',
             'cihaz_ip.regex' => 'Adres önekle yazılmalı: 198.51.100.120/24.',
             'yedek_dosya.required' => 'Yüklenecek yedeği seçin.',
+            'goruntu_saglama.regex' => 'Sağlama MD5 (32), SHA-1 (40) ya da SHA-256 (64) onaltılık karakter olmalı.',
             'seri_port.required' => 'Bu PC\'de birden çok seri port var; konsol kablosunun takılı olduğu portu seçin.',
         ] + $this->ozellestirmeIletileri();
     }

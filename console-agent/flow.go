@@ -118,6 +118,8 @@ type Flow struct {
 	configuration func(ctx context.Context) (string, error)
 	// patch yedeğin üstüne uygulanacak set/delete satırlarını verir (Job.Patch).
 	patch func(ctx context.Context) (string, error)
+	// finalConfig teslim anındaki yapılandırmayı panele verir (yoksa atlanır).
+	finalConfig func(ctx context.Context, text string) error
 	// addressInUse kurulum adresine başka bir cihazın cevap verip
 	// vermediğini söyler (testte sahte).
 	addressInUse func(ip string) bool
@@ -594,8 +596,37 @@ func (a *Flow) afterLogin(ctx context.Context) error {
 	} else {
 		a.stopZtp(ctx)
 	}
+	a.sendFinalConfig(ctx)
 	a.logout(ctx)
 	return nil
+}
+
+// reShowConfig `show configuration` çıktısı: komutun yankısından CLI istemine.
+var reShowConfig = regexp.MustCompile(`(?s)show configuration \| no-more\r?\n(.*?)\r?\n[\w.@:-]+>\s*$`)
+
+// sendFinalConfig cihazın teslim anındaki yapılandırmasını panele verir.
+// Panel bunu işin yanında İKİ GÜN tutar, sonra siler (teknik ekip switch'i
+// hangi hâlde bıraktığını görebilsin). Alınamazsa iş başarısız sayılmaz:
+// kurulum bitti, bu yalnız kayıt.
+func (a *Flow) sendFinalConfig(ctx context.Context) {
+	if a.finalConfig == nil {
+		return
+	}
+	a.k.StartCapture()
+	err := a.command(ctx, "show configuration | no-more", 2*time.Minute, reCli)
+	out, whole := a.k.StopCapture()
+	m := reShowConfig.FindSubmatch([]byte(strings.ReplaceAll(string(out), "\x00", "")))
+	if err != nil || !whole || m == nil {
+		a.notify("bilgi", "Teslim anındaki yapılandırma alınamadı.")
+		return
+	}
+	nctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	if err := a.finalConfig(nctx, strings.TrimSpace(strings.ReplaceAll(string(m[1]), "\r", ""))); err != nil {
+		a.notify("bilgi", "Teslim anındaki yapılandırma panele gönderilemedi: "+err.Error())
+		return
+	}
+	a.notify("bilgi", "Teslim anındaki yapılandırma panele kaydedildi (iki gün saklanır).")
 }
 
 // stopZtp fabrika ayarında bırakılan cihazda otomatik kurulumu (ZTP,
@@ -688,6 +719,7 @@ func (a *Flow) LoadOnly(ctx context.Context) error {
 	if err := a.loadConfiguration(ctx); err != nil {
 		return err
 	}
+	a.sendFinalConfig(ctx)
 	a.logout(ctx)
 	return nil
 }
@@ -869,6 +901,14 @@ func (a *Flow) loadConfiguration(ctx context.Context) error {
 			_ = a.command(ctx, "exit configuration-mode", 20*time.Second, reCli)
 			return err
 		}
+	}
+
+	// Yedek eski bir cihazdan geliyorsa ZTP'yi (chassis auto-image-upgrade)
+	// taşıyabilir: yeni cihaz DHCP'den görüntü aramaya başlar, konsola durmadan
+	// satır basar. Aynı commit'te silinir; yedekte yoksa Junos yalnız
+	// "warning: statement not found" der, hata sayılmaz.
+	if err := a.command(ctx, "delete chassis auto-image-upgrade", 20*time.Second, reConf); err != nil {
+		return fmt.Errorf("ZTP silinemedi: %w", err)
 	}
 
 	a.notify("yapilandirma", "Yüklendi; commit ediliyor.")

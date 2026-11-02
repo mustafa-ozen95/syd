@@ -46,6 +46,7 @@ class SyncAgentsCommand extends Command
         $this->sessizIsleriKapat($kayit);
         $this->geciciGoruntuleriSil();
         $this->eskiAjanJetonlariniSil();
+        $this->teslimConfigleriniSil();
 
         foreach (ConsolePc::query()->with('jeton')->orderBy('id')->get() as $pc) {
             $acik = $pc->isler()->acik()->orderBy('id')->get();
@@ -107,6 +108,17 @@ class SyncAgentsCommand extends Command
         ApiToken::query()->where('name', 'like', SitePc::JETON_ONEKI.'%')->whereNotNull('revoked_at')
             ->where('revoked_at', '<', now()->subDays((int) config('console.agent_token_keep_days')))
             ->delete();
+    }
+
+    /**
+     * Teslim anındaki yapılandırma geçici kayıttır (parola özetleri taşır):
+     * süresi dolunca silinir. Kalıcı yedek yedekleme sisteminin işidir.
+     */
+    private function teslimConfigleriniSil(): void
+    {
+        ConsoleJob::query()->whereNotNull('teslim_config_at')
+            ->where('teslim_config_at', '<', now()->subHours((int) config('console.final_config_keep_hours')))
+            ->update(['teslim_config' => null, 'teslim_config_at' => null]);
     }
 
     private function denemeZamaniMi(ConsolePc $pc): bool

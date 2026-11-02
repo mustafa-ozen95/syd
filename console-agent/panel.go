@@ -150,6 +150,17 @@ func (p *Panel) patch(ctx context.Context, uuid string) (string, error) {
 	return string(b), err
 }
 
+// finalConfig kurulum bitince cihazın yapılandırmasını panele verir (geçici
+// kayıt: panel iki gün sonra siler).
+func (p *Panel) finalConfig(ctx context.Context, uuid, text string) error {
+	resp, err := p.request(ctx, http.MethodPost, "/api/v1/console/jobs/"+uuid+"/final-config", map[string]string{"text": text})
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
+}
+
 func (p *Panel) notify(ctx context.Context, uuid, stage, message string) error {
 	resp, err := p.request(ctx, http.MethodPost, "/api/v1/console/jobs/"+uuid+"/event", map[string]string{"stage": stage, "message": message})
 	if err != nil {

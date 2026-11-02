@@ -6,6 +6,7 @@ namespace App\ConsoleModule\Http\Controllers;
 
 use App\ConsoleModule\Contracts\ConfigurationSource;
 use App\ConsoleModule\Http\Requests\EventRequest;
+use App\ConsoleModule\Http\Requests\FinalConfigRequest;
 use App\ConsoleModule\Http\Requests\OutputRequest;
 use App\ConsoleModule\Models\ConsoleInput;
 use App\ConsoleModule\Models\ConsoleJob;
@@ -93,6 +94,20 @@ class AgentApiController extends Controller
         });
 
         return response()->json(['inputs' => $girdiler, 'cancelled' => false]);
+    }
+
+    /**
+     * Kurulum bitince cihazdan okunan yapılandırma: teknik ekip switch'i
+     * hangi hâlde teslim ettiğini görsün. Yedek DEĞİLDİR, geçicidir
+     * (console:agents siler).
+     */
+    public function finalConfig(FinalConfigRequest $request, ConsoleJob $job, ActivityRecorder $kayit): JsonResponse
+    {
+        $this->benimAcikIsim($job);
+        $job->forceFill(['teslim_config' => (string) $request->input('text'), 'teslim_config_at' => now()])->save();
+        $kayit->kaydet('konsol_teslim_config', "Konsol: teslim anındaki yapılandırma alındı: {$job->ad}", $job);
+
+        return response()->json(['status' => 'ok']);
     }
 
     /** Yedeğin metni yalnız işi üstlenen ajana ve iş açıkken verilir. */

@@ -33,8 +33,14 @@
         @else
             İsteğe bağlı; seçilmezse dosyanın TFTP dizinine başka yoldan konması gerekir.
         @endif
-        En çok {{ $sinir }}. Büyük dosyada yükleme dakikalar sürebilir, sayfayı kapatmayın.
+        En çok {{ $sinir }}. Büyük dosyada yükleme dakikalar sürebilir, sayfayı kapatmayın. Yüklenen dosya sonuna kadar açılarak denetlenir: yarım ya da bozuk dosya reddedilir.
     </span>
+</div>
+
+<div class="field">
+    <label class="field__label" for="{{ $onek }}-saglama">Sağlama (isteğe bağlı)</label>
+    <input class="input input--mono" type="text" id="{{ $onek }}-saglama" name="saglama" value="{{ old('saglama') }}" maxlength="64" autocomplete="off" placeholder="Juniper indirme sayfasındaki MD5 / SHA-1 / SHA-256">
+    <span class="field__hint">Verilirse yüklenen dosyanınkiyle karşılaştırılır; tutmazsa dosya kaydedilmez.</span>
 </div>
 
 <div class="field">

@@ -231,6 +231,8 @@ func (c *fakeDevice) lineReceived(s string) {
 				c.state = "login"
 				c.emitLocked("\r\nqfx5100 (ttyd0)\r\n\r\nlogin: ")
 			})
+		case "show configuration | no-more":
+			c.emitLocked("## Last commit: 2026-11-02 10:00:00 UTC by root\r\nsystem {\r\n    host-name sw1;\r\n}\r\n\r\nroot@sw1> ")
 		case "request system autoinstallation stop":
 			c.ztpStopped = true
 			c.emitLocked("root> ")
@@ -964,5 +966,47 @@ func TestInstallWithPasswordDeletesZtp(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(*events, "\n"), "ZTP (otomatik kurulum) kapatıldı") {
 		t.Errorf("olaylar: %v", *events)
+	}
+}
+
+// Yedek yüklenirken ZTP aynı commit'te silinir.
+func TestLoadedBackupDropsZtp(t *testing.T) {
+	c := newFake(t, "login")
+	c.password = "gizli"
+	job := sampleJob
+	job.Password = "gizli"
+	a, events := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 60*time.Second)
+	defer stop()
+
+	if err := a.Install(ctx); err != nil {
+		t.Fatalf("kurulum: %v\nolaylar: %v", err, *events)
+	}
+	text := a.k.Text(0)
+	if !c.committed || !c.ztpDeleted || strings.Index(text, "delete chassis auto-image-upgrade") > strings.Index(text, "commit and-quit") {
+		t.Fatalf("ZTP commit'ten önce silinmeli: commit=%v silindi=%v\nkonsol: %q", c.committed, c.ztpDeleted, text)
+	}
+}
+
+// Kurulum bitince teslim anındaki yapılandırma panele gider.
+func TestFinalConfigSentAfterInstall(t *testing.T) {
+	c := newFake(t, "login")
+	c.password = "gizli"
+	job := sampleJob
+	job.Password = "gizli"
+	a, events := newTestFlow(t, c, job)
+	var got string
+	a.finalConfig = func(_ context.Context, text string) error { got = text; return nil }
+	ctx, stop := context.WithTimeout(context.Background(), 60*time.Second)
+	defer stop()
+
+	if err := a.Install(ctx); err != nil {
+		t.Fatalf("kurulum: %v\nolaylar: %v", err, *events)
+	}
+	if got != "## Last commit: 2026-11-02 10:00:00 UTC by root\nsystem {\n    host-name sw1;\n}" {
+		t.Fatalf("gönderilen: %q", got)
+	}
+	if c.state != "login" {
+		t.Errorf("oturum açık kaldı: %s", c.state)
 	}
 }

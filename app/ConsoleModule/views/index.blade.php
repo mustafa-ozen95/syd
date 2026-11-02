@@ -147,7 +147,7 @@
     {{-- Pencereler `.page__inner`in içinde: yenilemesiz geçiş yalnız bu öğeyi değiştiriyor. --}}
     @if ($yetki['ekle'] && $pcSecenekleri !== [])
       <x-ui.modal id="console-new" title="Yeni iş" :open="$ekleAcik" wide>
-        <form method="POST" action="{{ route('console.store') }}" enctype="multipart/form-data">
+        <form method="POST" action="{{ route('console.store') }}" enctype="multipart/form-data" data-console-job-form>
           @csrf
           <input type="hidden" name="_form" value="ekle">
           <div class="modal__body stack">

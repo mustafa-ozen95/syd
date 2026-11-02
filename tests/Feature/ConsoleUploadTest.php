@@ -96,7 +96,11 @@ final class ConsoleUploadTest extends TestCase
         ])->assertSessionHasErrors('goruntu_yukle');
 
         $this->actingAs($yonetici)->post(route('console.store'), [
-            'pc' => $pc->uuid, 'ad' => '', 'goruntu_yukle' => UploadedFile::fake()->create('jinstall-ex-3300-15.1R7.9-domestic-signed.tgz', 2048),
+            'pc' => $pc->uuid, 'ad' => '', 'goruntu_yukle' => UploadedFile::fake()->createWithContent('jinstall-ex-3300-15.1R7.9-domestic-signed.tgz', substr(gzencode(random_bytes(20000)), 0, 300)),
+        ])->assertSessionHasErrors('goruntu_yukle');
+
+        $this->actingAs($yonetici)->post(route('console.store'), [
+            'pc' => $pc->uuid, 'ad' => '', 'goruntu_yukle' => UploadedFile::fake()->createWithContent('jinstall-ex-3300-15.1R7.9-domestic-signed.tgz', gzencode(str_repeat('junos', 9000))),
         ])->assertSessionHasNoErrors();
 
         $is = ConsoleJob::sole();

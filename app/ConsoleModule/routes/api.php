@@ -17,6 +17,7 @@ Route::middleware(['api', 'auth:api', 'throttle:600,1', 'can:konsol:ajan'])
         Route::get('jobs/{job}/patch', [AgentApiController::class, 'patch'])->name('patch');
         Route::post('jobs/{job}/event', [AgentApiController::class, 'event'])->name('event');
         Route::post('jobs/{job}/output', [AgentApiController::class, 'output'])->name('output');
+        Route::post('jobs/{job}/final-config', [AgentApiController::class, 'finalConfig'])->name('final-config');
         Route::get('agent/{platform}', [AgentApiController::class, 'download'])
             ->whereIn('platform', ['linux', 'windows'])->name('agent');
     });

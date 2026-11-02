@@ -185,12 +185,61 @@ async function preview(button) {
     }
 }
 
+const PRECHECK_VARIANTS = { tamam: 'alert--success', uyari: 'alert--warning', hata: 'alert--danger' };
+
+/* "Kontrol et": sonuçları sunucu yazar; burada yalnız gösterilir. */
+async function precheck(button) {
+    const box = button.closest('[data-console-precheck-box]');
+    const out = box.querySelector('[data-console-precheck-out]');
+    const body = new FormData();
+
+    ['pc', 'seri_port', 'adres_turu', 'islem', 'cihaz_ip'].forEach((name) => {
+        const field = button.form.elements.namedItem(name);
+
+        if (field && 'value' in field) {
+            body.append(name, field.value);
+        }
+    });
+
+    out.classList.remove('is-hidden');
+    out.replaceChildren(document.createTextNode('Kontrol ediliyor…'));
+    button.disabled = true;
+
+    try {
+        const response = await fetch(box.dataset.url, {
+            method: 'POST',
+            body,
+            headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrf() },
+        });
+        const data = await response.json();
+        const rows = response.status === 422
+            ? Object.values(data.errors ?? {}).flat().map((metin) => ({ durum: 'hata', metin }))
+            : data.sonuclar;
+
+        out.replaceChildren(...rows.map((row) => {
+            const line = document.createElement('div');
+            line.className = `alert ${PRECHECK_VARIANTS[row.durum] ?? 'alert--info'}`;
+            line.textContent = row.metin;
+
+            return line;
+        }));
+    } catch {
+        out.replaceChildren(document.createTextNode('Kontrol yapılamadı.'));
+    } finally {
+        button.disabled = false;
+    }
+}
+
 export function init() {
     document.addEventListener('click', (event) => {
-        const button = event.target instanceof Element ? event.target.closest('[data-console-preview]') : null;
+        const target = event.target instanceof Element ? event.target : null;
+        const button = target?.closest('[data-console-preview]');
+        const check = target?.closest('[data-console-precheck]');
 
         if (button) {
             preview(button);
+        } else if (check) {
+            precheck(check);
         }
     });
 

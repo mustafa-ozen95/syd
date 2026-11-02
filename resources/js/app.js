@@ -7,6 +7,7 @@ import * as scrollingNavigate from './components/scrolling-navigate.js';
 import * as keyboard from './components/keyboard.js';
 import * as consoleWatch from './components/console-watch.js';
 import * as consoleForm from './components/console-form.js';
+import * as consoleNotify from './components/console-notify.js';
 import * as userMenu from './components/user-menu.js';
 import * as navigation from './components/navigation.js';
 import * as sessionLock from './components/session-lock.js';
@@ -66,6 +67,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /* Konsol "Yeni iş" formu; dinleyici belgede, bir kez. */
     consoleForm.init();
+
+    /* Konsol "iş bitti" bildirimi: her sayfada, bir döngü. */
+    consoleNotify.init();
 
     onEveryRender();
 });

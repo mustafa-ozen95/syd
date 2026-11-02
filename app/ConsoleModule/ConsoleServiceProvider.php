@@ -75,6 +75,12 @@ class ConsoleServiceProvider extends ServiceProvider
                     'ability' => 'konsol:ajan',
                     'description' => 'Yedeğin üstüne aynı commit\'te uygulanacak set/delete satırları (text/plain; "load set terminal"). Her verilişi denetim kaydına yazılır.',
                 ],
+                'console.final-config' => [
+                    'summary' => 'Konsol: teslim anındaki yapılandırma',
+                    'ability' => 'konsol:ajan',
+                    'description' => 'Kurulum bitince cihazdan okunan yapılandırma (show configuration). Geçici kayıttır: panel '.config('console.final_config_keep_hours', 48).' saat sonra siler.',
+                    'parameters' => ['text' => 'yapılandırma metni (en çok 2 MB)'],
+                ],
                 'console.agent' => [
                     'summary' => 'Konsol: ajanı indir',
                     'ability' => 'konsol:ajan',

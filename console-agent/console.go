@@ -57,6 +57,30 @@ type Console struct {
 	speed int // portun şu anki hızı; yalnız akışın goroutine'i değiştirir
 
 	device string // açılan port (COM9, /dev/ttyUSB0); iş kablo kimliğiyle gelse de
+
+	// capture tampon sınırından (64 KB) bağımsız toplanan çıktı: büyük bir
+	// switch'in yapılandırması tampona sığmaz (StartCapture/StopCapture).
+	capture   []byte
+	capturing bool
+}
+
+// captureLimit toplanan çıktının tavanı; yapılandırma bunu aşmaz.
+const captureLimit = 4 << 20
+
+// StartCapture bundan sonra gelen çıktıyı ayrıca toplamaya başlar.
+func (k *Console) StartCapture() {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.capture, k.capturing = nil, true
+}
+
+// StopCapture toplamayı bitirir, toplananı verir; tavan aşıldıysa false.
+func (k *Console) StopCapture() ([]byte, bool) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	out, ok := k.capture, len(k.capture) < captureLimit
+	k.capture, k.capturing = nil, false
+	return out, ok
 }
 
 const bufferLimit = 64 << 10
@@ -75,6 +99,9 @@ func (k *Console) read() {
 		if n > 0 {
 			k.buffer = append(k.buffer, b[:n]...)
 			k.forPanel = append(k.forPanel, b[:n]...)
+			if k.capturing && len(k.capture) < captureLimit {
+				k.capture = append(k.capture, b[:n]...)
+			}
 			if excess := len(k.buffer) - bufferLimit; excess > 0 {
 				k.buffer = append([]byte(nil), k.buffer[excess:]...)
 				k.start += int64(excess)

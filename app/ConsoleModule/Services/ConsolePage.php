@@ -81,6 +81,11 @@ class ConsolePage
             'olusturan' => $is->olusturan?->name ?? '—',
             'acilis' => $is->created_at?->format('d.m.Y H:i'),
             'yapilandirma' => $is->yapilandirmaOzeti(),
+            /* Teslim anındaki yapılandırma: yalnız yedek indirebilene, silinene kadar. */
+            'teslim' => $is->teslim_config_at !== null && Gate::allows('yedek:download') ? [
+                'alindi' => $is->teslim_config_at->format('d.m.Y H:i'),
+                'silinir' => $is->teslim_config_at->addHours((int) config('console.final_config_keep_hours'))->format('d.m.Y H:i'),
+            ] : null,
             'kapatOnay' => "{$is->ad} işi kapatılacak. Ajan konsolu bırakır; cihazda o ana kadar yapılanlar (ör. biçimlendirme) geri alınmaz.",
             'silOnay' => "{$is->ad} işi, adımları ve konsol kaydı geçmişten silinecek.",
         ];

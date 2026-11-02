@@ -7,17 +7,21 @@ namespace App\ConsoleModule\Http\Controllers;
 use App\ConsoleModule\Http\Requests\InputRequest;
 use App\ConsoleModule\Http\Requests\IsRequest;
 use App\ConsoleModule\Http\Requests\OnizlemeRequest;
+use App\ConsoleModule\Http\Requests\OnKontrolRequest;
 use App\ConsoleModule\Junos\PatchBuilder;
 use App\ConsoleModule\Junos\YedekDosyasi;
 use App\ConsoleModule\Models\ConsoleJob;
 use App\ConsoleModule\Services\ConsolePage;
+use App\ConsoleModule\Services\IsBildirimleri;
 use App\ConsoleModule\Services\JobOpener;
+use App\ConsoleModule\Services\OnKontrol;
 use App\ConsoleModule\Services\Ozellestirme;
 use App\Http\Controllers\Controller;
 use App\Services\ActivityRecorder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
@@ -109,6 +113,35 @@ class ConsoleController extends Controller
                 echo $parca->metin;
             });
         }, $ad, ['Content-Type' => 'text/plain; charset=utf-8']);
+    }
+
+    /**
+     * Teslim anındaki yapılandırma (geçici; bkz. AgentApiController::finalConfig).
+     * Yedek indirmekle aynı yetki: parola özetleri ve SNMP toplulukları taşır.
+     */
+    public function finalConfig(ConsoleJob $job): Response
+    {
+        abort_if($job->teslim_config === null, 404);
+        $this->kayit->kaydet('konsol_teslim_indir', "Konsol: teslim anındaki yapılandırma indirildi: {$job->ad}", $job);
+        $ad = preg_replace('/[^A-Za-z0-9._-]+/', '-', $job->ad).'-teslim-'.$job->teslim_config_at?->format('Ymd-His').'.conf';
+
+        return response($job->teslim_config, 200, [
+            'Content-Type' => 'text/plain; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="'.$ad.'"',
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+
+    /** "Kontrol et": switch'e dokunmadan PC, kablo ve adres. */
+    public function precheck(OnKontrolRequest $request, OnKontrol $kontrol): JsonResponse
+    {
+        return response()->json(['sonuclar' => $kontrol->yap($request->pc(), $request->string('seri_port')->trim()->value(), $request->adres())]);
+    }
+
+    /** Bu kişinin biten işleri (bir kez) ve sonraki yoklama; console-notify.js. */
+    public function notifications(Request $request, IsBildirimleri $bildirimler): JsonResponse
+    {
+        return response()->json($bildirimler->al($request->user()));
     }
 
     public function input(InputRequest $request, ConsoleJob $job): JsonResponse

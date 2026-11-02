@@ -77,7 +77,7 @@ class ConsoleJob extends Model
         'durum', 'asama', 'son_mesaj', 'ajan_token_id', 'olusturan_id', 'cikti_bayt',
     ];
 
-    protected $hidden = ['root_parola', 'yama', 'yedek_metni'];
+    protected $hidden = ['root_parola', 'yama', 'yedek_metni', 'teslim_config'];
 
     protected function casts(): array
     {
@@ -85,6 +85,9 @@ class ConsoleJob extends Model
             'root_parola' => 'encrypted',
             'yama' => 'encrypted',
             'yedek_metni' => 'encrypted',
+            'teslim_config' => 'encrypted',
+            'teslim_config_at' => 'immutable_datetime',
+            'bildirildi_at' => 'immutable_datetime',
             'cikti_bayt' => 'integer',
         ];
     }
