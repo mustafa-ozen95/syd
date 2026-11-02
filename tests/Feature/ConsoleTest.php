@@ -91,8 +91,13 @@ final class ConsoleTest extends TestCase
         $veri = $this->withToken($jeton)->getJson(route('api.v1.console.jobs'))->assertOk()->json('data.0');
 
         $this->assertSame([
-            'set ipaddr=198.51.100.120', 'set netmask=255.255.255.0', 'set gatewayip=198.51.100.1',
+            'set ipaddr=198.51.100.120', 'set netmask=255.255.255.0', 'set gatewayip=198.51.100.1', 'set serverip=192.0.2.5',
         ], $veri['loader_commands']);
+        /* EX2300/EX3400: ağ ayarı U-Boot'ta (KB31462); sonda ping. */
+        $this->assertSame([
+            'setenv ipaddr 198.51.100.120', 'setenv netmask 255.255.255.0', 'setenv gatewayip 198.51.100.1',
+            'setenv serverip 192.0.2.5', 'saveenv', 'ping 192.0.2.5',
+        ], $veri['uboot_commands']);
         $this->assertSame('install --format tftp://192.0.2.5/jinstall-ex-2200-12.3R12.4-domestic-signed.tgz', $veri['install_command']);
         $this->assertSame('198.51.100.120', $veri['device_ip']);
         $this->assertSame('eski-root', $veri['password']);
@@ -274,7 +279,8 @@ final class ConsoleTest extends TestCase
         $jeton = $this->ajan($pc, $yonetici);
         $this->app['auth']->forgetGuards();
         $veri = $this->withToken($jeton)->getJson(route('api.v1.console.jobs'))->assertOk()->json('data.0');
-        $this->assertSame([], $veri['loader_commands'], 'DHCP: adres satırı yazılmaz');
+        $this->assertSame(['set serverip=192.0.2.5'], $veri['loader_commands'], 'DHCP: adres satırı yazılmaz, sunucu yazılır');
+        $this->assertSame(['setenv serverip 192.0.2.5', 'saveenv', 'ping 192.0.2.5'], $veri['uboot_commands']);
         $this->assertSame('', $veri['device_ip'], 'DHCP: ping sınaması yapılmaz');
     }
 
@@ -290,7 +296,7 @@ final class ConsoleTest extends TestCase
         $jeton = $this->ajan($pc, $yonetici);
         $this->app['auth']->forgetGuards();
         $veri = $this->withToken($jeton)->getJson(route('api.v1.console.jobs'))->assertOk()->json('data.0');
-        $this->assertSame(['set ipaddr=198.51.100.150', 'set netmask=255.255.254.0', 'set gatewayip=198.51.100.254'], $veri['loader_commands']);
+        $this->assertSame(['set ipaddr=198.51.100.150', 'set netmask=255.255.254.0', 'set gatewayip=198.51.100.254', 'set serverip=192.0.2.5'], $veri['loader_commands']);
         $this->assertSame('198.51.100.150', $veri['device_ip']);
     }
 

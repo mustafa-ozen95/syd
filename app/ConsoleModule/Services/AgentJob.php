@@ -60,10 +60,8 @@ class AgentJob
             'serial_port' => $this->port($is),
             'device_ip' => $ip,
             /* DHCP'de adres satırları yazılmaz; loader adresi kendisi alır. */
-            'loader_commands' => array_values(array_map(fn (string $s): string => strtr($s, $yerler), array_filter(
-                (array) config('console.loader_commands'),
-                fn (string $s): bool => ! $dhcp || ! preg_match('/\{(ip|maske|gecit)\}/', $s),
-            ))),
+            'loader_commands' => self::komutlar('console.loader_commands', $yerler, $dhcp),
+            'uboot_commands' => self::komutlar('console.uboot_commands', $yerler, $dhcp),
             'install_command' => strtr((string) config('console.install_command'), $yerler),
             'install_minutes' => (int) config('console.install_minutes'),
             'expected_version' => (string) $is->beklenen_surum,
@@ -82,7 +80,39 @@ class AgentJob
      */
     public static function surum(string $dosya): ?string
     {
-        return preg_match('/(\d+\.\d+[RX]\d+(?:-S\d+)?(?:\.\d+)?)/', $dosya, $m) ? $m[1] : null;
+        /* 12.3R12.4, 18.4R3-S10, 15.1X53-D55.5 (D'li X dalı: EX2300/EX3400). */
+        return preg_match('/(\d+\.\d+[RX]\d+(?:-[SD]\d+)?(?:\.\d+)?)/', $dosya, $m) ? $m[1] : null;
+    }
+
+    /**
+     * Konsoldan (loader) kurulamayacak paket için açıklama; kurulabiliyorsa null.
+     * Juniper belgelerine göre:
+     *  - QFX5100, QFX5110, EX4600'de loader istemi yoktur (jinstall-host-qfx-*):
+     *    kurulum CLI'den (request system software add) ya da USB'den yapılır.
+     *  - EX2300/EX3400'de loader'dan yalnız "install-media-net" paketi kurulur
+     *    (junos-install-media-net-arm-32-*); düz junos-arm-32-* yalnız CLI'dendir.
+     */
+    public static function konsoldanKurulamaz(string $dosya): ?string
+    {
+        $ad = strtolower(basename($dosya));
+
+        return match (true) {
+            str_contains($ad, 'jinstall-host') || str_contains($ad, '-qfx-5') => 'Bu paket QFX5100/QFX5110/EX4600 içindir: bu modellerde loader yok, konsoldan TFTP ile kurulamaz. Switch açıkken CLI\'den "request system software add <paket> reboot" ya da USB kurulum medyası kullanın.',
+            str_contains($ad, 'arm-32') && ! str_contains($ad, 'install-media') => 'EX2300/EX3400 loader\'dan yalnız "junos-install-media-net-arm-32-…tgz" paketiyle kurulur; "junos-arm-32-…" paketi yalnız CLI yükseltmesi içindir.',
+            default => null,
+        };
+    }
+
+    /**
+     * @param  array<string, string>  $yerler
+     * @return list<string>
+     */
+    private static function komutlar(string $anahtar, array $yerler, bool $dhcp): array
+    {
+        return array_values(array_map(fn (string $s): string => strtr($s, $yerler), array_filter(
+            (array) config($anahtar),
+            fn (string $s): bool => ! $dhcp || ! preg_match('/\{(ip|maske|gecit)\}/', $s),
+        )));
     }
 
     /**

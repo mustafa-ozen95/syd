@@ -113,6 +113,8 @@ type Flow struct {
 	job    Job
 	notify Notifier
 	// configuration panelden yedek metnini alır; diske yazılmaz.
+	// ubootDone U-Boot ağ ayarı (UbootCommands) bu işte yapıldı mı.
+	ubootDone     bool
 	configuration func(ctx context.Context) (string, error)
 	// patch yedeğin üstüne uygulanacak set/delete satırlarını verir (Job.Patch).
 	patch func(ctx context.Context) (string, error)
@@ -229,6 +231,9 @@ func (a *Flow) dropToLoader(ctx context.Context) error {
 			err = a.waitBoot(ctx, a.bootTimeout)
 		case stUboot:
 			a.notify("bilgi", "U-Boot isteminde; loader açılıyor.")
+			if err := a.ubootSetup(ctx); err != nil {
+				return err
+			}
 			if err := a.send("boot\r"); err != nil {
 				return err
 			}
@@ -332,6 +337,31 @@ func menuChoice(text string) string {
 	return ""
 }
 
+// reUbootAlive U-Boot ping cevabı: "host 192.0.2.5 is alive".
+var reUbootAlive = regexp.MustCompile(`(?i)is alive`)
+
+// ubootSetup U-Boot isteminde ağ değişkenlerini yazar (bir kez): EX2300 ve
+// EX3400'de TFTP kurulumu bu değişkenlerle yapılır, loader'ın "set ipaddr"i
+// değil (KB31462). Sonda ping: sunucuya ulaşılamıyorsa saatlerce süren bir
+// kurulumu başlatmadan durulur. Eski EX'lerde de zararsızdır.
+func (a *Flow) ubootSetup(ctx context.Context) error {
+	if a.ubootDone || len(a.job.UbootCommands) == 0 {
+		return nil
+	}
+	a.ubootDone = true
+	a.notify("loader", "U-Boot'ta ağ ayarları yazılıyor.")
+	for _, line := range a.job.UbootCommands {
+		pos := a.k.Position()
+		if err := a.command(ctx, line, 20*time.Second, reUboot); err != nil {
+			return fmt.Errorf("U-Boot komutu (%s): %w", line, err)
+		}
+		if strings.HasPrefix(line, "ping ") && !reUbootAlive.MatchString(clean(a.k.Text(pos))) {
+			return fmt.Errorf("U-Boot'tan TFTP sunucusuna ulaşılamıyor (%s): yönetim portu kablosunu, adresi ve geçidi kontrol edin", line)
+		}
+	}
+	return nil
+}
+
 // garbleSample hızın tutup tutmadığına karar vermek için gereken bayt.
 const garbleSample = 24
 
@@ -380,6 +410,9 @@ func (a *Flow) waitBootFrom(ctx context.Context, timeout time.Duration, pos int6
 			// açılır, boşluk loader'ın yazısı görülünce yeniden başlar.
 			ubootCount++
 			booted = false
+			if err := a.ubootSetup(ctx); err != nil {
+				return err
+			}
 			pos = a.k.Position()
 			if err := a.send("boot\r"); err != nil {
 				return err
@@ -735,7 +768,11 @@ func (a *Flow) loadConfiguration(ctx context.Context) error {
 	if i == 1 {
 		_ = a.command(ctx, "rollback 0", 20*time.Second, reConf)
 		_ = a.command(ctx, "exit configuration-mode", 20*time.Second, reCli)
-		return fmt.Errorf("commit reddedildi, geri alındı: %s", errorLines(clean(a.k.Text(pos))))
+		reply := clean(a.k.Text(pos))
+		if strings.Contains(reply, "root-authentication") {
+			return fmt.Errorf("commit reddedildi, geri alındı: yapılandırmada root parolası yok (Junos commit için şart). Yapılandırmayı özelleştir'de root parolası verin ya da parolalı bir yedek seçin. %s", errorLines(reply))
+		}
+		return fmt.Errorf("commit reddedildi, geri alındı: %s", errorLines(reply))
 	}
 	if _, err := a.k.Wait(ctx, pos, time.Minute, reCli); err != nil {
 		return fmt.Errorf("commit sonrası: %w", err)

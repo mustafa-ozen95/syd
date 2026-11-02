@@ -16,10 +16,13 @@ import (
 
 // Panelden gelen iş. Alan adları panelin API'siyle (konsol.isler) aynı.
 type Job struct {
-	UUID            string   `json:"uuid"`
-	SerialPort      string   `json:"serial_port"`
-	DeviceIP        string   `json:"device_ip"`
-	LoaderCommands  []string `json:"loader_commands"`
+	UUID           string   `json:"uuid"`
+	SerialPort     string   `json:"serial_port"`
+	DeviceIP       string   `json:"device_ip"`
+	LoaderCommands []string `json:"loader_commands"`
+	// UbootCommands U-Boot isteminde (=>) "boot"tan önce yazılır: EX2300 ve
+	// EX3400'de ağ ayarı U-Boot'ta yapılır (Juniper KB31462), loader'da değil.
+	UbootCommands   []string `json:"uboot_commands"`
 	InstallCommand  string   `json:"install_command"`
 	InstallMinutes  int      `json:"install_minutes"`
 	ExpectedVersion string   `json:"expected_version"`

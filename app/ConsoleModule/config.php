@@ -36,6 +36,23 @@ return [
         'set ipaddr={ip}',
         'set netmask={maske}',
         'set gatewayip={gecit}',
+        /* Juniper KB20643: TFTP sunucusu loader'a ayrıca verilir. */
+        'set serverip={sunucu}',
+    ],
+
+    /*
+    | U-Boot isteminde (=>) "boot"tan önce: EX2300/EX3400'de ağ ayarı burada
+    | yapılır (Juniper KB31462), loader'da değil. Son satır ping: sunucuya
+    | ulaşılamıyorsa kurulum başlamadan durulur. Eski EX'lerde zararsız.
+    | DHCP'de adres satırları yazılmaz.
+    */
+    'uboot_commands' => [
+        'setenv ipaddr {ip}',
+        'setenv netmask {maske}',
+        'setenv gatewayip {gecit}',
+        'setenv serverip {sunucu}',
+        'saveenv',
+        'ping {sunucu}',
     ],
     'install_command' => 'install --format {adres}',
 

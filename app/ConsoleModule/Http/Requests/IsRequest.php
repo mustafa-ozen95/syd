@@ -83,8 +83,13 @@ class IsRequest extends FormRequest
             }],
             'gecit' => ['nullable', 'ip'],
             'goruntu' => [Rule::requiredIf(! $yalnizYedek && ! $goruntuYuklendi), 'nullable', 'string', function (string $alan, mixed $deger, Closure $hata) use ($yalnizYedek, $goruntuYuklendi): void {
-                if (! $yalnizYedek && ! $goruntuYuklendi && app(ImageSource::class)->bul((string) $deger) === null) {
-                    $hata('Görüntü listede yok.');
+                if (! $yalnizYedek && ! $goruntuYuklendi) {
+                    $g = app(ImageSource::class)->bul((string) $deger);
+                    if ($g === null) {
+                        $hata('Görüntü listede yok.');
+                    } elseif (($neden = AgentJob::konsoldanKurulamaz($g['dosya'])) !== null) {
+                        $hata($neden);
+                    }
                 }
             }],
             'yedek_dosya' => [Rule::requiredIf($cihaz !== '' && ! $yedekYuklendi), 'nullable', 'string', 'max:255',
@@ -101,6 +106,9 @@ class IsRequest extends FormRequest
             }],
             /* Ad TFTP adresine ve loader komutuna yazılır: yalnız güvenli karakterler. */
             'goruntu_yukle' => ['nullable', 'file', 'max:'.((int) config('junos.upload_max_mb') * 1024), function (string $alan, mixed $deger, Closure $hata): void {
+                if ($deger instanceof UploadedFile && ($neden = AgentJob::konsoldanKurulamaz($deger->getClientOriginalName())) !== null) {
+                    $hata($neden);
+                }
                 if ($deger instanceof UploadedFile && preg_match('/^[A-Za-z0-9._-]{1,200}\.tgz$/', $deger->getClientOriginalName()) !== 1) {
                     $hata('Junos dosyası .tgz olmalı ve adında yalnız harf, rakam, nokta, tire bulunmalı (ör. jinstall-ex-3200-12.3R12.4-domestic-signed.tgz).');
                 }

@@ -38,6 +38,8 @@ type fakeDevice struct {
 	patchReply string
 	missingIf  string
 	committed  bool
+	uboot      []string // U-Boot'ta yazılanlar
+	pingFails  bool
 	out        chan string
 }
 
@@ -228,6 +230,20 @@ func (c *fakeDevice) lineReceived(s string) {
 			})
 		}
 	case "uboot":
+		if strings.HasPrefix(s, "setenv ") || s == "saveenv" {
+			c.uboot = append(c.uboot, s)
+			c.emitLocked("=> ")
+			return
+		}
+		if strings.HasPrefix(s, "ping ") {
+			c.uboot = append(c.uboot, s)
+			if c.pingFails {
+				c.emitLocked("ping failed; host " + strings.TrimPrefix(s, "ping ") + " is not alive\r\n=> ")
+			} else {
+				c.emitLocked("Using eTSEC0 device\r\nhost " + strings.TrimPrefix(s, "ping ") + " is alive\r\n=> ")
+			}
+			return
+		}
 		if s == "boot" {
 			c.state = "acilis"
 			c.emitLocked("FreeBSD/PowerPC U-Boot bootstrap loader, Revision 2.4\r\nLoading /boot/defaults/loader.conf\r\n")
@@ -774,5 +790,45 @@ func TestMissingUplinkWarns(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(*events, "\n"), "uyari: Uplink arayüzü xe-0/1/0 cihazda yok") {
 		t.Errorf("uyarı beklendi: %v", *events)
+	}
+}
+
+// EX2300/EX3400: ağ ayarı U-Boot'ta yazılır, sonra "boot"; kurulum sürer.
+func TestUbootNetworkSetupBeforeBoot(t *testing.T) {
+	c := newFake(t, "login")
+	c.password = "gizli"
+	job := sampleJob
+	job.Password = "gizli"
+	job.UbootCommands = []string{"setenv ipaddr 198.51.100.120", "setenv netmask 255.255.255.0", "setenv serverip 198.51.100.250", "saveenv", "ping 198.51.100.250"}
+	a, events := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	if err := a.Install(ctx); err != nil {
+		t.Fatalf("kurulum: %v\nolaylar: %v", err, *events)
+	}
+	if strings.Join(c.uboot, "|") != strings.Join(job.UbootCommands, "|") {
+		t.Errorf("U-Boot'a yazılan: %q", c.uboot)
+	}
+	if c.installed == "" {
+		t.Error("kurulum yapılmalıydı")
+	}
+}
+
+// U-Boot'tan sunucuya ping gitmezse saatlik kurulum başlatılmaz.
+func TestUbootPingFailureStops(t *testing.T) {
+	c := newFake(t, "login")
+	c.password = "gizli"
+	c.pingFails = true
+	job := sampleJob
+	job.Password = "gizli"
+	job.UbootCommands = []string{"setenv serverip 198.51.100.250", "ping 198.51.100.250"}
+	a, _ := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	err := a.Install(ctx)
+	if err == nil || !strings.Contains(err.Error(), "ulaşılamıyor") || c.installed != "" {
+		t.Fatalf("ping hatası beklendi: %v kurulan=%q", err, c.installed)
 	}
 }
