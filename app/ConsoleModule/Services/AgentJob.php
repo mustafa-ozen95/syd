@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\ConsoleModule\Services;
 
+use App\ConsoleModule\Junos\Md5Crypt;
 use App\ConsoleModule\Models\ConsoleJob;
 use App\ConsoleModule\Models\ConsolePc;
 
@@ -41,10 +42,16 @@ class AgentJob
             ];
         }
 
-        /* CLI'den kurulum: loader yok; görüntü TFTP sunucusunun HTTP'sinden. */
+        /*
+         * CLI'den kurulum: loader yok; görüntü TFTP sunucusunun HTTP'sinden.
+         * Cihaz sunucuya ulaşmıyorsa ajan işteki adresi geçici olarak
+         * yapılandırmaya yazar (commit); parolasız cihaza root parolasının
+         * özeti konur, Junos parolasız yapılandırmada commit kabul etmiyor.
+         */
         if ($is->clidenMi()) {
             $adres = parse_url((string) $is->goruntu_adres);
             $http = 'http://'.($adres['host'] ?? '').':'.(int) config('console.image_http_port').'/'.basename((string) ($adres['path'] ?? ''));
+            $dhcp = $is->adres_turu === 'dhcp';
 
             return [
                 'uuid' => $is->uuid,
@@ -56,6 +63,10 @@ class AgentJob
                 'loader_commands' => [],
                 'uboot_commands' => [],
                 'cli_install' => true,
+                'cli_address' => $dhcp ? '' : (string) ($is->cihaz_ip ?? $pc->cihaz_ip),
+                'cli_gateway' => $dhcp ? '' : (string) ($is->gecit ?? $pc->gecit),
+                'image_server' => (string) ($adres['host'] ?? ''),
+                'root_hash' => $is->root_parola !== null ? Md5Crypt::ozet((string) $is->root_parola) : '',
                 'install_command' => strtr((string) config('console.cli_install_command'), ['{http}' => $http]),
                 'install_minutes' => (int) config('console.install_minutes'),
                 'expected_version' => (string) $is->beklenen_surum,

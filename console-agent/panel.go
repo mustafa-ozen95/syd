@@ -25,7 +25,15 @@ type Job struct {
 	UbootCommands []string `json:"uboot_commands"`
 	// CliInstall: loader'a inilmez, Junos çalışan cihazın CLI'sinden kurulur
 	// (QFX5100/QFX5110/EX4600'de loader yok).
-	CliInstall      bool   `json:"cli_install"`
+	CliInstall bool `json:"cli_install"`
+	// CliAddress/CliGateway: CLI kurulumunda cihaz kurulum sunucusuna
+	// (ImageServer) ulaşamıyorsa verilen geçici adres ("198.51.100.120/24");
+	// boşsa (DHCP) adres verilmez. RootHash: cihazda root parolası yoksa
+	// konan özet ($1$); Junos parolasız yapılandırmada commit kabul etmez.
+	CliAddress      string `json:"cli_address"`
+	CliGateway      string `json:"cli_gateway"`
+	ImageServer     string `json:"image_server"`
+	RootHash        string `json:"root_hash"`
 	InstallCommand  string `json:"install_command"`
 	InstallMinutes  int    `json:"install_minutes"`
 	ExpectedVersion string `json:"expected_version"`

@@ -42,6 +42,20 @@ type fakeDevice struct {
 	pingFails  bool
 	cliFail    bool // request system software add hata verir
 	cliNoAddr  bool // cihazın adresi yok (sıfır yapılandırmalı EX2300)
+	// Ağ: cabled kablonun takılı olduğu arayüz ("me0", "irb"); addr commit
+	// edilmiş adresler; ifConf arayüzlerin "set" satırları; pending
+	// commit bekleyen satırlar; rootSet commit'te root parolası kondu,
+	// newPassword o parolanın düz hâli (girişte sorulur).
+	cabled      string
+	terse       string
+	addr        map[string]string
+	ifConf      map[string][]string
+	route       []string
+	pending     []string
+	rootSet     bool
+	newPassword string
+	// askEmpty: parolasız cihaz da "Password:" sorar (EX2300 fabrika ayarı).
+	askEmpty   bool
 	ztpNoise   bool // show version isteminden sonra ZTP satırı düşer
 	ztpDeleted bool // delete chassis auto-image-upgrade
 	ztpStopped bool // request system autoinstallation stop
@@ -57,7 +71,7 @@ type fakeDevice struct {
 
 func newFake(t *testing.T, state string) *fakeDevice {
 	r, w := io.Pipe()
-	c := &fakeDevice{t: t, reader: r, writer: w, state: state, loaderSettings: map[string]string{}, speed: 115200, replySpeed: 115200, out: make(chan string, 4096)}
+	c := &fakeDevice{t: t, reader: r, writer: w, state: state, loaderSettings: map[string]string{}, addr: map[string]string{}, ifConf: map[string][]string{}, speed: 115200, replySpeed: 115200, out: make(chan string, 4096)}
 	// Tek yazar: çıktı sırası bozulmasın.
 	go func() {
 		for s := range c.out {
@@ -234,7 +248,7 @@ func (c *fakeDevice) lineReceived(s string) {
 				c.emitLocked("Fetching package...\r\nerror: could not fetch package\r\nroot@sw1> ")
 				return
 			}
-			if c.cliNoAddr {
+			if c.cliNoAddr && !c.reachable() {
 				c.emitLocked("fetch-secure: http://198.51.100.250:*: Can't assign requested address\r\nERROR: Cannot fetch file: jinstall-host-qfx-5-17.2R1.13-signed.tgz\r\n\r\n{master:0}\r\nroot> ")
 				return
 			}
@@ -252,9 +266,19 @@ func (c *fakeDevice) lineReceived(s string) {
 				return
 			}
 			c.emitLocked("## Last commit: 2026-11-02 10:00:00 UTC by root\r\nsystem {\r\n    host-name sw1;\r\n}\r\n\r\nroot@sw1> ")
+		case "ping 198.51.100.250 count 5 rapid":
+			if c.reachable() {
+				c.emitLocked("PING 198.51.100.250: 56 data bytes\r\n!!!!!\r\n5 packets transmitted, 5 packets received, 0% packet loss\r\n\r\nroot> ")
+				return
+			}
+			c.emitLocked("ping: sendto: Can't assign requested address\r\n5 packets transmitted, 0 packets received, 100% packet loss\r\n\r\nroot> ")
+		case "show interfaces terse | no-more":
+			c.emitLocked(c.terse + "\r\n\r\nroot> ")
+		case "show configuration routing-options static | display set | no-more":
+			c.emitLocked(strings.Join(c.route, "\r\n") + "\r\n\r\nroot> ")
 		case "show configuration system root-authentication | count":
 			n := "0"
-			if c.password != "" {
+			if c.password != "" || c.rootSet {
 				n = "1"
 			}
 			c.emitLocked("Count: " + n + " lines\r\n\r\nroot@sw1> ")
@@ -265,6 +289,9 @@ func (c *fakeDevice) lineReceived(s string) {
 				return
 			}
 			c.emitLocked("root> ")
+		case "show configuration interfaces me0 | display set | no-more", "show configuration interfaces irb | display set | no-more":
+			n := strings.Fields(s)[3]
+			c.emitLocked(strings.Join(c.ifConf[n], "\r\n") + "\r\n\r\nroot> ")
 		case "configure":
 			c.configured = true
 			c.state = "conf"
@@ -356,7 +383,7 @@ func (c *fakeDevice) lineReceived(s string) {
 			return
 		}
 		if s == "root" {
-			if c.password != "" {
+			if c.password != "" || c.askEmpty {
 				c.state = "parola"
 				c.emitLocked("Password:")
 				return
@@ -402,18 +429,23 @@ func (c *fakeDevice) lineReceived(s string) {
 			c.emitLocked("Exiting configuration mode\r\n\r\nroot> ")
 		case "rollback 0":
 			c.ztpDeleted = false
+			c.pending = nil
 			c.emitLocked("load complete\r\n\r\n[edit]\r\nroot# ")
 		case "commit and-quit":
 			// Fabrika ayarı (root parolası yok, yapılandırma yüklenmedi):
 			// Junos hiçbir commit'i kabul etmez.
-			if c.password == "" && len(c.loaded) == 0 {
+			if c.password == "" && len(c.loaded) == 0 && !c.rootSet && !c.pendingRoot() {
 				c.emitLocked("[edit]\r\n  'system'\r\n    Missing mandatory statement: 'root-authentication'\r\nerror: commit failed: (missing statements)\r\n\r\n[edit]\r\nroot# ")
 				return
 			}
 			c.committed = true
+			c.applyPending()
 			c.state = "cli"
 			c.emitLocked("commit complete\r\nExiting configuration mode\r\n\r\nroot@sw1> ")
 		default:
+			if strings.HasPrefix(s, "set ") || strings.HasPrefix(s, "delete ") {
+				c.pending = append(c.pending, s)
+			}
 			c.emitLocked("[edit]\r\nroot# ")
 		}
 	case "yukleme":
@@ -434,6 +466,43 @@ func (c *fakeDevice) lineReceived(s string) {
 		}
 		c.emitLocked("sh: " + s + ": not found\r\n# ")
 	}
+}
+
+// reachable: cihaz kurulum sunucusuna ulaşıyor mu (kablolu arayüzde adres var).
+func (c *fakeDevice) reachable() bool { return c.cabled == "" || c.addr[c.cabled] != "" }
+
+func (c *fakeDevice) pendingRoot() bool {
+	for _, l := range c.pending {
+		if strings.HasPrefix(l, "set system root-authentication ") {
+			return true
+		}
+	}
+	return false
+}
+
+// applyPending commit: bekleyen set/delete satırları cihazın durumuna işlenir.
+func (c *fakeDevice) applyPending() {
+	for _, l := range c.pending {
+		f := strings.Fields(l)
+		switch {
+		case strings.HasPrefix(l, "set system root-authentication "):
+			c.rootSet = true
+			c.password = c.newPassword
+		case strings.HasPrefix(l, "delete interfaces ") && strings.HasSuffix(l, " unit 0 family inet"):
+			delete(c.addr, f[2])
+			c.ifConf[f[2]] = nil
+		case strings.HasPrefix(l, "set interfaces ") && strings.Contains(l, " family inet address "):
+			c.addr[f[2]] = f[len(f)-1]
+			c.ifConf[f[2]] = append(c.ifConf[f[2]], l)
+		case strings.HasPrefix(l, "set interfaces "):
+			c.ifConf[f[2]] = append(c.ifConf[f[2]], l)
+		case l == "delete routing-options static route 0.0.0.0/0":
+			c.route = nil
+		case strings.HasPrefix(l, "set routing-options static route 0.0.0.0/0 "):
+			c.route = append(c.route, l)
+		}
+	}
+	c.pending = nil
 }
 
 func newTestFlow(t *testing.T, c *fakeDevice, job Job) (*Flow, *[]string) {
@@ -968,17 +1037,98 @@ func TestCliInstallFailureStops(t *testing.T) {
 	}
 }
 
-// Adresi olmayan cihazda ham "Can't assign" yerine ne yapılacağı söylenir.
+// Adres verilemeyen (işte DHCP) cihazda ham "Can't assign" yerine ne
+// yapılacağı söylenir.
 func TestCliInstallWithoutAddressExplains(t *testing.T) {
 	c := newFake(t, "cli")
 	c.cliNoAddr = true
+	c.cabled = "me0"
 	a, _ := newTestFlow(t, c, cliJob)
 	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
 	defer stop()
 
 	err := a.CliInstall(ctx)
-	if err == nil || !strings.Contains(err.Error(), "normal kurulumu seçin") {
+	if err == nil || !strings.Contains(err.Error(), "sabit adres ve ağ geçidi verin") {
 		t.Fatalf("açıklayıcı hata beklendi: %v", err)
+	}
+}
+
+// Sıfır yapılandırmalı cihaz: sunucuya ulaşmıyor; ajan root parolasını koyar,
+// önce yönetim portunu dener (kablo orada değil, geri alınır), ön portların
+// irb.0'ında ulaşır, kurar, sonra geçici adresi kaldırıp eski ayarı geri yazar.
+func TestCliInstallGivesTemporaryAddress(t *testing.T) {
+	c := newFake(t, "login")
+	c.askEmpty = true
+	c.cliNoAddr = true
+	c.cabled = "irb"
+	c.newPassword = "yeni"
+	c.terse = "Interface  Admin Link Proto\r\nge-0/0/0  up  up\r\nme0  up  down\r\nme0.0  up  down  inet\r\nirb.0  up  up  inet"
+	c.ifConf["irb"] = []string{"set interfaces irb unit 0 family inet dhcp vendor-id Juniper-ex2300-24t"}
+	job := cliJob
+	job.Configuration = false
+	job.Password = "yeni"
+	job.RootHash = "$1$abcdefgh$0123456789abcdefghijkl"
+	job.CliAddress = "198.51.100.120/24"
+	job.CliGateway = "198.51.100.1"
+	job.ImageServer = "198.51.100.250"
+	a, events := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 60*time.Second)
+	defer stop()
+
+	if err := a.CliInstall(ctx); err != nil {
+		t.Fatalf("kurulum: %v\nolaylar: %v\nkonsol: %q", err, *events, a.k.Text(0))
+	}
+	if c.installed != "cli" || !c.rootSet {
+		t.Fatalf("kurulan=%q root=%v", c.installed, c.rootSet)
+	}
+	if len(c.addr) != 0 || len(c.route) != 0 {
+		t.Errorf("geçici adres kaldı: %v %v", c.addr, c.route)
+	}
+	if strings.Join(c.ifConf["irb"], "|") != "set interfaces irb unit 0 family inet dhcp vendor-id Juniper-ex2300-24t" {
+		t.Errorf("irb eski ayarına dönmedi: %q", c.ifConf["irb"])
+	}
+	joined := strings.Join(*events, "\n")
+	for _, w := range []string{"me0 üzerinden kurulum sunucusuna ulaşılamadı", "geçici adres verildi: 198.51.100.120/24 (irb)", "root parolası kondu", "Geçici adres kaldırıldı"} {
+		if !strings.Contains(joined, w) {
+			t.Errorf("olay yok: %q\n%s", w, joined)
+		}
+	}
+}
+
+// Parolasız cihaza parola konamazsa (işte parola yok) açıkça söylenir.
+func TestCliAddressNeedsRootPassword(t *testing.T) {
+	c := newFake(t, "cli")
+	c.cliNoAddr = true
+	c.cabled = "me0"
+	c.terse = "me0.0  up  up  inet"
+	job := cliJob
+	job.CliAddress = "198.51.100.120/24"
+	job.ImageServer = "198.51.100.250"
+	a, _ := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	err := a.CliInstall(ctx)
+	if err == nil || !strings.Contains(err.Error(), "root parolası") || c.installed != "" {
+		t.Fatalf("root parolası hatası beklendi: %v (kurulan %q)", err, c.installed)
+	}
+}
+
+// Sunucuya zaten ulaşan cihazın ayarına dokunulmaz.
+func TestCliInstallReachableKeepsConfig(t *testing.T) {
+	c := newFake(t, "cli")
+	job := cliJob
+	job.CliAddress = "198.51.100.120/24"
+	job.ImageServer = "198.51.100.250"
+	a, events := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	if err := a.CliInstall(ctx); err != nil {
+		t.Fatalf("kurulum: %v\nolaylar: %v", err, *events)
+	}
+	if len(c.addr) != 0 || !strings.Contains(strings.Join(*events, "\n"), "adres verilmedi") {
+		t.Errorf("adres verilmemeliydi: %v %v", c.addr, *events)
 	}
 }
 

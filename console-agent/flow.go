@@ -123,6 +123,9 @@ type Flow struct {
 	// addressInUse kurulum adresine başka bir cihazın cevap verip
 	// vermediğini söyler (testte sahte).
 	addressInUse func(ip string) bool
+	// cliNet CLI kurulumunda cihaza verilen geçici adres; kurulumdan sonra
+	// geri alınır (bkz. cli_network.go). nil: adres verilmedi.
+	cliNet *cliNetwork
 	// Bekleme süreleri (testte kısaltılır).
 	bootTimeout    time.Duration
 	installTimeout time.Duration
@@ -313,6 +316,20 @@ func onlyPrompts(patterns []*regexp.Regexp) bool {
 
 // login giriş isteminden root olarak kabuğa ya da CLI'ye geçer.
 func (a *Flow) login(ctx context.Context) error {
+	err := a.loginWith(ctx, a.job.Password)
+	/*
+	 * İşteki parola fabrika ayarındaki (parolasız) cihazda tutmaz: CLI
+	 * kurulumunda bu parola cihaza KONMAK için de verilir (bkz.
+	 * cli_network.go). Bir kez de boş parolayla denenir.
+	 */
+	if errors.Is(err, errPassword) && a.job.Password != "" {
+		a.notify("bilgi", "İşteki root parolası tutmadı; parolasız (fabrika ayarı) giriş deneniyor.")
+		return a.loginWith(ctx, "")
+	}
+	return err
+}
+
+func (a *Flow) loginWith(ctx context.Context, password string) error {
 	pos := a.k.Position()
 	if err := a.send("root\r"); err != nil {
 		return err
@@ -339,7 +356,7 @@ func (a *Flow) login(ctx context.Context) error {
 	}
 	if i == 0 {
 		pos = a.k.Position()
-		if err := a.send(a.job.Password + "\r"); err != nil {
+		if err := a.send(password + "\r"); err != nil {
 			return err
 		}
 		i, err = a.k.Wait(ctx, pos, 30*time.Second, reShell, reCli, reWrongLogin, reLogin)
@@ -606,10 +623,12 @@ func (a *Flow) afterLogin(ctx context.Context) error {
 		return err
 	}
 	if a.job.Configuration {
+		// Yedek "load override" ile yüklenir: geçici adres de gider.
 		if err := a.loadConfiguration(ctx); err != nil {
 			return err
 		}
 	} else {
+		a.restoreCliNetwork(ctx)
 		a.stopZtp(ctx)
 	}
 	a.sendFinalConfig(ctx)
@@ -717,7 +736,7 @@ var reCliInstallFail = regexp.MustCompile(`(?i)(error:|fetch: |failed to|not eno
 
 // reNoAddress cihazın ağ adresi yok ya da sunucuya yolu yok: Junos
 // "fetch-secure: ...: Can't assign requested address" der (sıfır
-// yapılandırmalı EX2300'de görüldü). CLI kurulumu adres vermez.
+// yapılandırmalı EX2300'de görüldü).
 var reNoAddress = regexp.MustCompile(`(?i)can't assign requested address|no route to host|network is unreachable`)
 
 // reRebooting yazılım eklendi, cihaz yeniden başlıyor.
@@ -733,6 +752,9 @@ func (a *Flow) CliInstall(ctx context.Context) error {
 	if err := a.reachCli(ctx); err != nil {
 		return err
 	}
+	if err := a.prepareCliNetwork(ctx); err != nil {
+		return err
+	}
 	a.notify("kurulum", "Kurulum başladı: "+a.job.InstallCommand)
 	pos := a.k.Position()
 	if err := a.send(a.job.InstallCommand + "\r"); err != nil {
@@ -744,7 +766,7 @@ func (a *Flow) CliInstall(ctx context.Context) error {
 	}
 	if i == 1 {
 		if reNoAddress.MatchString(a.k.Text(pos)) {
-			return errors.New("yazılım eklenemedi: cihazın ağ adresi yok ya da kurulum sunucusuna yolu yok. CLI'den kurulum adres vermez; loader'ı olan cihazlarda (EX2200/EX2300/EX3300/EX3400/EX4200…) normal kurulumu seçin, adres orada verilir")
+			return errors.New("yazılım eklenemedi: cihazın kurulum sunucusuna yolu yok. İşte switch adresi DHCP seçiliyse sabit adres ve ağ geçidi verin; ajan cihaza geçici olarak bu adresi yazar")
 		}
 		return fmt.Errorf("yazılım eklenemedi: %s", lastLines(a.k.Text(pos), 8))
 	}

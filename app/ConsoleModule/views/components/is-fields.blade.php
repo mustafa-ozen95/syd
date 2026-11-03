@@ -14,7 +14,7 @@
             <option value="{{ $anahtar }}" @selected($deger['islem'] === $anahtar)>{{ $etiket }}</option>
         @endforeach
     </select>
-    <span class="field__hint">"Yalnız yedeği yükle"de cihaz yeniden başlatılmaz, Junos kurulmaz: ajan CLI'ye girer ve yedeği yükler. "CLI'den kur" loader'ı olmayan QFX5100, QFX5110 ve EX4600 içindir: Junos çalışan cihazda <code>request system software add</code> ile kurulur, görüntü panelin HTTP'sinden çekilir; cihazın ağ adresi önceden ayarlı olmalı (bu yol adres vermez).</span>
+    <span class="field__hint">"Yalnız yedeği yükle"de cihaz yeniden başlatılmaz, Junos kurulmaz: ajan CLI'ye girer ve yedeği yükler. "CLI'den kur" loader'ı olmayan QFX5100, QFX5110 ve EX4600 içindir: Junos çalışan cihazda <code>request system software add</code> ile kurulur, görüntü panelin HTTP'sinden çekilir. Cihazın adresi yoksa ajan aşağıdaki kurulum adresini geçici olarak verir.</span>
 </div>
 
 <div class="field-row">
@@ -70,11 +70,11 @@
 
 {{-- Kurulumun alanları (adres, görüntü): "Yalnız yedek"te gizli; console-form.js açar/kapar. --}}
 <div @class(['stack', 'is-hidden' => $deger['islem'] === 'yedek']) data-console-install>
-{{-- Switch'in loader'daki adresi; PC kaydındakiyle dolu gelir. DHCP'de adres satırları gönderilmez. --}}
-<div @class(['stack', 'is-hidden' => $deger['islem'] === 'cli']) data-console-loader>
+{{-- Switch'in kurulum adresi (loader'da ya da CLI'de geçici); PC kaydındakiyle dolu gelir. DHCP'de adres satırları gönderilmez. --}}
+<div class="stack">
 <div class="field-row">
     <div class="field">
-        <label class="field__label" for="console-address-type">Switch'in adresi (loader)</label>
+        <label class="field__label" for="console-address-type">Switch'in kurulum adresi</label>
         <select class="select" id="console-address-type" name="adres_turu" data-console-address>
             @foreach ($adresTurleri as $anahtar => $etiket)
                 <option value="{{ $anahtar }}" @selected($deger['adres_turu'] === $anahtar)>{{ $etiket }}</option>
@@ -92,7 +92,7 @@
                maxlength="45" placeholder="198.51.100.1" data-console-gateway>
     </div>
 </div>
-<span class="field__hint">Sabit adreste ajan önce adrese ping atar; başka bir cihaz cevap verirse kurmaz. Aynı PC'de aynı anda kurulan switch'ler aynı loader adresini alamaz: ikinci işe başka bir adres verin (panel aynı adresi reddeder).</span>
+<span class="field__hint">Sabit adreste ajan önce adrese ping atar; başka bir cihaz cevap verirse kurmaz. Aynı PC'de aynı anda kurulan switch'ler aynı adresi alamaz: ikinci işe başka bir adres verin (panel aynı adresi reddeder). "CLI'den kur"da cihaz kurulum sunucusuna ulaşamıyorsa ajan bu adresi geçici olarak yapılandırmaya yazar, kurulumdan sonra kaldırır.</span>
 </div>
 
 <div class="field">
@@ -248,6 +248,7 @@
     <span class="field__hint">
         Kurulumda cihaz çalışıyorsa ajan girip <code>request system reboot</code> ile loader'a iner; parola yoksa ya da tutmazsa
         sizden cihazın elektriğini çekip takmanızı ister. Yalnız yedekte ajan bu parolayla girer (sıfır cihazda boş bırakın).
+        "CLI'den kur"da cihazın root parolası yoksa adres verebilmek için bu parola cihaza konur (Junos parolasız commit kabul etmez).
         Şifreli saklanır, iş bitince silinir.
     </span>
 </div>

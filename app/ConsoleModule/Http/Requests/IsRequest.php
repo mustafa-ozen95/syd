@@ -74,13 +74,13 @@ class IsRequest extends FormRequest
                 }
             }],
             'adres_turu' => ['nullable', Rule::in(array_keys(ConsoleJob::ADRES_TURLERI))],
-            /* Aynı PC'de aynı anda kurulan iki switch aynı loader adresini alamaz. */
+            /* Aynı PC'de aynı anda kurulan iki switch aynı kurulum adresini alamaz (loader ya da CLI). */
             'cihaz_ip' => ['nullable', 'string', 'regex:/^(\d{1,3}\.){3}\d{1,3}\/([8-9]|[12]\d|30)$/', function (string $alan, mixed $deger, Closure $hata) use ($yalnizYedek): void {
                 $pc = $this->pcYaDaNull();
                 $adres = trim((string) $deger) ?: (string) $pc?->cihaz_ip;
-                if ($pc !== null && ! $yalnizYedek && $this->input('islem') !== 'cli' && $this->input('adres_turu') !== 'dhcp'
+                if ($pc !== null && ! $yalnizYedek && $this->input('adres_turu') !== 'dhcp'
                     && $pc->isler()->acik()->where('cihaz_ip', $adres)->exists()) {
-                    $hata("Bu PC'de açık başka bir iş {$adres} loader adresini kullanıyor; bu switch'e başka bir adres verin.");
+                    $hata("Bu PC'de açık başka bir iş {$adres} kurulum adresini kullanıyor; bu switch'e başka bir adres verin.");
                 }
             }],
             'gecit' => ['nullable', 'ip'],
@@ -162,11 +162,6 @@ class IsRequest extends FormRequest
             'gecici_goruntu' => $g['gecici'] ?? null,
             'beklenen_surum' => AgentJob::surum($g['dosya']),
         ];
-
-        /* CLI'den kurulumda loader yok: adres verilmez. */
-        if ($this->input('islem') === 'cli') {
-            $kurulum = ['adres_turu' => 'sabit', 'cihaz_ip' => null, 'gecit' => null] + $kurulum;
-        }
 
         return $kurulum + [
             'pc_id' => $pc->id,
