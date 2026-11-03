@@ -12,7 +12,12 @@
  */
 
 const POLL_MS = 1500;
-const SCREEN_LIMIT = 400_000;
+
+/*
+ * Ekranda tutulan en çok karakter (~3000 satır). Tamamı "Konsol kaydı"nda.
+ * 400 bindi: Junos açılışında 1 MB'ı aşan çıktıda ekran ağırlaşıyordu.
+ */
+const SCREEN_LIMIT = 150_000;
 
 let active = null;
 
@@ -43,6 +48,55 @@ function eraseBackspaces(text) {
     } while (text !== previous);
 
     return text.replace(/\x08/g, '');
+}
+
+/*
+ * Yeni çıktıyı ekranın sonuna ekler; ekran BAŞTAN YAZILMAZ.
+ *
+ * Her yoklamada bütün ekranı (yüz binlerce karakter) okuyup geri silmeyi
+ * baştan uygulamak ve yeniden çizdirmek, Junos açılışı gibi hızlı akan
+ * çıktıda tarayıcıyı kilitliyordu. Tamamlanmış satırlar ayrı metin
+ * düğümleri olarak eklenir ve bir daha işlenmez; yalnız son (yarım) satır
+ * yeni gelenle birlikte işlenir: geri silme (\b) satır sonunu geçmez, dönen
+ * çubuk ("/-\|") bu satırda kalır. Sınır aşılınca en eski düğümler düşer.
+ */
+function appendScreen(output, screen, incoming) {
+    let text = incoming;
+
+    /* Tek seferde sınırdan büyük gelen (ilk açılış): yalnız sonu, tam satırdan. */
+    if (text.length > SCREEN_LIMIT) {
+        text = text.slice(-SCREEN_LIMIT);
+        text = text.slice(text.indexOf('\n') + 1);
+    }
+
+    const combined = eraseBackspaces(screen.tail.data + text);
+    const cut = combined.lastIndexOf('\n') + 1;
+
+    if (cut > 0) {
+        const lines = document.createTextNode(combined.slice(0, cut));
+
+        output.insertBefore(lines, screen.tail);
+        screen.lines.push(lines);
+        screen.length += lines.length;
+    }
+
+    /* Hiç satır sonu gelmeyen akış da sınırı aşmasın. */
+    screen.tail.data = combined.slice(cut).slice(-SCREEN_LIMIT);
+
+    while (screen.length > SCREEN_LIMIT && screen.lines.length > 1) {
+        const oldest = screen.lines.shift();
+
+        screen.length -= oldest.length;
+        oldest.remove();
+    }
+}
+
+/* Ekranı boşaltır: bundan sonra çıktı eklenerek yazılır. */
+function resetScreen(output, screen) {
+    screen.tail = document.createTextNode('');
+    screen.lines = [];
+    screen.length = 0;
+    output.replaceChildren(screen.tail);
 }
 
 function writeSteps(tableBody, events) {
@@ -150,6 +204,7 @@ function start(root) {
     const output = root.querySelector('[data-console-screen]');
     const steps = document.querySelector('[data-console-steps]');
     const state = { after: 0, first: true, empty: true, root };
+    const screen = { tail: document.createTextNode(''), lines: [], length: 0 };
 
     active = state;
 
@@ -187,12 +242,18 @@ function start(root) {
 
         if (state.first || incoming !== '') {
             const atBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 40;
-            /* İlk çizimde ya da yer tutucu dururken ekran baştan yazılır. */
-            const previous = state.first || state.empty ? '' : output.textContent;
-            const next = eraseBackspaces(previous + incoming);
 
-            state.empty = next === '';
-            output.textContent = state.empty ? emptyScreen(data) : next.slice(-SCREEN_LIMIT);
+            /* İlk çizimde ya da yer tutucu dururken ekran boşaltılır, sonra eklenir. */
+            if (state.first || state.empty) {
+                resetScreen(output, screen);
+            }
+
+            appendScreen(output, screen, incoming);
+            state.empty = screen.length === 0 && screen.tail.data === '';
+
+            if (state.empty) {
+                output.textContent = emptyScreen(data);
+            }
 
             if (atBottom || state.first) {
                 output.scrollTop = output.scrollHeight;
