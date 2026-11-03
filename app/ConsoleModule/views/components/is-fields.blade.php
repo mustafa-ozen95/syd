@@ -39,23 +39,37 @@
         </select>
         <span class="field__hint">Her portta aynı anda bir iş: birden çok kablo takılıysa her biri ayrı switch kurar.</span>
     </div>
-    <div class="field">
-        <label class="field__label" for="console-name">Cihaz</label>
-        <select class="select" id="console-name" name="ad" data-console-device data-url="{{ route('console.backups') }}">
-            <option value="" @selected($deger['ad'] === '')>Listede yok (fabrika ayarında kur)</option>
-            @foreach ($yedekCihazlari as $cihaz)
-                <option value="{{ $cihaz }}" @selected($deger['ad'] === $cihaz) @isset($sablonlar[$cihaz]) data-sablon @endisset>{{ $cihaz }}</option>
-            @endforeach
-        </select>
-        <span class="field__hint">Listeden seçilen cihazın yedeği kurulumdan sonra yüklenir; listede yoksa fabrika ayarında kalır.</span>
-    </div>
 </div>
 
+{{--
+    Yedek listesi AÇIK DURUR (size), açılır kutu değil: 75 cihazlık açılır listeyi
+    Linux'taki Chrome alanın üstüne açıyor ve fareyi bırakma anı imlecin altındaki
+    cihazı seçiyordu (uzak masaüstündeki gecikmeyle her tıklamada). Arama kutusu
+    listeyi süzer; adı yoktur, gönderilmez. Değer yine bu <select>'ten gider.
+--}}
 <div class="field">
-    <label class="field__label" for="console-backup-upload">ya da bilgisayardan yedek dosyası (isteğe bağlı)</label>
-    <input class="input" type="file" id="console-backup-upload" name="yedek_yukle" accept=".conf,.cfg,.txt,.gz" data-console-backup-upload>
-    <span class="field__hint">Seçilirse listedeki cihazın yerine bu dosya yüklenir (düz metin ya da .gz, en çok 8 MB). Yalnız bu işte kullanılır, iş bitince silinir.</span>
+    <label class="field__label" for="console-name">Yedek</label>
+    <input class="input" type="search" placeholder="Ara…" autocomplete="off" aria-controls="console-name" aria-label="Yedeklerde ara" data-console-device-search>
+    <select class="select" id="console-name" name="ad" size="8" data-console-device data-url="{{ route('console.backups') }}">
+        <option value="" @selected($deger['ad'] === '')>Listede yok (fabrika ayarında kur)</option>
+        @foreach ($yedekCihazlari as $cihaz)
+            <option value="{{ $cihaz }}" @selected($deger['ad'] === $cihaz) @isset($sablonlar[$cihaz]) data-sablon @endisset>{{ $cihaz }}</option>
+        @endforeach
+    </select>
+    <span class="field__hint">Listeden seçilen yedek kurulumdan sonra yüklenir; "Listede yok"ta switch fabrika ayarında kalır.</span>
 </div>
+
+{{-- İsteğe bağlı: kapalı durur, başlığa tıklanınca açılır. Hata varsa açık gelir. --}}
+<details class="fieldgroup" @if ($errors->has('yedek_yukle')) open @endif data-console-optional>
+    <summary class="fieldgroup__head">Bilgisayardan yedek dosyası yükle (isteğe bağlı)</summary>
+    <div class="fieldgroup__body">
+        <div class="field">
+            <label class="field__label" for="console-backup-upload">Yedek dosyası</label>
+            <input class="input" type="file" id="console-backup-upload" name="yedek_yukle" accept=".conf,.cfg,.txt,.gz" data-console-backup-upload>
+            <span class="field__hint">Seçilirse listedeki yedeğin yerine bu dosya yüklenir (düz metin ya da .gz, en çok 8 MB). Yalnız bu işte kullanılır, iş bitince silinir.</span>
+        </div>
+    </div>
+</details>
 
 {{-- Kurulumun alanları (adres, görüntü): "Yalnız yedek"te gizli; console-form.js açar/kapar. --}}
 <div @class(['stack', 'is-hidden' => $deger['islem'] === 'yedek']) data-console-install>
@@ -94,15 +108,20 @@
     </select>
     <span class="field__hint">Liste Kurulum sayfasındaki tablodur. <code>--format</code> ile kurulur: cihazdaki yapılandırma silinir.</span>
 </div>
-<div class="field">
-    <label class="field__label" for="console-image-upload">ya da bilgisayardan Junos dosyası (isteğe bağlı)</label>
-    <input class="input" type="file" id="console-image-upload" name="goruntu_yukle" accept=".tgz" data-console-image-upload>
-    <span class="field__hint">Seçilirse listedeki görüntünün yerine bu dosya kurulur (.tgz). Yalnız bu iş için TFTP'ye konur, iş bitince silinir. Büyük dosyada "İşi aç" yükleme bitene kadar sürer. Dosya sonuna kadar açılarak denetlenir: yarım ya da bozuk dosyayla iş açılmaz.</span>
-</div>
-<div class="field">
-    <label class="field__label" for="console-image-hash">Junos dosyasının sağlaması (isteğe bağlı)</label>
-    <input class="input input--mono" type="text" id="console-image-hash" name="goruntu_saglama" value="{{ old('goruntu_saglama') }}" maxlength="64" autocomplete="off" placeholder="Juniper indirme sayfasındaki MD5 / SHA-1 / SHA-256">
-</div>
+<details class="fieldgroup" @if ($errors->hasAny(['goruntu_yukle', 'goruntu_saglama']) || filled(old('goruntu_saglama'))) open @endif data-console-optional>
+    <summary class="fieldgroup__head">Bilgisayardan Junos dosyası yükle (isteğe bağlı)</summary>
+    <div class="fieldgroup__body">
+        <div class="field">
+            <label class="field__label" for="console-image-upload">Junos dosyası</label>
+            <input class="input" type="file" id="console-image-upload" name="goruntu_yukle" accept=".tgz" data-console-image-upload>
+            <span class="field__hint">Seçilirse listedeki görüntünün yerine bu dosya kurulur (.tgz). Yalnız bu iş için TFTP'ye konur, iş bitince silinir. Büyük dosyada "İşi aç" yükleme bitene kadar sürer. Dosya sonuna kadar açılarak denetlenir: yarım ya da bozuk dosyayla iş açılmaz.</span>
+        </div>
+        <div class="field">
+            <label class="field__label" for="console-image-hash">Sağlama (isteğe bağlı)</label>
+            <input class="input input--mono" type="text" id="console-image-hash" name="goruntu_saglama" value="{{ old('goruntu_saglama') }}" maxlength="64" autocomplete="off" placeholder="Juniper indirme sayfasındaki MD5 / SHA-1 / SHA-256">
+        </div>
+    </div>
+</details>
 </div>
 
 {{-- Yalnız listeden bir cihaz seçilince görünür; console-form.js açar/kapar, o cihazın yedeklerini çeker. --}}

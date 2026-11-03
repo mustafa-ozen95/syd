@@ -26,6 +26,7 @@
 @import './components/user-menu.css';
 @import './components/pagination.css';
 @import './components/hint.css';
+@import './components/fieldgroup.css';
 
 /*
  * Bu panele özel bileşenler: pencere gövdesi içi düzen, panele özel küçük

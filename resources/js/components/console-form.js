@@ -6,6 +6,10 @@
  * seçilince o cihazın yedekleri `data-url`ten çekilir, en yenisi seçili gelir. İlk görünüm sunucudan
  * doğru gelir, burada yalnız değişiklik izlenir.
  *
+ * Yedek listesi açık durur (<select size>); üstündeki arama kutusu onu süzer.
+ * Bilgisayardan yükleme bölümleri katlıdır (<details>), açılınca görünür olana
+ * kadar kaydırılır.
+ *
  * "Yapılandırmayı özelleştir": alanlar seçilen yedekteki değerlerle dolar
  * (`data-fields-url`); "Önizle" ajanın yazacağı satırları sunucudan alır
  * (`data-preview-url`). Kurallar sunucuda; burada yalnız DOM.
@@ -309,4 +313,53 @@ export function init() {
             fillCustom(target.form);
         }
     });
+
+    /* Yedek araması listeyi süzer; "Listede yok" hep görünür. */
+    document.addEventListener('input', (event) => {
+        const target = event.target;
+
+        if (!(target instanceof HTMLInputElement) || !target.matches('[data-console-device-search]')) {
+            return;
+        }
+
+        const query = target.value.trim().toLocaleLowerCase('tr');
+
+        for (const option of target.form?.querySelector('[data-console-device]')?.options ?? []) {
+            option.hidden = option.value !== '' && query !== '' && !option.text.toLocaleLowerCase('tr').includes(query);
+        }
+    });
+
+    /* Aramada Enter formu göndermez: tek eşleşme varsa onu seçer. Aşağı ok listeye geçer. */
+    document.addEventListener('keydown', (event) => {
+        const target = event.target;
+
+        if (!(target instanceof HTMLInputElement) || !target.matches('[data-console-device-search]')
+            || (event.key !== 'Enter' && event.key !== 'ArrowDown')) {
+            return;
+        }
+
+        event.preventDefault();
+        const select = target.form?.querySelector('[data-console-device]');
+
+        if (!select) {
+            return;
+        }
+
+        const matches = [...select.options].filter((o) => !o.hidden && o.value !== '');
+
+        if (event.key === 'Enter' && matches.length === 1 && select.value !== matches[0].value) {
+            select.value = matches[0].value;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        select.focus();
+    });
+
+    /* İsteğe bağlı bölüm açılınca pencerede aşağıda kalmasın: görünür olana kadar kaydırılır. */
+    document.addEventListener('toggle', (event) => {
+        const details = event.target;
+
+        if (details instanceof HTMLDetailsElement && details.open && details.matches('[data-console-optional]')) {
+            details.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    }, true);
 }
