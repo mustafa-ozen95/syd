@@ -144,8 +144,14 @@ class SitePc
             'token_hash' => $sir['hash'],
             'prefix' => $sir['prefix'],
             'abilities' => ['konsol' => ['view', 'ajan']],
-            /* Panel PC'yi NAT arkasından görebilir (bkz. gorunen_adres). */
-            'allowed_ips' => array_values(array_unique(array_filter([$pc->adres, $pc->gorunen_adres]))),
+            /*
+             * Adres kilidi YOK. Panel istemcinin gerçek adresini görmüyor: ağ
+             * geçidi (10.4.4.1) arkasındaki her isteği kendi adresiyle iletiyor;
+             * kilit ya kurulumu bozuyor ya da geçidin arkasındaki herkese
+             * açılıyordu. Jetonu koruyan: yalnız o PC'de durması, dar yetki
+             * (iş alma, bildirim), süre, ajan kaldırılınca iptal ve panelin bir
+             * PC'nin jetonuyla yalnız o PC'nin işlerini vermesi.
+             */
             'expires_at' => CarbonImmutable::now()->addDays(max(1, (int) config('api.default_lifetime_days'))),
         ]);
 

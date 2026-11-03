@@ -29,7 +29,6 @@ class PcRequest extends FormRequest
             'ad' => ['required', 'string', 'max:60'],
             'platform' => ['required', Rule::in(array_keys(ConsolePc::PLATFORMLAR))],
             'adres' => ['required', 'string', 'max:120', 'regex:/^[A-Za-z0-9][A-Za-z0-9.-]*$/'],
-            'gorunen_adres' => ['nullable', 'ip'],
             'port' => ['nullable', 'integer', 'between:1,65535'],
             'kullanici' => $windows
                 ? ['required', 'string', 'max:64', 'regex:/^[\pL\pN][\pL\pN ._\\\\-]*$/u']
@@ -65,7 +64,6 @@ class PcRequest extends FormRequest
             'ad' => $this->string('ad')->squish()->value(),
             'platform' => $platform,
             'adres' => $this->string('adres')->trim()->value(),
-            'gorunen_adres' => $this->filled('gorunen_adres') ? $this->string('gorunen_adres')->trim()->value() : '',
             'port' => $this->filled('port') ? $this->integer('port') : $varsayilan['port'],
             'kullanici' => $this->string('kullanici')->trim()->value(),
             'parola' => $this->filled('parola') ? (string) $this->input('parola') : null,

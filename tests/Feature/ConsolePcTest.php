@@ -120,12 +120,10 @@ final class ConsolePcTest extends TestCase
         $ilk = $pc->refresh()->jeton_id;
         $this->assertNotNull($ilk);
         $jeton = ApiToken::findOrFail($ilk);
-        $this->assertSame(['198.51.100.16'], $jeton->allowed_ips);
-
-        /* NAT: panelin gördüğü adres de kabul edilir. */
-        $pc->update(['gorunen_adres' => '192.0.2.1']);
+        /* Adres kilidi yok: panel istemcileri ağ geçidinin adresiyle görüyor (bkz. SitePc). */
+        $this->assertEmpty($jeton->allowed_ips);
         $this->actingAs($yonetici)->post(route('console.pc.islem', [$pc, 'install']));
-        $this->assertSame(['198.51.100.16', '192.0.2.1'], ApiToken::findOrFail($pc->refresh()->jeton_id)->allowed_ips);
+        $this->assertEmpty(ApiToken::findOrFail($pc->refresh()->jeton_id)->allowed_ips);
         $ilk = $pc->jeton_id;
         $istekler = [$istekler[0]];
         $this->assertTrue($jeton->permits('konsol', 'ajan'));

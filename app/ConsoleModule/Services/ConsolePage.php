@@ -175,7 +175,7 @@ class ConsolePage
     {
         $deger = [];
 
-        foreach (['ad', 'platform', 'adres', 'gorunen_adres', 'port', 'kullanici', 'cihaz_ip', 'gecit', 'dizin'] as $alan) {
+        foreach (['ad', 'platform', 'adres', 'port', 'kullanici', 'cihaz_ip', 'gecit', 'dizin'] as $alan) {
             $deger[$alan] = $hatali ? (string) old($alan, '') : (string) ($pc?->{$alan} ?? '');
         }
         /* Portlar elle yazılmaz: "Sına" ya da "Durum" PC'den okur (SitePc::portlariAlgila). */

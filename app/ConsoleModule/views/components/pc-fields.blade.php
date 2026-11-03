@@ -26,11 +26,6 @@
         <input class="input input--mono" type="text" id="{{ $onek }}-adres" name="adres" value="{{ $deger['adres'] }}" required maxlength="120" placeholder="198.51.100.16">
     </div>
     <div class="field">
-        <label class="field__label" for="{{ $onek }}-gorunen">Panelin gördüğü adres</label>
-        <input class="input input--mono" type="text" id="{{ $onek }}-gorunen" name="gorunen_adres" value="{{ $deger['gorunen_adres'] }}" maxlength="45" placeholder="NAT varsa: 192.0.2.1">
-        <span class="field__hint">PC panele NAT arkasından ulaşıyorsa (198.51.100.x → 192.0.2.1). Ajan jetonu yalnız bu iki adresten kabul edilir.</span>
-    </div>
-    <div class="field">
         <label class="field__label" for="{{ $onek }}-port">Port</label>
         <input class="input input--mono" type="number" id="{{ $onek }}-port" name="port" value="{{ $deger['port'] }}" min="1" max="65535" placeholder="Windows 5985 · Linux 22">
     </div>

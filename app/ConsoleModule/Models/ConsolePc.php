@@ -21,7 +21,7 @@ class ConsolePc extends Model
     ];
 
     protected $fillable = [
-        'ad', 'platform', 'adres', 'gorunen_adres', 'port', 'kullanici', 'parola', 'seri_port', 'seri_portlar', 'port_bilgileri', 'portlar_at',
+        'ad', 'platform', 'adres', 'port', 'kullanici', 'parola', 'seri_port', 'seri_portlar', 'port_bilgileri', 'portlar_at',
         'cihaz_ip', 'gecit', 'dizin', 'ssh_parmak_izi', 'jeton_id', 'son_kurulum_at', 'ajan_mesaj',
         'ajan_deneme_sayisi', 'ajan_sonraki_deneme_at',
     ];
