@@ -80,6 +80,11 @@ services:
       # ve şifreli alanlar ona bağlı.
       - storage:/uygulama/storage/app
       - logs:/uygulama/storage/logs
+      # TLS sertifikası: sunucudaki ortak sertifika ajanının durumu (salt
+      # okunur) ve panelin tur isteği bıraktığı dizin. Sertifikayı panel
+      # almaz; ajan alır ve vekile kurar (bkz. Ayarlar → Sertifika).
+      - /etc/dc:/etc/dc:ro
+      - /etc/dc/sertifika-panel:/etc/dc/sertifika-panel
       # Switch yedekleri SALT OKUNUR: çoğu zaman cihaz yedeklerinin tek kopyası. Panelin
       # yazma ucu yok; kod bir gün yanlışlıkla yazmaya kalksa bile dosya
       # sistemi izin vermesin. Yazan yalnız swbck-pull (ya da sunucudaki FTP).
