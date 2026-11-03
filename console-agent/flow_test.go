@@ -41,6 +41,7 @@ type fakeDevice struct {
 	uboot      []string // U-Boot'ta yazılanlar
 	pingFails  bool
 	cliFail    bool // request system software add hata verir
+	cliNoAddr  bool // cihazın adresi yok (sıfır yapılandırmalı EX2300)
 	ztpNoise   bool // show version isteminden sonra ZTP satırı düşer
 	ztpDeleted bool // delete chassis auto-image-upgrade
 	ztpStopped bool // request system autoinstallation stop
@@ -48,6 +49,9 @@ type fakeDevice struct {
 	// Virtual Chassis satırı ("{master:0}"), sahada görüldüğü gibi.
 	ex4200     bool
 	configured bool // configure kipine girildi
+	// staleLogin: "root"tan önce eski Enter'ların cevabı olan bir "login:"
+	// daha düşer, asıl cevap biraz sonra gelir (EX2300'de görüldü).
+	staleLogin bool
 	out        chan string
 }
 
@@ -230,6 +234,10 @@ func (c *fakeDevice) lineReceived(s string) {
 				c.emitLocked("Fetching package...\r\nerror: could not fetch package\r\nroot@sw1> ")
 				return
 			}
+			if c.cliNoAddr {
+				c.emitLocked("fetch-secure: http://198.51.100.250:*: Can't assign requested address\r\nERROR: Cannot fetch file: jinstall-host-qfx-5-17.2R1.13-signed.tgz\r\n\r\n{master:0}\r\nroot> ")
+				return
+			}
 			c.state = "kuruluyor"
 			c.emitLocked("Installing package ...\r\nRebooting ...\r\nShutdown NOW!\r\n")
 			c.after(300*time.Millisecond, func() {
@@ -337,6 +345,16 @@ func (c *fakeDevice) lineReceived(s string) {
 			c.emitLocked("not found\r\nloader> ")
 		}
 	case "login":
+		if s == "root" && c.staleLogin {
+			c.staleLogin = false
+			c.emitLocked("\r\nFreeBSD/arm (Amnesiac) (ttyu0)\r\n\r\nlogin: ")
+			c.after(300*time.Millisecond, func() {
+				c.mu.Lock()
+				defer c.mu.Unlock()
+				c.lineReceived("root")
+			})
+			return
+		}
 		if s == "root" {
 			if c.password != "" {
 				c.state = "parola"
@@ -472,6 +490,22 @@ func TestInstallFromRunningDevice(t *testing.T) {
 	}
 	if c.state != "login" {
 		t.Errorf("oturum açık kaldı: %s", c.state)
+	}
+}
+
+// Eski bir "login:" istemi parola yanlış sayılmaz: parolasız cihaza girilir.
+func TestStaleLoginPromptIsNotWrongPassword(t *testing.T) {
+	c := newFake(t, "login")
+	c.staleLogin = true
+	job := Job{Configuration: true, LoadCommand: "load override terminal", LoadOnly: true}
+	a, events := newTestFlow(t, c, job)
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+	if err := a.reachCli(ctx); err != nil {
+		t.Fatalf("CLI'ye girilemedi: %v\nolaylar: %v\nkonsol: %q", err, *events, a.k.Text(0))
+	}
+	if c.state != "cli" {
+		t.Fatalf("durum: %s", c.state)
 	}
 }
 
@@ -931,6 +965,20 @@ func TestCliInstallFailureStops(t *testing.T) {
 	err := a.CliInstall(ctx)
 	if err == nil || !strings.Contains(err.Error(), "could not fetch") {
 		t.Fatalf("hata beklendi: %v", err)
+	}
+}
+
+// Adresi olmayan cihazda ham "Can't assign" yerine ne yapılacağı söylenir.
+func TestCliInstallWithoutAddressExplains(t *testing.T) {
+	c := newFake(t, "cli")
+	c.cliNoAddr = true
+	a, _ := newTestFlow(t, c, cliJob)
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+
+	err := a.CliInstall(ctx)
+	if err == nil || !strings.Contains(err.Error(), "normal kurulumu seçin") {
+		t.Fatalf("açıklayıcı hata beklendi: %v", err)
 	}
 }
 

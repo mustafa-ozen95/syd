@@ -14,7 +14,7 @@
             <option value="{{ $anahtar }}" @selected($deger['islem'] === $anahtar)>{{ $etiket }}</option>
         @endforeach
     </select>
-    <span class="field__hint">"Yalnız yedeği yükle"de cihaz yeniden başlatılmaz, Junos kurulmaz: ajan CLI'ye girer ve yedeği yükler. "CLI'den kur" loader'ı olmayan QFX5100, QFX5110 ve EX4600 içindir: Junos çalışan cihazda <code>request system software add</code> ile kurulur, görüntü panelin HTTP'sinden çekilir.</span>
+    <span class="field__hint">"Yalnız yedeği yükle"de cihaz yeniden başlatılmaz, Junos kurulmaz: ajan CLI'ye girer ve yedeği yükler. "CLI'den kur" loader'ı olmayan QFX5100, QFX5110 ve EX4600 içindir: Junos çalışan cihazda <code>request system software add</code> ile kurulur, görüntü panelin HTTP'sinden çekilir; cihazın ağ adresi önceden ayarlı olmalı (bu yol adres vermez).</span>
 </div>
 
 <div class="field-row">

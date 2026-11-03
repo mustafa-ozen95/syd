@@ -321,6 +321,22 @@ func (a *Flow) login(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("giriş: %w", err)
 	}
+	/*
+	 * "root"tan hemen sonra gelen çıplak "login:" çoğu kez ESKİ bir
+	 * istemdir: port aranırken ve durum sorulurken yazılan Enter'ların
+	 * cevabı "root"un cevabından önce düşer. EX2300'de sahada görüldü:
+	 * parolasız cihaz "parola yanlış" sanılıp operatörden elektriği
+	 * çekmesi istendi. Asıl cevap (Password:, kabuk, CLI ya da "Login
+	 * incorrect") biraz beklenir; gelmezse giriş başarısız sayılır.
+	 */
+	if i == 4 {
+		j, werr := a.k.Wait(ctx, pos, 8*time.Second, rePassword, reShell, reCli, reWrongLogin)
+		if werr == nil {
+			i = j
+		} else if !errors.Is(werr, errTimeout) {
+			return fmt.Errorf("giriş: %w", werr)
+		}
+	}
 	if i == 0 {
 		pos = a.k.Position()
 		if err := a.send(a.job.Password + "\r"); err != nil {
@@ -699,6 +715,11 @@ func (a *Flow) deleteZtp(ctx context.Context) bool {
 // ya da paket reddedildi; cihaz yeniden başlamaz.
 var reCliInstallFail = regexp.MustCompile(`(?i)(error:|fetch: |failed to|not enough space|validation failed|aborting)`)
 
+// reNoAddress cihazın ağ adresi yok ya da sunucuya yolu yok: Junos
+// "fetch-secure: ...: Can't assign requested address" der (sıfır
+// yapılandırmalı EX2300'de görüldü). CLI kurulumu adres vermez.
+var reNoAddress = regexp.MustCompile(`(?i)can't assign requested address|no route to host|network is unreachable`)
+
 // reRebooting yazılım eklendi, cihaz yeniden başlıyor.
 var reRebooting = regexp.MustCompile(`(?i)(shutdown now|system going down|rebooting|reboot the system)`)
 
@@ -722,6 +743,9 @@ func (a *Flow) CliInstall(ctx context.Context) error {
 		return fmt.Errorf("yazılım eklenemedi: %w: %s", err, lastLines(a.k.Text(pos), 6))
 	}
 	if i == 1 {
+		if reNoAddress.MatchString(a.k.Text(pos)) {
+			return errors.New("yazılım eklenemedi: cihazın ağ adresi yok ya da kurulum sunucusuna yolu yok. CLI'den kurulum adres vermez; loader'ı olan cihazlarda (EX2200/EX2300/EX3300/EX3400/EX4200…) normal kurulumu seçin, adres orada verilir")
+		}
 		return fmt.Errorf("yazılım eklenemedi: %s", lastLines(a.k.Text(pos), 8))
 	}
 	a.notify("kurulum", "Yazılım eklendi; cihaz yeniden başlıyor.")
