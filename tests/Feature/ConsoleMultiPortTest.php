@@ -73,30 +73,42 @@ final class ConsoleMultiPortTest extends TestCase
     }
 
     /**
-     * Algılama yalnız o an takılı kabloyu görür: COM1–COM10 (Linux'ta
-     * /dev/ttyUSB0–9) da elle seçilebilir. Algılanan portun COM adı ikinci kez çıkmaz;
-     * "Otomatik" yalnız algılanan port sayısına bakar.
+     * Konsol kablosu standardı: yalnız USB'den bağlanan seri aygıt. Yerleşik
+     * port ve adı listelenmez; COM1–COM10 (Linux'ta /dev/ttyUSB0–9) elle
+     * seçilebilir; tek kablo seçili gelir, yoksa seçmek şart.
      */
     #[Test]
     public function windowsta_com1_com10_elle_secilebilir(): void
     {
         $yonetici = User::factory()->admin()->create();
-        $pc = $this->pc(['ACPI\\PNP0501\\0']);
-        $pc->forceFill(['port_bilgileri' => ['ACPI\\PNP0501\\0' => ['com' => 'COM1', 'ad' => 'İletişim Bağlantı Noktası']]])->save();
+        $ch340 = 'USB\\VID_1A86&PID_7523\\6&2920A0D6&0&6';
+        $pc = $this->pc(['COM3']);
+        /* Taramada yerleşik port da görüldü (eski kayıtta port listesinde bile): konsol sayılmaz. */
+        $pc->forceFill(['seri_portlar' => ['ACPI\\PNP0501\\0', $ch340], 'port_bilgileri' => [
+            'ACPI\\PNP0501\\0' => ['com' => 'COM1', 'ad' => 'İletişim Bağlantı Noktası'],
+            $ch340 => ['com' => 'COM3', 'ad' => 'USB-SERIAL CH340'],
+        ]])->save();
 
-        $this->assertSame(['ACPI\\PNP0501\\0', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'COM10'], $pc->secilebilirPortlar());
-        /* Kasanın yerleşik portu kablo sayılmaz: seçili gelen yok, seçmek şart. */
-        $this->assertSame('', $pc->varsayilanPort());
-        $this->assertSame(['' => '— Port seçin —', 'ACPI\\PNP0501\\0' => 'COM1 · İletişim Bağlantı Noktası'], array_slice(ConsolePage::portSecenekleri($pc), 0, 2, true));
-        $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, ''))->assertSessionHasErrors('seri_port');
+        $this->assertSame([$ch340], $pc->portlar());
+        /* Ne yerleşik port ne adı (COM1) ne de kablonun adı (COM3) ikinci kez. */
+        $this->assertSame([$ch340, 'COM2', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'COM10'], $pc->secilebilirPortlar());
+        /* Tek kablo seçili gelir; "Otomatik" yok. */
+        $this->assertSame($ch340, $pc->varsayilanPort());
+        $this->assertSame([$ch340 => 'COM3 · USB-SERIAL CH340', 'COM2' => 'COM2'], array_slice(ConsolePage::portSecenekleri($pc), 0, 2, true));
 
         $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, 'COM5'))->assertSessionHasNoErrors();
         $this->assertSame('COM5', ConsoleJob::sole()->seri_port);
-        $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, 'COM11', '198.51.100.121/24'))->assertSessionHasErrors('seri_port');
+        foreach (['COM1', 'ACPI\\PNP0501\\0', 'COM11'] as $olmaz) {
+            $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, $olmaz, '198.51.100.121/24'))->assertSessionHasErrors('seri_port');
+        }
 
-        /* Linux'ta COM yok: düz adlar /dev/ttyUSB0–9. */
-        $pc->forceFill(['platform' => 'linux'])->save();
-        $this->assertSame(['ACPI\\PNP0501\\0', ...array_map(fn (int $n): string => "/dev/ttyUSB{$n}", range(0, 9))], $pc->fresh()->secilebilirPortlar());
+        /* Kablo yoksa seçili gelen yok: seçmek şart. */
+        $pc->forceFill(['seri_portlar' => ['ACPI\\PNP0501\\0']])->save();
+        $this->assertSame(['' => '— Port seçin —', 'COM2' => 'COM2'], array_slice(ConsolePage::portSecenekleri($pc), 0, 2, true));
+
+        /* Linux'ta düz adlar /dev/ttyUSB0–9; /dev/ttyS* kablo değildir. */
+        $pc->forceFill(['platform' => 'linux', 'seri_portlar' => ['/dev/ttyS0'], 'port_bilgileri' => []])->save();
+        $this->assertSame(array_map(fn (int $n): string => "/dev/ttyUSB{$n}", range(0, 9)), $pc->fresh()->secilebilirPortlar());
     }
 
     /**
@@ -146,14 +158,14 @@ final class ConsoleMultiPortTest extends TestCase
     }
 
     #[Test]
-    public function tek_portlu_pcde_otomatik_o_porttur(): void
+    public function tek_kablolu_pcde_bos_port_o_kablodur(): void
     {
         $yonetici = User::factory()->admin()->create();
         $pc = $this->pc(['COM9']);
 
         $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, ''))->assertSessionHasNoErrors();
         $this->assertSame(['COM9', 'COM9'], [ConsoleJob::sole()->seri_port, ConsoleJob::sole()->acik_port]);
-        /* "Otomatik" ile açılan iş de o portu tutar. */
+        /* Port seçmeden açılan iş de o kabloyu tutar. */
         $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, 'COM9', '198.51.100.121/24'))->assertSessionHasErrors('pc');
     }
 

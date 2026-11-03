@@ -57,7 +57,8 @@ class SitePc
      * formundaki port listesi buradan gelir, elle yazılmaz.
      *
      * Kimlik COM numarası DEĞİLDİR: Windows kablo başka USB girişine takılınca
-     * ona yeni numara veriyor. Windows'ta aygıt örneğinin kimliği (FTDI gibi
+     * ona yeni numara veriyor. Yalnız USB'den bağlanan seri aygıtlar kablo
+     * sayılır (ConsolePc::konsolKablosuMu). Windows'ta aygıt örneğinin kimliği (FTDI gibi
      * seri numaralı kablolarda girişten bağımsız), Linux'ta /dev/serial/by-id
      * yolu. Ajan işi alınca kimliğin o anki COM numarasını kendisi bulur.
      *
@@ -87,14 +88,20 @@ class SitePc
         }
         ksort($bilgi);
 
+        /*
+         * Yalnız konsol kabloları port olur (ConsolePc::konsolKablosuMu).
+         * Yerleşik portlar bilgide kalır: adları (COM1) elle listeye girmesin.
+         */
+        $kablolar = array_values(array_filter(array_keys($bilgi), ConsolePc::konsolKablosuMu(...)));
+
         $pc->forceFill([
-            'seri_portlar' => array_keys($bilgi),
-            'seri_port' => array_key_first($bilgi) ?? '',
+            'seri_portlar' => $kablolar,
+            'seri_port' => $kablolar[0] ?? '',
             'port_bilgileri' => $bilgi,
             'portlar_at' => now(),
         ])->save();
 
-        return array_map(fn (string $k): string => $pc->portEtiketi($k), array_keys($bilgi));
+        return array_map(fn (string $k): string => $pc->portEtiketi($k), $kablolar);
     }
 
     /**

@@ -84,15 +84,34 @@ class ConsolePc extends Model
     }
 
     /**
-     * PC'nin seri portları (kablo kimlikleri; eski kayıtlarda COM adı). Liste
-     * yoksa eski tek port; o da yoksa boş (ajan USB-seri dönüştürücüyü
-     * kendisi bulur).
+     * KONSOL KABLOSU STANDARDI: yalnız USB'den bağlanan seri aygıt.
+     *
+     * Switch'in konsoluna giden kablo her zaman bir USB-seri dönüştürücüdür
+     * (CH340, FTDI, Prolific, CP210x, Cisco/Juniper USB konsolu). Kasanın
+     * yerleşik "İletişim Bağlantı Noktası" (ACPI\PNP0501) ve PCI seri kartlar
+     * hiçbir zaman konsol değildir; Teknik PC'de COM1 hep algılanıp işler
+     * ona açılıyordu. Windows'ta kimlik USB\ ya da FTDIBUS\ ile başlar,
+     * Linux'ta /dev/serial/by-id, /dev/ttyUSB*, /dev/ttyACM*. Eski kayıtların
+     * düz "COM9"u kablo sayılır (o zaman yalnız kablolar yazılıyordu).
+     */
+    public static function konsolKablosuMu(string $kimlik): bool
+    {
+        return preg_match('#^(USB|FTDIBUS)\\\\#i', $kimlik) === 1
+            || preg_match('#^COM\d+$#i', $kimlik) === 1
+            || preg_match('#^/dev/(serial/by-id/|ttyUSB\d|ttyACM\d)#', $kimlik) === 1;
+    }
+
+    /**
+     * PC'nin konsol kabloları (kablo kimlikleri; eski kayıtlarda COM adı).
+     * Liste yoksa eski tek port. Standarda uymayan (yerleşik) portlar
+     * eski bir taramadan kalmış olsa da sayılmaz.
      *
      * @return list<string>
      */
     public function portlar(): array
     {
-        return array_values(array_filter((array) ($this->seri_portlar ?: [$this->seri_port]), fn ($p): bool => (string) $p !== ''));
+        return array_values(array_filter((array) ($this->seri_portlar ?: [$this->seri_port]),
+            fn ($p): bool => (string) $p !== '' && self::konsolKablosuMu((string) $p)));
     }
 
     /**
@@ -107,7 +126,8 @@ class ConsolePc extends Model
     public function secilebilirPortlar(): array
     {
         $portlar = $this->portlar();
-        $algilanan = array_map(fn (string $p): string => strtoupper(($this->port_bilgileri ?? [])[$p]['com'] ?? $p), $portlar);
+        /* Taramada görülen her portun adı (yerleşikler dahil) elle listeye girmez. */
+        $algilanan = array_map('strtoupper', [...$portlar, ...array_column($this->port_bilgileri ?? [], 'com')]);
         $adlar = $this->windowsMu()
             ? array_map(fn (int $n): string => "COM{$n}", range(1, 10))
             : array_map(fn (int $n): string => "/dev/ttyUSB{$n}", range(0, 9));
@@ -117,15 +137,12 @@ class ConsolePc extends Model
     }
 
     /**
-     * Yeni işte önceden seçili port: algılanan TEK konsol kablosu. Kasanın
-     * yerleşik seri portu (Windows'ta ACPI\PNP0501, Linux'ta /dev/ttyS*)
-     * kablo sayılmaz: Teknik PC'de COM1 hep algılanıyordu. İki kablo
+     * Yeni işte önceden seçili port: algılanan TEK konsol kablosu. İki kablo
      * takılıysa ya da hiç yoksa boş: o zaman seçmek şart.
      */
     public function varsayilanPort(): string
     {
-        $kablolar = array_values(array_filter($this->portlar(),
-            fn (string $p): bool => ! str_starts_with(strtoupper($p), 'ACPI\\') && preg_match('#^/dev/ttyS\d+$#', $p) !== 1));
+        $kablolar = $this->portlar();
 
         return count($kablolar) === 1 ? $kablolar[0] : '';
     }

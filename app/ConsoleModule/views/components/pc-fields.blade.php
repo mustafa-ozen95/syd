@@ -68,7 +68,7 @@
     <div class="field">
         <label class="field__label" for="{{ $onek }}-seri">Seri portlar</label>
         <textarea class="textarea input--mono" id="{{ $onek }}-seri" rows="2" readonly placeholder="henüz algılanmadı">{{ $deger['seri_portlar'] }}</textarea>
-        <span class="field__hint">Elle yazılmaz: "Sına" ya da "Durum" PC'ye takılı konsol kablolarını okur. @if ($deger['portlar_at'] !== '') Son okuma: {{ $deger['portlar_at'] }}. @endif Kablo, COM numarasıyla değil kendi kimliğiyle tutulur; başka USB girişine takılınca da bulunur. Birden çok kablo takılıysa her biri ayrı switch kurar. Hız otomatik.</span>
+        <span class="field__hint">Elle yazılmaz: "Sına" ya da "Durum" PC'ye takılı konsol kablolarını okur. @if ($deger['portlar_at'] !== '') Son okuma: {{ $deger['portlar_at'] }}. @endif Yalnız USB'den bağlanan seri aygıtlar konsol kablosu sayılır; kasanın yerleşik "İletişim Bağlantı Noktası" hiç listelenmez. Kablo, COM numarasıyla değil kendi kimliğiyle tutulur; başka USB girişine takılınca da bulunur. Birden çok kablo takılıysa her biri ayrı switch kurar. Hız otomatik.</span>
     </div>
     <div class="field">
         <label class="field__label" for="{{ $onek }}-dizin">Ajan dizini</label>
