@@ -12,6 +12,7 @@ Route::middleware(['web', 'auth'])->prefix('console')->name('console.')->group(f
     Route::get('/backups', [ConsoleController::class, 'backups'])->middleware('can:konsol:create')->name('backups');
     Route::match(['get', 'post'], '/backups/fields', [ConsoleController::class, 'fields'])->middleware('can:konsol:create')->name('fields');
     Route::post('/job/precheck', [ConsoleController::class, 'precheck'])->middleware('can:konsol:create')->name('precheck');
+    Route::post('/job/ports', [ConsoleController::class, 'ports'])->middleware('can:konsol:create')->name('ports');
     Route::post('/job/preview', [ConsoleController::class, 'preview'])->middleware('can:konsol:create')->name('preview');
     Route::get('/job/{job}', [ConsoleController::class, 'show'])->middleware('can:konsol:view')->name('show');
     Route::get('/job/{job}/stream', [ConsoleController::class, 'stream'])->middleware('can:konsol:view')->name('stream');

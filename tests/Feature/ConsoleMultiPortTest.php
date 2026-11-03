@@ -6,9 +6,11 @@ namespace Tests\Feature;
 
 use App\ConsoleModule\Models\ConsoleJob;
 use App\ConsoleModule\Models\ConsolePc;
+use App\ConsoleModule\Services\ConsolePage;
 use App\ConsoleModule\Services\JobOpener;
 use App\Models\ApiToken;
 use App\Models\JunosImage;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Process;
@@ -52,9 +54,9 @@ final class ConsoleMultiPortTest extends TestCase
         $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, 'COM3', '198.51.100.122/24'))->assertSessionHasErrors('pc');
         $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, 'COM9', '198.51.100.121/24'))->assertSessionHasErrors('cihaz_ip');
 
-        /* Çok portlu PC'de port seçmek şart; tanımsız port olmaz. */
+        /* Çok portlu PC'de port seçmek şart; listede olmayan port olmaz (Windows'ta COM1–COM10 listededir). */
         $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, '', '198.51.100.123/24'))->assertSessionHasErrors('seri_port');
-        $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, 'COM7', '198.51.100.123/24'))->assertSessionHasErrors('seri_port');
+        $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, 'COM11', '198.51.100.123/24'))->assertSessionHasErrors('seri_port');
 
         /* İş kapanınca port boşalır. */
         ConsoleJob::query()->where('seri_port', 'COM3')->sole()->kapat('tamam', null);
@@ -68,6 +70,76 @@ final class ConsoleMultiPortTest extends TestCase
         $this->app['auth']->forgetGuards();
         $portlar = collect($this->withToken($sir['plain'])->getJson(route('api.v1.console.jobs'))->assertOk()->json('data'))->pluck('serial_port')->sort()->values()->all();
         $this->assertSame(['COM3', 'COM9'], $portlar);
+    }
+
+    /**
+     * Algılama yalnız o an takılı kabloyu görür: COM1–COM10 (Linux'ta
+     * /dev/ttyUSB0–9) da elle seçilebilir. Algılanan portun COM adı ikinci kez çıkmaz;
+     * "Otomatik" yalnız algılanan port sayısına bakar.
+     */
+    #[Test]
+    public function windowsta_com1_com10_elle_secilebilir(): void
+    {
+        $yonetici = User::factory()->admin()->create();
+        $pc = $this->pc(['ACPI\\PNP0501\\0']);
+        $pc->forceFill(['port_bilgileri' => ['ACPI\\PNP0501\\0' => ['com' => 'COM1', 'ad' => 'İletişim Bağlantı Noktası']]])->save();
+
+        $this->assertSame(['ACPI\\PNP0501\\0', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'COM10'], $pc->secilebilirPortlar());
+        $this->assertSame(['' => 'Otomatik', 'ACPI\\PNP0501\\0' => 'COM1 · İletişim Bağlantı Noktası'], array_slice(ConsolePage::portSecenekleri($pc), 0, 2, true));
+
+        $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, 'COM5'))->assertSessionHasNoErrors();
+        $this->assertSame('COM5', ConsoleJob::sole()->seri_port);
+        $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, 'COM11', '198.51.100.121/24'))->assertSessionHasErrors('seri_port');
+
+        /* Linux'ta COM yok: düz adlar /dev/ttyUSB0–9. */
+        $pc->forceFill(['platform' => 'linux'])->save();
+        $this->assertSame(['ACPI\\PNP0501\\0', ...array_map(fn (int $n): string => "/dev/ttyUSB{$n}", range(0, 9))], $pc->fresh()->secilebilirPortlar());
+    }
+
+    /**
+     * "Portları listele": PC'ye o an takılı portlar okunur, liste tazelenir;
+     * takılı olanlar adıyla ve aktif işaretiyle gelir. Linux'ta düz adlar
+     * /dev/ttyUSB0–9. PC'ye ulaşılamazsa nedeni söylenir.
+     */
+    #[Test]
+    public function portlari_listele_takili_olanlari_okur(): void
+    {
+        $teknik = User::factory()->rol('teknik')->create();
+        Role::where('slug', 'teknik')->sole()->update(['yetkiler' => ['konsol' => ['view', 'create']]]);
+        $teknik = $teknik->fresh();
+        $pc = $this->pc([]);
+        $ch340 = 'USB\VID_1A86&PID_7523\6&33E0B10C&0&1';
+        $cikti = "{$ch340}|COM9|USB-SERIAL CH340\r\n";
+        $hata = false;
+        Process::fake(function () use (&$cikti, &$hata) {
+            return Process::result((string) json_encode($hata
+                ? ['ok' => false, 'error' => 'timed out']
+                : ['ok' => true, 'status' => 0, 'stdout' => base64_encode($cikti), 'stderr' => '']));
+        });
+
+        $yanit = $this->actingAs($teknik)->postJson(route('console.ports'), ['pc' => $pc->uuid])->assertOk()
+            ->assertJsonPath('otomatik', true)
+            ->assertJsonPath('portlar.0', ['deger' => $ch340, 'etiket' => 'COM9 · USB-SERIAL CH340', 'aktif' => true]);
+        /* COM9 algılandı: düz COM9 ikinci kez çıkmaz. */
+        $this->assertSame(['COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM10'],
+            array_column(array_slice($yanit->json('portlar'), 1), 'deger'));
+        $this->assertSame([$ch340], $pc->refresh()->portlar(), 'kayıt da güncellenir');
+
+        /* Linux'ta düz adlar /dev/ttyUSB0–9; by-id yolunun hedefi tekrar listelenmez. */
+        $pc->forceFill(['platform' => 'linux'])->save();
+        $cikti = "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0|/dev/ttyUSB0|usb-1a86_USB_Serial-if00-port0\n";
+        $this->actingAs($teknik)->postJson(route('console.ports'), ['pc' => $pc->uuid])->assertOk()
+            ->assertJsonPath('portlar.0.deger', '/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0')
+            ->assertJsonPath('portlar.1.deger', '/dev/ttyUSB1')
+            ->assertJsonCount(10, 'portlar');
+
+        /* Ulaşılamayan PC: 422 ve neden. */
+        $hata = true;
+        $this->actingAs($teknik)->postJson(route('console.ports'), ['pc' => $pc->uuid])->assertStatus(422)
+            ->assertJsonPath('message', fn (string $m): bool => str_starts_with($m, "PC'ye ulaşılamadı"));
+
+        /* İş açamayan listeleyemez: PC'ye komut gönderir. */
+        $this->actingAs(User::factory()->create())->postJson(route('console.ports'), ['pc' => $pc->uuid])->assertForbidden();
     }
 
     #[Test]

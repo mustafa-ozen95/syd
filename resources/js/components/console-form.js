@@ -6,7 +6,6 @@
  * seçilince o cihazın yedekleri `data-url`ten çekilir, en yenisi seçili gelir. İlk görünüm sunucudan
  * doğru gelir, burada yalnız değişiklik izlenir.
  *
- * Yedek listesi açık durur (<select size>); üstündeki arama kutusu onu süzer.
  * Bilgisayardan yükleme bölümleri katlıdır (<details>), açılınca görünür olana
  * kadar kaydırılır.
  *
@@ -82,6 +81,84 @@ async function fillBackups(deviceSelect) {
 }
 
 const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content ?? '';
+
+/**
+ * Port kutusu o PC'nin portlarıyla dolar: algılananlar ve COM1–COM10 (Linux'ta
+ * /dev/ttyUSB0–9). Tek algılanan portta "Otomatik" de var, çok portta seçmek
+ * şart. Seçili port listede kaldıysa seçili kalır.
+ */
+function fillPorts(form, ports, auto) {
+    const select = form.querySelector('[data-console-port]');
+
+    if (!select) {
+        return;
+    }
+
+    const current = select.value;
+
+    select.replaceChildren(
+        ...(auto ? [makeOption('', 'Otomatik')] : []),
+        ...ports.map((p) => makeOption(p.deger, p.etiket)),
+    );
+
+    if ([...select.options].some((o) => o.value === current)) {
+        select.value = current;
+    }
+}
+
+/**
+ * "Portları listele": PC'ye o an takılı portlar okunur, liste tazelenir.
+ * Takılı olanlar adlarıyla yazılır (ör. "COM9 · USB-SERIAL CH340").
+ */
+async function listPorts(button) {
+    const form = button.form;
+    const pcSelect = form.querySelector('[data-console-pc]');
+    const out = button.closest('.field')?.querySelector('[data-console-ports-out]');
+    const body = new FormData();
+
+    body.append('pc', pcSelect?.value ?? '');
+    button.disabled = true;
+    if (out) {
+        out.textContent = "PC'deki portlar okunuyor…";
+    }
+
+    try {
+        const response = await fetch(button.dataset.url, {
+            method: 'POST',
+            body,
+            headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrf() },
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || Object.values(data.errors ?? {}).flat().join(' ') || 'Portlar okunamadı.');
+        }
+
+        fillPorts(form, data.portlar, data.otomatik);
+
+        /* PC değişip geri gelinince taze liste kullanılsın. */
+        const option = pcSelect?.selectedOptions[0];
+
+        if (option) {
+            option.dataset.ports = JSON.stringify(data.portlar);
+            option.dataset.auto = data.otomatik ? '1' : '0';
+        }
+
+        const active = data.portlar.filter((p) => p.aktif).map((p) => p.etiket);
+
+        if (out) {
+            out.textContent = active.length
+                ? `${data.saat} itibarıyla takılı: ${active.join(', ')}.`
+                : `${data.saat} itibarıyla takılı seri port yok. Kablo takılıysa işletim sistemi onu tanımıyor; listeden elle seçebilirsiniz.`;
+        }
+    } catch (error) {
+        if (out) {
+            out.textContent = error.message;
+        }
+    } finally {
+        button.disabled = false;
+    }
+}
 
 /** Bilgisayardan seçilen yedek dosyası; yoksa null. */
 const uploadedBackup = (form) => form.querySelector('[data-console-backup-upload]')?.files?.[0] ?? null;
@@ -239,11 +316,14 @@ export function init() {
         const target = event.target instanceof Element ? event.target : null;
         const button = target?.closest('[data-console-preview]');
         const check = target?.closest('[data-console-precheck]');
+        const ports = target?.closest('[data-console-ports]');
 
         if (button) {
             preview(button);
         } else if (check) {
             precheck(check);
+        } else if (ports) {
+            listPorts(ports);
         }
     });
 
@@ -296,62 +376,14 @@ export function init() {
                 gatewayInput.value = selected.dataset.gateway ?? '';
             }
 
-            /* Port seçenekleri o PC'nin portları: tek portta "Otomatik" de var, çok portta seçmek şart. */
-            const portSelect = target.form.querySelector('[data-console-port]');
-
-            if (selected && portSelect) {
-                const ports = JSON.parse(selected.dataset.ports || '[]');
-
-                portSelect.replaceChildren(
-                    ...(ports.length > 1 ? [] : [makeOption('', 'Otomatik')]),
-                    ...ports.map((p) => makeOption(p.deger, p.etiket)),
-                );
+            if (selected) {
+                fillPorts(target.form, JSON.parse(selected.dataset.ports || '[]'), selected.dataset.auto === '1');
             }
         } else if (target.matches('[data-console-device]')) {
             fillBackups(target);
         } else if (target.matches('[data-console-backup-file]')) {
             fillCustom(target.form);
         }
-    });
-
-    /* Yedek araması listeyi süzer; "Listede yok" hep görünür. */
-    document.addEventListener('input', (event) => {
-        const target = event.target;
-
-        if (!(target instanceof HTMLInputElement) || !target.matches('[data-console-device-search]')) {
-            return;
-        }
-
-        const query = target.value.trim().toLocaleLowerCase('tr');
-
-        for (const option of target.form?.querySelector('[data-console-device]')?.options ?? []) {
-            option.hidden = option.value !== '' && query !== '' && !option.text.toLocaleLowerCase('tr').includes(query);
-        }
-    });
-
-    /* Aramada Enter formu göndermez: tek eşleşme varsa onu seçer. Aşağı ok listeye geçer. */
-    document.addEventListener('keydown', (event) => {
-        const target = event.target;
-
-        if (!(target instanceof HTMLInputElement) || !target.matches('[data-console-device-search]')
-            || (event.key !== 'Enter' && event.key !== 'ArrowDown')) {
-            return;
-        }
-
-        event.preventDefault();
-        const select = target.form?.querySelector('[data-console-device]');
-
-        if (!select) {
-            return;
-        }
-
-        const matches = [...select.options].filter((o) => !o.hidden && o.value !== '');
-
-        if (event.key === 'Enter' && matches.length === 1 && select.value !== matches[0].value) {
-            select.value = matches[0].value;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        select.focus();
     });
 
     /* İsteğe bağlı bölüm açılınca pencerede aşağıda kalmasın: görünür olana kadar kaydırılır. */

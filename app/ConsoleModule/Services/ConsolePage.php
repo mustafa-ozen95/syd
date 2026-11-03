@@ -43,8 +43,7 @@ class ConsolePage
             'pcSecenekleri' => ConsolePc::query()->orderBy('ad')->pluck('ad', 'uuid')->all(),
             /* PC değişince adres ve port seçenekleri onun kaydıyla dolar (console-form.js). */
             'pcAdresleri' => ConsolePc::query()->get(['uuid', 'cihaz_ip', 'gecit', 'seri_port', 'seri_portlar', 'port_bilgileri'])
-                ->mapWithKeys(fn (ConsolePc $p): array => [$p->uuid => ['ip' => (string) $p->cihaz_ip, 'gecit' => (string) $p->gecit,
-                    'portlar' => array_map(fn (string $k): array => ['deger' => $k, 'etiket' => $p->portEtiketi($k)], $p->portlar())]])->all(),
+                ->mapWithKeys(fn (ConsolePc $p): array => [$p->uuid => ['ip' => (string) $p->cihaz_ip, 'gecit' => (string) $p->gecit] + self::portListesi($p)])->all(),
             'adresTurleri' => ConsoleJob::ADRES_TURLERI,
             'islemler' => ConsoleJob::ISLEMLER,
             'goruntuSecenekleri' => $this->goruntuler->secenekler(),
@@ -225,17 +224,38 @@ class ConsolePage
     }
 
     /**
-     * Port seçim kutusu: tek portta "otomatik" + o port, çok portta yalnız
-     * portlar (seçmek şart), hiç yoksa yalnız otomatik. console-form.js aynı
-     * kuralı PC değişince uygular.
+     * Formun port listesi: seçilebilen portlar, hangilerinin son taramada
+     * takılı görüldüğü (aktif) ve "Otomatik"in olup olmadığı. Sayfa ilk
+     * çizilirken ve "Portları listele"de (console.ports) aynı biçim.
+     *
+     * @return array{portlar: list<array{deger: string, etiket: string, aktif: bool}>, otomatik: bool}
+     */
+    public static function portListesi(ConsolePc $pc): array
+    {
+        $algilanan = $pc->portlar();
+
+        return [
+            'portlar' => array_map(fn (string $k): array => [
+                'deger' => $k, 'etiket' => $pc->portEtiketi($k), 'aktif' => in_array($k, $algilanan, true),
+            ], $pc->secilebilirPortlar()),
+            'otomatik' => count($algilanan) <= 1,
+        ];
+    }
+
+    /**
+     * Port seçim kutusu: algılanan portlar ve on düz ad (COM1–COM10 ya da
+     * /dev/ttyUSB0–9). Tek algılanan portta ya da hiç yoksa başta "Otomatik";
+     * çok algılanan portta yok (seçmek şart). console-form.js aynı kuralı PC
+     * değişince ve "Portları listele"de uygular.
      *
      * @return array<string, string>
      */
     public static function portSecenekleri(?ConsolePc $pc): array
     {
-        $portlar = $pc?->portlar() ?? [];
+        $portlar = $pc?->secilebilirPortlar() ?? [];
         $secenek = array_combine($portlar, array_map(fn (string $k): string => (string) $pc?->portEtiketi($k), $portlar));
 
-        return count($portlar) > 1 ? $secenek : ['' => 'Otomatik'] + $secenek;
+        /* "Otomatik" algılanan port sayısına bakar; elle eklenen COM'lar sayılmaz. */
+        return count($pc?->portlar() ?? []) > 1 ? $secenek : ['' => 'Otomatik'] + $secenek;
     }
 }

@@ -8,9 +8,12 @@ use App\ConsoleModule\Http\Requests\InputRequest;
 use App\ConsoleModule\Http\Requests\IsRequest;
 use App\ConsoleModule\Http\Requests\OnizlemeRequest;
 use App\ConsoleModule\Http\Requests\OnKontrolRequest;
+use App\ConsoleModule\Http\Requests\PortListeRequest;
 use App\ConsoleModule\Junos\PatchBuilder;
 use App\ConsoleModule\Junos\YedekDosyasi;
 use App\ConsoleModule\Models\ConsoleJob;
+use App\ConsoleModule\Remote\RemoteError;
+use App\ConsoleModule\Remote\SitePc;
 use App\ConsoleModule\Services\ConsolePage;
 use App\ConsoleModule\Services\IsBildirimleri;
 use App\ConsoleModule\Services\JobOpener;
@@ -136,6 +139,24 @@ class ConsoleController extends Controller
     public function precheck(OnKontrolRequest $request, OnKontrol $kontrol): JsonResponse
     {
         return response()->json(['sonuclar' => $kontrol->yap($request->pc(), $request->string('seri_port')->trim()->value(), $request->adres())]);
+    }
+
+    /**
+     * "Portları listele": PC'ye o an takılı seri portları okur ("Sına"daki
+     * algılamanın aynısı, kaydı da günceller) ve formun port listesini
+     * döndürür. PC'ye ulaşılamazsa nedeni söylenir.
+     */
+    public function ports(PortListeRequest $request, SitePc $uzak): JsonResponse
+    {
+        $pc = $request->pc();
+
+        try {
+            $uzak->portlariAlgila($pc);
+        } catch (RemoteError $e) {
+            return response()->json(['message' => "PC'ye ulaşılamadı: {$e->getMessage()}"], 422);
+        }
+
+        return response()->json(ConsolePage::portListesi($pc->refresh()) + ['saat' => now()->format('H:i:s')]);
     }
 
     /** Bu kişinin biten işleri (bir kez) ve sonraki yoklama; console-notify.js. */

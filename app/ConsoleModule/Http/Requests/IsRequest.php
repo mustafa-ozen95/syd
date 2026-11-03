@@ -58,7 +58,7 @@ class IsRequest extends FormRequest
              */
             'seri_port' => [Rule::requiredIf(fn (): bool => count($this->pcYaDaNull()?->portlar() ?? []) > 1), 'nullable', 'string', 'max:200',
                 function (string $alan, mixed $deger, Closure $hata): void {
-                    if (! in_array((string) $deger, $this->pcYaDaNull()?->portlar() ?? [], true)) {
+                    if (! in_array((string) $deger, $this->pcYaDaNull()?->secilebilirPortlar() ?? [], true)) {
                         $hata('Bu port PC\'de tanımlı değil.');
                     }
                 }],

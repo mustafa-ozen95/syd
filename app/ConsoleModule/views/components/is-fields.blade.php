@@ -23,13 +23,16 @@
         <select class="select" id="console-pc" name="pc" required data-console-pc>
             @foreach ($pcler as $uuid => $ad)
                 <option value="{{ $uuid }}" data-ip="{{ $pcAdresleri[$uuid]['ip'] ?? '' }}" data-gateway="{{ $pcAdresleri[$uuid]['gecit'] ?? '' }}"
-                        data-ports="{{ json_encode($pcAdresleri[$uuid]['portlar'] ?? []) }}"
+                        data-ports="{{ json_encode($pcAdresleri[$uuid]['portlar'] ?? []) }}" data-auto="{{ ($pcAdresleri[$uuid]['otomatik'] ?? true) ? '1' : '0' }}"
                         @selected($deger['pc'] === $uuid)>{{ $ad }}</option>
             @endforeach
         </select>
         <span class="field__hint">Switch'in konsol kablosu bu PC'ye takılı olmalı.</span>
     </div>
-    {{-- Seçenekler seçili PC'nin portları; PC değişince console-form.js yeniden doldurur. Birden çok portta seçmek şart. --}}
+    {{--
+        Seçenekler seçili PC'nin portları: algılananlar ve COM1–COM10 (Linux'ta /dev/ttyUSB0–9).
+        PC değişince console-form.js yeniden doldurur; "Portları listele" PC'ye o an takılı olanları okur (console.ports).
+    --}}
     <div class="field">
         <label class="field__label" for="console-port">Seri port</label>
         <select class="select" id="console-port" name="seri_port" data-console-port>
@@ -37,20 +40,14 @@
                 <option value="{{ $portDeger }}" @selected($deger['seri_port'] === $portDeger)>{{ $etiket }}</option>
             @endforeach
         </select>
-        <span class="field__hint">Her portta aynı anda bir iş: birden çok kablo takılıysa her biri ayrı switch kurar.</span>
+        <div><button type="button" class="btn btn--sm" data-console-ports data-url="{{ route('console.ports') }}">Portları listele</button></div>
+        <span class="field__hint" data-console-ports-out>Her portta aynı anda bir iş: birden çok kablo takılıysa her biri ayrı switch kurar.</span>
     </div>
 </div>
 
-{{--
-    Yedek listesi AÇIK DURUR (size), açılır kutu değil: 75 cihazlık açılır listeyi
-    Linux'taki Chrome alanın üstüne açıyor ve fareyi bırakma anı imlecin altındaki
-    cihazı seçiyordu (uzak masaüstündeki gecikmeyle her tıklamada). Arama kutusu
-    listeyi süzer; adı yoktur, gönderilmez. Değer yine bu <select>'ten gider.
---}}
 <div class="field">
     <label class="field__label" for="console-name">Yedek</label>
-    <input class="input" type="search" placeholder="Ara…" autocomplete="off" aria-controls="console-name" aria-label="Yedeklerde ara" data-console-device-search>
-    <select class="select" id="console-name" name="ad" size="8" data-console-device data-url="{{ route('console.backups') }}">
+    <select class="select" id="console-name" name="ad" data-console-device data-url="{{ route('console.backups') }}">
         <option value="" @selected($deger['ad'] === '')>Listede yok (fabrika ayarında kur)</option>
         @foreach ($yedekCihazlari as $cihaz)
             <option value="{{ $cihaz }}" @selected($deger['ad'] === $cihaz) @isset($sablonlar[$cihaz]) data-sablon @endisset>{{ $cihaz }}</option>

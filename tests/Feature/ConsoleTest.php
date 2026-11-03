@@ -209,9 +209,7 @@ final class ConsoleTest extends TestCase
         $this->actingAs($yonetici)->get(route('console.index'))->assertOk()
             ->assertSee('<option value="sw-a"', false)->assertDontSee('list="console-devices"', false)
             /* "Listede yok" boş değer: tarayıcı reddetmesin; ayrı "yapılandırma türü" seçimi yok. */
-            ->assertSee('name="ad" size="8" data-console-device', false)->assertSee('Listede yok (fabrika ayarında kur)')
-            /* Liste açık durur (açılır kutu uzun listede imlecin altındakini seçiyordu); arama kutusu gönderilmez. */
-            ->assertSee('data-console-device-search', false)->assertDontSee('name="yedek_ara"', false)
+            ->assertSee('name="ad" data-console-device', false)->assertSee('Listede yok (fabrika ayarında kur)')
             /* Bilgisayardan yüklemeler katlı gelir. */
             ->assertSee('<details class="fieldgroup"  data-console-optional>', false)
             ->assertDontSee('name="yapilandirma_turu"', false)->assertDontSee('name="yedek_cihaz"', false);
