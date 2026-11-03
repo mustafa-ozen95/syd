@@ -17,6 +17,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 /**
  * Yeni iş. Bir PC'de aynı anda TEK açık iş olur: kablo bir tane.
@@ -74,15 +75,8 @@ class IsRequest extends FormRequest
                 }
             }],
             'adres_turu' => ['nullable', Rule::in(array_keys(ConsoleJob::ADRES_TURLERI))],
-            /* Aynı PC'de aynı anda kurulan iki switch aynı kurulum adresini alamaz (loader ya da CLI). */
-            'cihaz_ip' => ['nullable', 'string', 'regex:/^(\d{1,3}\.){3}\d{1,3}\/([8-9]|[12]\d|30)$/', function (string $alan, mixed $deger, Closure $hata) use ($yalnizYedek): void {
-                $pc = $this->pcYaDaNull();
-                $adres = trim((string) $deger) ?: (string) $pc?->cihaz_ip;
-                if ($pc !== null && ! $yalnizYedek && $this->input('adres_turu') !== 'dhcp'
-                    && $pc->isler()->acik()->where('cihaz_ip', $adres)->exists()) {
-                    $hata("Bu PC'de açık başka bir iş {$adres} kurulum adresini kullanıyor; bu switch'e başka bir adres verin.");
-                }
-            }],
+            /* Aynı adres denetimi after()'da: alan boşken de (PC kaydındaki adres) işlemeli. */
+            'cihaz_ip' => ['nullable', 'string', 'regex:/^(\d{1,3}\.){3}\d{1,3}\/([8-9]|[12]\d|30)$/'],
             'gecit' => ['nullable', 'ip'],
             'goruntu' => [Rule::requiredIf(! $yalnizYedek && ! $goruntuYuklendi), 'nullable', 'string', function (string $alan, mixed $deger, Closure $hata) use ($yalnizYedek, $goruntuYuklendi): void {
                 if (! $yalnizYedek && ! $goruntuYuklendi) {
@@ -117,6 +111,28 @@ class IsRequest extends FormRequest
                 }
             }],
         ] + $this->ozellestirmeKurallari();
+    }
+
+    /**
+     * Aynı PC'de aynı anda kurulan iki switch aynı kurulum adresini alamaz
+     * (loader ya da CLI). Alan kuralı değil: Laravel boş alanda kural
+     * çalıştırmaz, oysa boş bırakılan adres PC kaydındakidir ve en sık
+     * çakışan odur.
+     *
+     * @return array<int, Closure>
+     */
+    public function after(): array
+    {
+        return [function (Validator $v): void {
+            $pc = $this->pcYaDaNull();
+            if ($pc === null || $this->input('islem') === 'yedek' || $this->input('adres_turu') === 'dhcp' || $v->errors()->has('cihaz_ip')) {
+                return;
+            }
+            $adres = trim((string) $this->input('cihaz_ip')) ?: (string) $pc->cihaz_ip;
+            if ($adres !== '' && $pc->isler()->acik()->where('cihaz_ip', $adres)->exists()) {
+                $v->errors()->add('cihaz_ip', "Bu PC'de açık başka bir iş {$adres} kurulum adresini kullanıyor; bu switch'e başka bir adres verin.");
+            }
+        }];
     }
 
     /** @return array<string, string> */

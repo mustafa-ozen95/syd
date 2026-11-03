@@ -46,6 +46,8 @@ final class ConsoleMultiPortTest extends TestCase
         $pc = $this->pc(['COM3', 'COM9']);
 
         $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, 'COM3'))->assertSessionHasNoErrors();
+        /* Boş adres PC kaydındakidir: ilk iş onu kullanıyor, ikinci boş adres de reddedilir. */
+        $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, 'COM9'))->assertSessionHasErrors('cihaz_ip');
         /* İkinci switch: başka port, başka loader adresi. */
         $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, 'COM9', '198.51.100.121/24'))->assertSessionHasNoErrors();
         $this->assertSame(2, ConsoleJob::query()->acik()->count());
