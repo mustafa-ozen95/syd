@@ -31,10 +31,15 @@ class BackupController extends Controller
     {
         /*
          * Ana sayfa herkesin ilk durağı; yedek göremeyen kişi 403 yerine
-         * görebildiği bölüme gider.
+         * görebildiği bölüme gider. Konsol da bir bölüm: yalnız konsol
+         * yetkisi olan teknik rolü girişte "yetki yok"a düşüyordu.
          */
         if (Gate::denies('yedek:view')) {
-            return redirect()->route(Gate::allows('junos:view') ? 'setup.index' : 'forbidden');
+            return redirect()->route(match (true) {
+                Gate::allows('junos:view') => 'setup.index',
+                Gate::allows('konsol:view') => 'console.index',
+                default => 'forbidden',
+            });
         }
 
         $arama = trim((string) $request->query('search', ''));

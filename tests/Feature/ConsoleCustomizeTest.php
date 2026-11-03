@@ -187,7 +187,8 @@ final class ConsoleCustomizeTest extends TestCase
         ])->assertSessionHasNoErrors();
         $this->assertStringContainsString('set system host-name piga', (string) ConsoleJob::sole()->yama);
 
-        /* Yedekleri ne görür ne indirir. */
-        $this->actingAs($teknik)->get(route('backup.index'))->assertRedirect(route('forbidden'));
+        /* Yedekleri ne görür ne indirir; ana sayfa onu "yetki yok" yerine konsola götürür. */
+        $this->actingAs($teknik)->get(route('backup.index'))->assertRedirect(route('console.index'));
+        $this->actingAs($teknik)->get(route('backup.folder', ['path' => 'sw-a']))->assertRedirect(route('forbidden'));
     }
 }
