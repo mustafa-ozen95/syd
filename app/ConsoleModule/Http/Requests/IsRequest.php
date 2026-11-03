@@ -52,11 +52,12 @@ class IsRequest extends FormRequest
                 }
             }],
             /*
-             * Seri port: PC'nin portlarından biri. İki ve daha çok portlu PC'de
-             * seçmek şart: "otomatik" taramada ajan öbür işin kablosunu da
-             * deneyebilirdi.
+             * Seri port: listedekilerden biri. "Otomatik" yok; boş gelirse
+             * PC'nin tek kablosu (varsayilanPort). Tek kablo yoksa seçmek şart:
+             * ajanın taraması öbür işin kablosunu ya da kasanın yerleşik
+             * portunu bulabilirdi.
              */
-            'seri_port' => [Rule::requiredIf(fn (): bool => count($this->pcYaDaNull()?->portlar() ?? []) > 1), 'nullable', 'string', 'max:200',
+            'seri_port' => [Rule::requiredIf(fn (): bool => ($this->pcYaDaNull()?->varsayilanPort() ?? '') === ''), 'nullable', 'string', 'max:200',
                 function (string $alan, mixed $deger, Closure $hata): void {
                     if (! in_array((string) $deger, $this->pcYaDaNull()?->secilebilirPortlar() ?? [], true)) {
                         $hata('Bu port PC\'de tanımlı değil.');
@@ -127,7 +128,7 @@ class IsRequest extends FormRequest
             'cihaz_ip.regex' => 'Adres önekle yazılmalı: 198.51.100.120/24.',
             'yedek_dosya.required' => 'Yüklenecek yedeği seçin.',
             'goruntu_saglama.regex' => 'Sağlama MD5 (32), SHA-1 (40) ya da SHA-256 (64) onaltılık karakter olmalı.',
-            'seri_port.required' => 'Bu PC\'de birden çok seri port var; konsol kablosunun takılı olduğu portu seçin.',
+            'seri_port.required' => 'Konsol kablosunun takılı olduğu seri portu seçin ("Portları listele" PC\'ye takılı olanları gösterir).',
         ] + $this->ozellestirmeIletileri();
     }
 
@@ -238,14 +239,11 @@ class IsRequest extends FormRequest
     }
 
     /**
-     * İşin portu: seçilen; seçilmediyse PC'nin tek portu; o da yoksa ''
-     * (otomatik). Aynı porta ikinci açık iş bu değerle aranır.
+     * İşin portu: seçilen; seçilmediyse PC'nin tek kablosu (doğrulama
+     * ikisinden birini şart koşar). Aynı porta ikinci açık iş bu değerle aranır.
      */
     public function secilenPort(): string
     {
-        $secilen = $this->string('seri_port')->trim()->value();
-        $portlar = $this->pcYaDaNull()?->portlar() ?? [];
-
-        return $secilen !== '' ? $secilen : (count($portlar) === 1 ? $portlar[0] : '');
+        return $this->string('seri_port')->trim()->value() ?: (string) $this->pcYaDaNull()?->varsayilanPort();
     }
 }

@@ -71,6 +71,8 @@ final class ConsoleLiveAgentTest extends TestCase
         $pc = ConsolePc::create([
             'ad' => 'Linux PC', 'platform' => 'linux', 'adres' => '198.51.100.15', 'port' => 2222, 'kullanici' => 'root',
             'parola' => 'x', 'cihaz_ip' => '198.51.100.120/24', 'gecit' => '198.51.100.1', 'dizin' => '/opt/console-agent', 'ssh_parmak_izi' => 'SHA256:abc',
+            /* Algılanmış tek konsol kablosu: iş formunda seçili gelir ("Otomatik" yok). */
+            'seri_port' => 'COM3', 'seri_portlar' => ['COM3'],
         ]);
         $betikler = [];
         Process::fake(function (PendingProcess $p) use (&$betikler) {

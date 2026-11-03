@@ -85,7 +85,10 @@ final class ConsoleMultiPortTest extends TestCase
         $pc->forceFill(['port_bilgileri' => ['ACPI\\PNP0501\\0' => ['com' => 'COM1', 'ad' => 'İletişim Bağlantı Noktası']]])->save();
 
         $this->assertSame(['ACPI\\PNP0501\\0', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'COM10'], $pc->secilebilirPortlar());
-        $this->assertSame(['' => 'Otomatik', 'ACPI\\PNP0501\\0' => 'COM1 · İletişim Bağlantı Noktası'], array_slice(ConsolePage::portSecenekleri($pc), 0, 2, true));
+        /* Kasanın yerleşik portu kablo sayılmaz: seçili gelen yok, seçmek şart. */
+        $this->assertSame('', $pc->varsayilanPort());
+        $this->assertSame(['' => '— Port seçin —', 'ACPI\\PNP0501\\0' => 'COM1 · İletişim Bağlantı Noktası'], array_slice(ConsolePage::portSecenekleri($pc), 0, 2, true));
+        $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, ''))->assertSessionHasErrors('seri_port');
 
         $this->actingAs($yonetici)->post(route('console.store'), $this->is($pc, 'COM5'))->assertSessionHasNoErrors();
         $this->assertSame('COM5', ConsoleJob::sole()->seri_port);
@@ -118,7 +121,7 @@ final class ConsoleMultiPortTest extends TestCase
         });
 
         $yanit = $this->actingAs($teknik)->postJson(route('console.ports'), ['pc' => $pc->uuid])->assertOk()
-            ->assertJsonPath('otomatik', true)
+            ->assertJsonPath('varsayilan', $ch340)
             ->assertJsonPath('portlar.0', ['deger' => $ch340, 'etiket' => 'COM9 · USB-SERIAL CH340', 'aktif' => true]);
         /* COM9 algılandı: düz COM9 ikinci kez çıkmaz. */
         $this->assertSame(['COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM10'],

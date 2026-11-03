@@ -84,10 +84,10 @@ const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content ??
 
 /**
  * Port kutusu o PC'nin portlarıyla dolar: algılananlar ve COM1–COM10 (Linux'ta
- * /dev/ttyUSB0–9). Tek algılanan portta "Otomatik" de var, çok portta seçmek
- * şart. Seçili port listede kaldıysa seçili kalır.
+ * /dev/ttyUSB0–9). "Otomatik" yok: tek kablo takılıysa o seçili gelir, değilse
+ * başta "— Port seçin —". Seçili port listede kaldıysa seçili kalır.
  */
-function fillPorts(form, ports, auto) {
+function fillPorts(form, ports, preferred, keepCurrent) {
     const select = form.querySelector('[data-console-port]');
 
     if (!select) {
@@ -97,13 +97,11 @@ function fillPorts(form, ports, auto) {
     const current = select.value;
 
     select.replaceChildren(
-        ...(auto ? [makeOption('', 'Otomatik')] : []),
+        ...(preferred === '' ? [makeOption('', '— Port seçin —')] : []),
         ...ports.map((p) => makeOption(p.deger, p.etiket)),
     );
 
-    if ([...select.options].some((o) => o.value === current)) {
-        select.value = current;
-    }
+    select.value = keepCurrent && current !== '' && [...select.options].some((o) => o.value === current) ? current : preferred;
 }
 
 /**
@@ -134,14 +132,14 @@ async function listPorts(button) {
             throw new Error(data.message || Object.values(data.errors ?? {}).flat().join(' ') || 'Portlar okunamadı.');
         }
 
-        fillPorts(form, data.portlar, data.otomatik);
+        fillPorts(form, data.portlar, data.varsayilan, true);
 
         /* PC değişip geri gelinince taze liste kullanılsın. */
         const option = pcSelect?.selectedOptions[0];
 
         if (option) {
             option.dataset.ports = JSON.stringify(data.portlar);
-            option.dataset.auto = data.otomatik ? '1' : '0';
+            option.dataset.default = data.varsayilan;
         }
 
         const active = data.portlar.filter((p) => p.aktif).map((p) => p.etiket);
@@ -377,7 +375,7 @@ export function init() {
             }
 
             if (selected) {
-                fillPorts(target.form, JSON.parse(selected.dataset.ports || '[]'), selected.dataset.auto === '1');
+                fillPorts(target.form, JSON.parse(selected.dataset.ports || '[]'), selected.dataset.default ?? '', false);
             }
         } else if (target.matches('[data-console-device]')) {
             fillBackups(target);

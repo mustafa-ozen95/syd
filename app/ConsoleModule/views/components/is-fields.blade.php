@@ -23,7 +23,7 @@
         <select class="select" id="console-pc" name="pc" required data-console-pc>
             @foreach ($pcler as $uuid => $ad)
                 <option value="{{ $uuid }}" data-ip="{{ $pcAdresleri[$uuid]['ip'] ?? '' }}" data-gateway="{{ $pcAdresleri[$uuid]['gecit'] ?? '' }}"
-                        data-ports="{{ json_encode($pcAdresleri[$uuid]['portlar'] ?? []) }}" data-auto="{{ ($pcAdresleri[$uuid]['otomatik'] ?? true) ? '1' : '0' }}"
+                        data-ports="{{ json_encode($pcAdresleri[$uuid]['portlar'] ?? []) }}" data-default="{{ $pcAdresleri[$uuid]['varsayilan'] ?? '' }}"
                         @selected($deger['pc'] === $uuid)>{{ $ad }}</option>
             @endforeach
         </select>

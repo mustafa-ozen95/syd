@@ -160,7 +160,7 @@ class ConsolePage
         return ConsolePc::query()->with('jeton')->orderBy('ad')->get()->map(fn (ConsolePc $pc): array => [
             'pc' => $pc,
             'platform' => ConsolePc::PLATFORMLAR[$pc->platform]['etiket'] ?? $pc->platform,
-            'seriPort' => implode(', ', array_map($pc->portEtiketi(...), $pc->portlar())) ?: 'otomatik',
+            'seriPort' => implode(', ', array_map($pc->portEtiketi(...), $pc->portlar())) ?: 'algılanmadı',
             'ajan' => $pc->ajanKuruluMu() ? 'Kurulu' : 'Kurulu değil',
             'ajanSon' => $pc->jeton?->last_used_at?->diffForHumans() ?? '—',
             'ajanMesaj' => $pc->ajan_mesaj,
@@ -219,16 +219,18 @@ class ConsolePage
         $pc = ConsolePc::query()->where('uuid', $deger['pc'])->first() ?? ConsolePc::query()->orderBy('ad')->first();
         $deger['cihaz_ip'] = $deger['cihaz_ip'] ?: (string) $pc?->cihaz_ip;
         $deger['gecit'] = $deger['gecit'] ?: (string) $pc?->gecit;
+        $deger['seri_port'] = $deger['seri_port'] ?: (string) $pc?->varsayilanPort();
 
         return $deger;
     }
 
     /**
      * Formun port listesi: seçilebilen portlar, hangilerinin son taramada
-     * takılı görüldüğü (aktif) ve "Otomatik"in olup olmadığı. Sayfa ilk
-     * çizilirken ve "Portları listele"de (console.ports) aynı biçim.
+     * takılı görüldüğü (aktif) ve önceden seçili olan (varsayilan; yoksa
+     * boş: seçmek şart). Sayfa ilk çizilirken ve "Portları listele"de
+     * (console.ports) aynı biçim.
      *
-     * @return array{portlar: list<array{deger: string, etiket: string, aktif: bool}>, otomatik: bool}
+     * @return array{portlar: list<array{deger: string, etiket: string, aktif: bool}>, varsayilan: string}
      */
     public static function portListesi(ConsolePc $pc): array
     {
@@ -238,15 +240,16 @@ class ConsolePage
             'portlar' => array_map(fn (string $k): array => [
                 'deger' => $k, 'etiket' => $pc->portEtiketi($k), 'aktif' => in_array($k, $algilanan, true),
             ], $pc->secilebilirPortlar()),
-            'otomatik' => count($algilanan) <= 1,
+            'varsayilan' => $pc->varsayilanPort(),
         ];
     }
 
     /**
      * Port seçim kutusu: algılanan portlar ve on düz ad (COM1–COM10 ya da
-     * /dev/ttyUSB0–9). Tek algılanan portta ya da hiç yoksa başta "Otomatik";
-     * çok algılanan portta yok (seçmek şart). console-form.js aynı kuralı PC
-     * değişince ve "Portları listele"de uygular.
+     * /dev/ttyUSB0–9). "Otomatik" yok: ajanın taraması yanlış kabloyu
+     * (kasanın yerleşik portunu ya da öbür işinkini) bulabiliyordu. Tek
+     * kablo takılıysa o seçili gelir; değilse başta "— Port seçin —".
+     * console-form.js aynı kuralı PC değişince ve "Portları listele"de uygular.
      *
      * @return array<string, string>
      */
@@ -255,7 +258,6 @@ class ConsolePage
         $portlar = $pc?->secilebilirPortlar() ?? [];
         $secenek = array_combine($portlar, array_map(fn (string $k): string => (string) $pc?->portEtiketi($k), $portlar));
 
-        /* "Otomatik" algılanan port sayısına bakar; elle eklenen COM'lar sayılmaz. */
-        return count($pc?->portlar() ?? []) > 1 ? $secenek : ['' => 'Otomatik'] + $secenek;
+        return ($pc?->varsayilanPort() ?? '') === '' ? ['' => '— Port seçin —'] + $secenek : $secenek;
     }
 }

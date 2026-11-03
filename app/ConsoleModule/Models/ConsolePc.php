@@ -116,6 +116,20 @@ class ConsolePc extends Model
         return [...$portlar, ...array_values($elle)];
     }
 
+    /**
+     * Yeni işte önceden seçili port: algılanan TEK konsol kablosu. Kasanın
+     * yerleşik seri portu (Windows'ta ACPI\PNP0501, Linux'ta /dev/ttyS*)
+     * kablo sayılmaz: Teknik PC'de COM1 hep algılanıyordu. İki kablo
+     * takılıysa ya da hiç yoksa boş: o zaman seçmek şart.
+     */
+    public function varsayilanPort(): string
+    {
+        $kablolar = array_values(array_filter($this->portlar(),
+            fn (string $p): bool => ! str_starts_with(strtoupper($p), 'ACPI\\') && preg_match('#^/dev/ttyS\d+$#', $p) !== 1));
+
+        return count($kablolar) === 1 ? $kablolar[0] : '';
+    }
+
     /** Ekranda port: "COM9 · USB Serial Port"; algılanmamışsa olduğu gibi. */
     public function portEtiketi(string $port): string
     {

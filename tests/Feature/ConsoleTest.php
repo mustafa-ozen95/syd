@@ -31,6 +31,8 @@ final class ConsoleTest extends TestCase
         return ConsolePc::create([
             'ad' => 'PC-01', 'platform' => 'windows', 'adres' => '198.51.100.16', 'port' => 5985, 'kullanici' => 'OPERATÖR',
             'parola' => 'x', 'cihaz_ip' => '198.51.100.120/24', 'gecit' => '198.51.100.1', 'dizin' => 'C:\\Console-Agent',
+            /* Algılanmış tek konsol kablosu: iş formunda seçili gelir ("Otomatik" yok). */
+            'seri_port' => 'COM3', 'seri_portlar' => ['COM3'],
         ]);
     }
 
