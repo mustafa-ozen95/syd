@@ -78,6 +78,7 @@ class ConsolePage
             'is' => $is,
             'yetki' => $this->yetki(),
             'acik' => $is->acikMi(),
+            'kapatabilir' => Gate::allows('konsol-is-kapat', $is),
             'olusturan' => $is->olusturan?->name ?? '—',
             'acilis' => $is->created_at?->format('d.m.Y H:i'),
             'yapilandirma' => $is->yapilandirmaOzeti(),

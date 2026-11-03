@@ -11,6 +11,7 @@ use App\ConsoleModule\Services\AgentJob;
 use App\ConsoleModule\Sources\TftpProgress;
 use App\Models\ApiToken;
 use App\Models\JunosImage;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\Api\ApiTokenContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -208,7 +209,11 @@ final class ConsoleTest extends TestCase
         $this->actingAs($yonetici)->get(route('console.index'))->assertOk()
             ->assertSee('<option value="sw-a"', false)->assertDontSee('list="console-devices"', false)
             /* "Listede yok" boş değer: tarayıcı reddetmesin; ayrı "yapılandırma türü" seçimi yok. */
-            ->assertSee('name="ad" data-console-device', false)->assertSee('Listede yok (fabrika ayarında kur)')
+            ->assertSee('name="ad" size="8" data-console-device', false)->assertSee('Listede yok (fabrika ayarında kur)')
+            /* Liste açık durur (açılır kutu uzun listede imlecin altındakini seçiyordu); arama kutusu gönderilmez. */
+            ->assertSee('data-console-device-search', false)->assertDontSee('name="yedek_ara"', false)
+            /* Bilgisayardan yüklemeler katlı gelir. */
+            ->assertSee('<details class="fieldgroup"  data-console-optional>', false)
             ->assertDontSee('name="yapilandirma_turu"', false)->assertDontSee('name="yedek_cihaz"', false);
 
         /* Listede olmayan ad kabul edilmez. */
@@ -361,6 +366,40 @@ final class ConsoleTest extends TestCase
 
         config(['console.tftp_state' => $yol]);
         $this->assertNull(app(TftpProgress::class)->icin($is), 'Dosya yoksa ilerleme yok');
+    }
+
+    /**
+     * Kapatma silmeden ayrı: "İşi kapat" yetkisi her işi, işi açan kendi
+     * işini kapatır; ikisi de geçmişten silemez. Yalnız iş açabilen teknik
+     * rolü takılan işini bırakamıyordu.
+     */
+    #[Test]
+    public function is_kapatma_yetkisi(): void
+    {
+        $pc = $this->pc();
+        $yonetici = User::factory()->admin()->create();
+        $teknik = User::factory()->rol('teknik')->create();
+        Role::where('slug', 'teknik')->sole()->update(['yetkiler' => ['konsol' => ['view', 'create', 'ajan']]]);
+        $kendi = ConsoleJob::create(['pc_id' => $pc->id, 'ad' => 'sw-k', 'olusturan_id' => $teknik->id, 'acik_port' => 'COM3']);
+        $baskasi = ConsoleJob::create(['pc_id' => $pc->id, 'ad' => 'sw-b', 'olusturan_id' => $yonetici->id, 'acik_port' => 'COM4']);
+
+        /* Kendi işi: düğmeyi görür ve kapatır. */
+        $this->actingAs($teknik)->get(route('console.show', $kendi))->assertOk()->assertSee(route('console.close', $kendi), false);
+        $this->actingAs($teknik)->put(route('console.close', $kendi))->assertRedirect(route('console.show', $kendi));
+        $this->assertSame('iptal', $kendi->refresh()->durum);
+
+        /* Başkasının işi: yetkisi yoksa ne düğme ne kapatma. */
+        $this->actingAs($teknik)->get(route('console.show', $baskasi))->assertOk()->assertDontSee(route('console.close', $baskasi), false);
+        $this->actingAs($teknik)->put(route('console.close', $baskasi))->assertRedirect(route('forbidden'));
+        $this->assertTrue($baskasi->refresh()->acikMi());
+
+        /* "İşi kapat" verilince her işi kapatır, yine silemez. */
+        Role::where('slug', 'teknik')->sole()->update(['yetkiler' => ['konsol' => ['view', 'create', 'ajan', 'kapat']]]);
+        $teknik = $teknik->fresh();
+        $this->actingAs($teknik)->put(route('console.close', $baskasi))->assertRedirect(route('console.show', $baskasi));
+        $this->assertSame('iptal', $baskasi->refresh()->durum);
+        $this->actingAs($teknik)->delete(route('console.destroy', $baskasi))->assertRedirect(route('forbidden'));
+        $this->assertNotNull($baskasi->fresh());
     }
 
     private function isGirdisi(ConsolePc $pc, string $ad): array

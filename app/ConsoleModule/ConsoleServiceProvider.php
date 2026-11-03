@@ -8,11 +8,13 @@ use App\ConsoleModule\Commands\SyncAgentsCommand;
 use App\ConsoleModule\Contracts\ConfigurationSource;
 use App\ConsoleModule\Contracts\ImageSource;
 use App\ConsoleModule\Sources\SablonluKaynak;
+use App\Models\User;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull;
 use Illuminate\Foundation\Http\Middleware\TrimStrings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -41,9 +43,11 @@ class ConsoleServiceProvider extends ServiceProvider
             'permissions.actions.ajan' => 'Ajan olarak bağlan',
             /* Cihaz yedeğinde "Yapılandırmayı özelleştir". Config şablonlarında iş açan herkes özelleştirebilir. */
             'permissions.actions.ozellestir' => 'Yedekte özelleştirme',
+            /* Açık işi durdurmak; geçmişten silmek değil (o "Sil"). Takılan iş portu tutar, bırakabilmek gerekir. */
+            'permissions.actions.kapat' => 'İşi kapat',
             'permissions.resources.konsol' => [
                 'label' => 'Konsol kurulum',
-                'actions' => ['view', 'create', 'update', 'delete', 'ajan', 'ozellestir'],
+                'actions' => ['view', 'create', 'update', 'delete', 'ajan', 'ozellestir', 'kapat'],
             ],
             'api.endpoints' => (array) config('api.endpoints', []) + [
                 'console.jobs' => [
@@ -101,6 +105,15 @@ class ConsoleServiceProvider extends ServiceProvider
         Blade::anonymousComponentPath(__DIR__.'/views/components', 'console');
         $this->loadRoutesFrom(__DIR__.'/routes/web.php');
         $this->loadRoutesFrom(__DIR__.'/routes/api.php');
+
+        /*
+         * Açık işi kapatmak: silme ya da kapatma yetkisi olan her işi, işi
+         * açan kendi işini. Yalnız iş açabilen teknik rolü kapatamıyordu:
+         * takılan iş portu tutuyor ve kimse bırakamıyordu.
+         */
+        Gate::define('konsol-is-kapat', fn (User $kim, Models\ConsoleJob $is): bool => $kim->can('konsol:delete')
+            || $kim->can('konsol:kapat')
+            || ($is->olusturan_id === $kim->id && $kim->can('konsol:create')));
 
         /*
          * Konsol metni olduğu gibi kalır: baştaki/sondaki boşluk ve satır

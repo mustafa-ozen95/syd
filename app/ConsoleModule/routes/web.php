@@ -18,7 +18,7 @@ Route::middleware(['web', 'auth'])->prefix('console')->name('console.')->group(f
     Route::get('/job/{job}/log', [ConsoleController::class, 'log'])->middleware('can:konsol:view')->name('log');
     Route::get('/job/{job}/final-config', [ConsoleController::class, 'finalConfig'])->middleware(['can:konsol:view', 'can:yedek:download'])->name('final-config');
     Route::post('/job/{job}/input', [ConsoleController::class, 'input'])->middleware('can:konsol:create')->name('input');
-    Route::put('/job/{job}/close', [ConsoleController::class, 'close'])->middleware('can:konsol:delete')->name('close');
+    Route::put('/job/{job}/close', [ConsoleController::class, 'close'])->middleware('can:konsol-is-kapat,job')->name('close');
     Route::delete('/job/{job}', [ConsoleController::class, 'destroy'])->middleware('can:konsol:delete')->name('destroy');
 
     Route::middleware('can:konsol:update')->group(function (): void {

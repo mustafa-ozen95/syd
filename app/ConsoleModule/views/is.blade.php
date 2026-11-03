@@ -12,7 +12,7 @@
           <a class="btn btn--sm" href="{{ route('console.final-config', $is) }}"
              title="Kurulum bitince cihazdan okundu ({{ $teslim['alindi'] }}). Geçici kayıt: {{ $teslim['silinir'] }} tarihinde silinir."><x-icon name="download" />Teslim config'i</a>
         @endif
-        @if ($yetki['sil'] && $acik)
+        @if ($kapatabilir && $acik)
           <form method="POST" action="{{ route('console.close', $is) }}" data-confirm="{{ $kapatOnay }}"
                 data-confirm-title="İşi kapat" data-confirm-variant="danger" data-confirm-reasonless>
             @csrf
