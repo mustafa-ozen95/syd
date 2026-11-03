@@ -602,7 +602,10 @@ func (a *Flow) afterLogin(ctx context.Context) error {
 }
 
 // reShowConfig `show configuration` çıktısı: komutun yankısından CLI istemine.
-var reShowConfig = regexp.MustCompile(`(?s)show configuration \| no-more\r?\n(.*?)\r?\n[\w.@:-]+>\s*$`)
+// EX4200'de yankı sonunda boşlukla gelir ("no-more \r\n"), satır sonları
+// "\r\r\n" olabilir ve istemden önce Virtual Chassis satırı ("{master:0}")
+// durur: üçü de yapılandırmaya karışmadan atlanır.
+var reShowConfig = regexp.MustCompile(`(?s)show configuration \| no-more[ \t]*\r*\n(.*?)\r*\n(?:\r*\n)*(?:\{[^}\r\n]*\}\r*\n)?[\w.@:-]+>\s*$`)
 
 // sendFinalConfig cihazın teslim anındaki yapılandırmasını panele verir.
 // Panel bunu işin yanında İKİ GÜN tutar, sonra siler (teknik ekip switch'i
@@ -633,43 +636,63 @@ func (a *Flow) sendFinalConfig(ctx context.Context) {
 // "Auto Image Upgrade") kapatır: yoksa cihaz DHCP'den görüntü arayıp konsola
 // durmadan satır basar, teslim alan teknisyen temiz bir istem görmez.
 //
-// Kalıcı yol `delete chassis auto-image-upgrade` + commit; ama Junos fabrika
-// ayarında root parolası olmadan HİÇBİR commit'i kabul etmez ("Missing
-// mandatory statement: 'root-authentication'"). O zaman aday geri alınır ve
-// ZTP yalnız bu açılış için durdurulur (`request system autoinstallation
-// stop`; komutu olmayan sürümde zararsızca reddedilir). Kurulum bu yüzden
-// hiçbir durumda başarısız sayılmaz: Junos kuruldu, ZTP yalnız gürültü.
+// Kalıcı yol `delete chassis auto-image-upgrade` + commit; ama Junos root
+// parolası olmayan yapılandırmada HİÇBİR commit'i kabul etmez ("Missing
+// mandatory statement: 'root-authentication'"). Fabrika kurulumunda parola
+// hiç yoktur: commit denemek yalnız konsola kırmızı bir hata bırakıyordu
+// (EX4200, 12.3R12.4). Önce parolaya bakılır (`| count`: özet konsola
+// basılmaz); yoksa ZTP yalnız bu açılış için durdurulur (`request system
+// autoinstallation stop`). Kurulum hiçbir durumda başarısız sayılmaz: Junos
+// kuruldu, ZTP yalnız gürültü.
 func (a *Flow) stopZtp(ctx context.Context) {
-	if err := a.command(ctx, "configure", 20*time.Second, reConf); err != nil {
-		a.notify("bilgi", "ZTP kapatılamadı (yapılandırma kipine girilemedi).")
-		return
-	}
 	pos := a.k.Position()
-	_ = a.command(ctx, "delete chassis auto-image-upgrade", 20*time.Second, reConf)
-	if strings.Contains(a.k.Text(pos), "statement not found") {
-		_ = a.command(ctx, "exit configuration-mode", 20*time.Second, reCli)
-		return // bu sürümün fabrika ayarında ZTP yok
-	}
-	pos = a.k.Position()
-	if err := a.send("commit and-quit\r"); err != nil {
+	_ = a.command(ctx, "show configuration system root-authentication | count", 20*time.Second, reCli)
+	if m := reCount.FindStringSubmatch(a.k.Text(pos)); m != nil && m[1] != "0" && a.deleteZtp(ctx) {
 		return
 	}
-	i, err := a.k.Wait(ctx, pos, 3*time.Minute, reCommit, reError)
-	if err == nil && i == 0 {
-		_, _ = a.k.Wait(ctx, pos, time.Minute, reCli)
-		a.notify("bilgi", "ZTP (otomatik kurulum) kapatıldı.")
-		return
-	}
-	_ = a.command(ctx, "rollback 0", 20*time.Second, reConf)
-	_ = a.command(ctx, "exit configuration-mode", 20*time.Second, reCli)
-
 	pos = a.k.Position()
 	_ = a.command(ctx, "request system autoinstallation stop", 30*time.Second, reCli)
 	if reError.MatchString(a.k.Text(pos)) || strings.Contains(a.k.Text(pos), "unknown command") {
 		a.notify("bilgi", "ZTP kalıcı kapatılamadı: fabrika ayarında root parolası olmadan commit edilemiyor. İlk yapılandırmada `delete chassis auto-image-upgrade` ekleyin.")
 		return
 	}
+	/* EX4200 12.3: "warning: autoinstallation subsystem not running". */
+	if strings.Contains(a.k.Text(pos), "not running") {
+		a.notify("bilgi", "ZTP bu açılışta çalışmıyordu. Kalıcı kapatmak için ilk yapılandırmada `delete chassis auto-image-upgrade` ekleyin (fabrika ayarında root parolası olmadan commit edilemiyor).")
+		return
+	}
 	a.notify("bilgi", "ZTP bu açılış için durduruldu. Kalıcı kapatmak için ilk yapılandırmada `delete chassis auto-image-upgrade` ekleyin (fabrika ayarında root parolası olmadan commit edilemiyor).")
+}
+
+// reCount `| count` çıktısı: "Count: 3 lines".
+var reCount = regexp.MustCompile(`Count: (\d+) lines?`)
+
+// deleteZtp ZTP'yi kalıcı kaldırır (root parolası olan yapılandırmada).
+// Commit yine reddedilirse aday geri alınır ve false döner: ZTP o zaman
+// yalnız bu açılış için durdurulur.
+func (a *Flow) deleteZtp(ctx context.Context) bool {
+	if err := a.command(ctx, "configure", 20*time.Second, reConf); err != nil {
+		return false
+	}
+	pos := a.k.Position()
+	_ = a.command(ctx, "delete chassis auto-image-upgrade", 20*time.Second, reConf)
+	if strings.Contains(a.k.Text(pos), "statement not found") {
+		_ = a.command(ctx, "exit configuration-mode", 20*time.Second, reCli)
+		return true // bu sürümün yapılandırmasında ZTP yok
+	}
+	pos = a.k.Position()
+	if err := a.send("commit and-quit\r"); err != nil {
+		return false
+	}
+	i, err := a.k.Wait(ctx, pos, 3*time.Minute, reCommit, reError)
+	if err == nil && i == 0 {
+		_, _ = a.k.Wait(ctx, pos, time.Minute, reCli)
+		a.notify("bilgi", "ZTP (otomatik kurulum) kapatıldı.")
+		return true
+	}
+	_ = a.command(ctx, "rollback 0", 20*time.Second, reConf)
+	_ = a.command(ctx, "exit configuration-mode", 20*time.Second, reCli)
+	return false
 }
 
 // reCliInstallFail "request system software add" başarısız: ağdan çekilemedi

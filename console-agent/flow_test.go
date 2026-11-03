@@ -44,6 +44,10 @@ type fakeDevice struct {
 	ztpNoise   bool // show version isteminden sonra ZTP satırı düşer
 	ztpDeleted bool // delete chassis auto-image-upgrade
 	ztpStopped bool // request system autoinstallation stop
+	// ex4200: CLI yankısı sonunda boşluk ("no-more \r\n") ve istemden önce
+	// Virtual Chassis satırı ("{master:0}"), sahada görüldüğü gibi.
+	ex4200     bool
+	configured bool // configure kipine girildi
 	out        chan string
 }
 
@@ -176,6 +180,9 @@ func (c *fakeDevice) handleByte(b byte) {
 	if b == '\r' || b == '\n' {
 		line := strings.TrimSpace(c.line)
 		c.line = ""
+		if c.ex4200 && c.state == "cli" && line != "" {
+			c.emitLocked(" ")
+		}
 		c.emitLocked("\r\n")
 		c.lineReceived(line)
 		return
@@ -232,11 +239,26 @@ func (c *fakeDevice) lineReceived(s string) {
 				c.emitLocked("\r\nqfx5100 (ttyd0)\r\n\r\nlogin: ")
 			})
 		case "show configuration | no-more":
+			if c.ex4200 {
+				c.emitLocked("## Last commit: 2016-01-20 07:07:07 UTC by root\r\nversion 12.3R12.4;\r\npoe {\r\n    interface all;\r\n}\r\n\r\n{master:0}\r\nroot> ")
+				return
+			}
 			c.emitLocked("## Last commit: 2026-11-02 10:00:00 UTC by root\r\nsystem {\r\n    host-name sw1;\r\n}\r\n\r\nroot@sw1> ")
+		case "show configuration system root-authentication | count":
+			n := "0"
+			if c.password != "" {
+				n = "1"
+			}
+			c.emitLocked("Count: " + n + " lines\r\n\r\nroot@sw1> ")
 		case "request system autoinstallation stop":
 			c.ztpStopped = true
+			if c.ex4200 {
+				c.emitLocked("warning: autoinstallation subsystem not running - not needed by configuration.\r\n\r\n{master:0}\r\nroot> ")
+				return
+			}
 			c.emitLocked("root> ")
 		case "configure":
+			c.configured = true
 			c.state = "conf"
 			c.emitLocked("Entering configuration mode\r\n\r\n[edit]\r\nroot# ")
 		case "exit":
@@ -939,8 +961,12 @@ func TestFactoryInstallStopsZtpWithoutCommit(t *testing.T) {
 	if err := a.Install(ctx); err != nil {
 		t.Fatalf("kurulum: %v\nolaylar: %v", err, *events)
 	}
-	if c.committed || c.ztpDeleted || !c.ztpStopped {
-		t.Fatalf("commit=%v silindi=%v durduruldu=%v\nolaylar: %v\nkonsol: %q", c.committed, c.ztpDeleted, c.ztpStopped, *events, a.k.Text(0))
+	if c.committed || c.ztpDeleted || !c.ztpStopped || c.configured {
+		t.Fatalf("commit=%v silindi=%v durduruldu=%v configure=%v\nolaylar: %v\nkonsol: %q", c.committed, c.ztpDeleted, c.ztpStopped, c.configured, *events, a.k.Text(0))
+	}
+	/* Parolasız yapılandırmada commit denenmez: konsolda kırmızı hata kalmaz. */
+	if strings.Contains(a.k.Text(0), "commit failed") {
+		t.Errorf("commit denendi: %q", a.k.Text(0))
 	}
 	if !strings.Contains(strings.Join(*events, "\n"), "ZTP bu açılış için durduruldu") {
 		t.Errorf("olaylar: %v", *events)
@@ -989,6 +1015,34 @@ func TestLoadedBackupDropsZtp(t *testing.T) {
 }
 
 // Kurulum bitince teslim anındaki yapılandırma panele gider.
+// EX4200 (12.3R12.4, sahada): yankı boşlukla biter, istemden önce
+// "{master:0}" durur. Yapılandırma ikisine takılmadan alınmalı.
+func TestFinalConfigSentOnEx4200(t *testing.T) {
+	c := newFake(t, "loader")
+	c.ex4200 = true
+	job := sampleJob
+	job.Configuration = false
+	a, events := newTestFlow(t, c, job)
+	var got string
+	a.finalConfig = func(_ context.Context, text string) error { got = text; return nil }
+	ctx, stop := context.WithTimeout(context.Background(), 60*time.Second)
+	defer stop()
+
+	if err := a.Install(ctx); err != nil {
+		t.Fatalf("kurulum: %v\nolaylar: %v", err, *events)
+	}
+	if got != "## Last commit: 2016-01-20 07:07:07 UTC by root\nversion 12.3R12.4;\npoe {\n    interface all;\n}" {
+		t.Fatalf("gönderilen: %q\nolaylar: %v", got, *events)
+	}
+	/* Konsolda commit hatası yok; ZTP'nin çalışmadığı doğru söylenir. */
+	if strings.Contains(a.k.Text(0), "commit failed") || c.configured {
+		t.Errorf("commit denendi: %q", a.k.Text(0))
+	}
+	if olaylar := strings.Join(*events, "\n"); !strings.Contains(olaylar, "ZTP bu açılışta çalışmıyordu") || strings.Contains(olaylar, "durduruldu") {
+		t.Errorf("olaylar: %v", *events)
+	}
+}
+
 func TestFinalConfigSentAfterInstall(t *testing.T) {
 	c := newFake(t, "login")
 	c.password = "gizli"
