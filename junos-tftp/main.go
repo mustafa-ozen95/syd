@@ -213,7 +213,12 @@ func main() {
 	// baytlık ilk bloğu "son blok" sanıp "truncated gzip input" ile düşer.
 	// İstenen boy verilir; üst sınır arayüzün MTU'su.
 	srv.SetBlockSize(blockLimit)
-	srv.SetTimeout(5 * time.Second)
+	// Kaybolan blok bu süre sonunda yeniden gönderilir. Kurucu 512 baytlık
+	// blokla çekiyor (EX4550: 112 MB, 220 bin blok) ve cihaz flash'a yazarken
+	// arada bir paketi kaçırıyor; her kayıp bu kadar bekletir. Vazgeçme süresi
+	// (süre × deneme) eskisi gibi ~25 sn.
+	srv.SetTimeout(2 * time.Second)
+	srv.SetRetries(12)
 	log.Printf("junos-tftp: %s · dizin %s · tek port", *addr, *root)
 	log.Fatal(srv.ListenAndServe(*addr))
 }

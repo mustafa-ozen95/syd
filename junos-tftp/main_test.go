@@ -164,3 +164,60 @@ func TestHTTPServesOnlyImages(t *testing.T) {
 		t.Errorf("PUT: %d", rec.Code)
 	}
 }
+
+// Kaybolan blok yeniden gönderilmeli. Kayıptan sonra istemci son ACK'i
+// sunucunun bekleme süresinden SIK tekrarlıyor (EX4550 kurucusu); kütüphanenin
+// tek port kipi her eski ACK'te süreyi baştan başlatıyordu, süre hiç dolmuyor
+// ve blok bir daha gönderilmiyordu: aktarım 6,6 MB'ta "Channel timeout" ile
+// kesildi, kurucu "gzip: stdin: unexpected end of file" dedi.
+func TestLostBlockIsResent(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "j.tgz"), make([]byte, 512*4+100), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{root: root, stateFile: filepath.Join(t.TempDir(), "tftp.json")}
+	srv := tftp.NewServer(s.readHandler, nil)
+	srv.EnableSinglePort()
+	srv.SetTimeout(time.Second)
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	go srv.Serve(conn)
+	defer srv.Shutdown()
+
+	c, err := net.DialUDP("udp", nil, conn.LocalAddr().(*net.UDPAddr))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	if _, err := c.Write(append([]byte{0, 1}, []byte("j.tgz\x00octet\x00")...)); err != nil {
+		t.Fatal(err)
+	}
+	ack := func(block byte) { _, _ = c.Write([]byte{0, 4, 0, block}) }
+	read := func(timeout time.Duration) []byte {
+		c.SetReadDeadline(time.Now().Add(timeout))
+		b := make([]byte, 600)
+		n, err := c.Read(b)
+		if err != nil {
+			return nil
+		}
+		return b[:n]
+	}
+
+	if p := read(2 * time.Second); len(p) < 4 || p[3] != 1 {
+		t.Fatalf("ilk blok gelmedi: %v", p)
+	}
+	ack(1)
+	read(2 * time.Second) // blok 2: "kayboldu", ACK'lenmez
+
+	// Eski ACK süreden sık tekrarlanır; blok 2 en geç birkaç saniyede yeniden gelmeli.
+	end := time.Now().Add(4 * time.Second)
+	for time.Now().Before(end) {
+		ack(1)
+		if p := read(300 * time.Millisecond); len(p) >= 4 && p[1] == 3 && p[3] == 2 {
+			return
+		}
+	}
+	t.Fatal("kaybolan blok 2 yeniden gönderilmedi")
+}

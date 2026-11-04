@@ -63,6 +63,8 @@ FROM golang:1.24-bookworm AS junos-tftp
 
 WORKDIR /src
 COPY junos-tftp/go.mod junos-tftp/go.sum ./
+# Yamalı kütüphane (replace ./pintftp) indirmeden önce yerinde olmalı.
+COPY junos-tftp/pintftp/ ./pintftp/
 RUN go mod download
 COPY junos-tftp/ ./
 RUN go vet ./... \
