@@ -55,6 +55,10 @@ var (
 	// EX2300'ün loader'ı boşlukla durmaz ("Autoboot in 3 seconds... (press
 	// Ctrl-C to interrupt)").
 	reAutoboot = regexp.MustCompile(`(?i)press ctrl-c to interrupt`)
+	// Çekirdeği olmayan cihazın loader'ı (EX4550: yarım kalan "install
+	// --format" diski boşaltmış, "can't load '/kernel'") yalnız Enter'la
+	// durur; boşluk işlemez, watchdog cihazı yeniden başlatır ve döngü sürer.
+	reBootSeq = regexp.MustCompile(`(?i)press enter to stop auto bootsequencing`)
 	// Menüde loader istemine götüren madde ve "daha fazla" maddesi; numara
 	// ekrandan okunur.
 	reMenuLoaderItem = regexp.MustCompile(`(?i)(\d+)\.\s*[^\n\d]{0,30}?(\[b\]oot prompt|boot \[p\]rompt|loader \[?p\]?rompt|escape to loader)`)
@@ -447,7 +451,7 @@ func (a *Flow) waitBootFrom(ctx context.Context, timeout time.Duration, pos int6
 	booted := false
 	ubootCount := 0
 	speedOk, speedChanges := false, 0
-	ctrlc, menu, spaceOK := 0, 0, true
+	ctrlc, menu, enter, spaceOK := 0, 0, 0, true
 	for time.Now().Before(end) {
 		if !speedOk && !booted {
 			raw := a.k.Text(pos)
@@ -494,6 +498,17 @@ func (a *Flow) waitBootFrom(ctx context.Context, timeout time.Duration, pos int6
 			booted, spaceOK = true, false // boşluk menünün istemine yazılmasın
 			pos = a.k.Position()
 			if err := a.send("\x03"); err != nil {
+				return err
+			}
+			continue
+		case reBootSeq.MatchString(text) && enter < 5:
+			if enter == 0 {
+				a.notify("acilis", "Cihazda çekirdek yok (can't load '/kernel'); loader için Enter gönderiliyor.")
+			}
+			enter++
+			booted, spaceOK = true, false // boşluk loader istemine yazılmasın
+			pos = a.k.Position()
+			if err := a.send("\r"); err != nil {
 				return err
 			}
 			continue

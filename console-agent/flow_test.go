@@ -131,6 +131,32 @@ func (c *fakeDevice) powerOn2300() {
 	})
 }
 
+// powerOnNoKernel çekirdeği olmayan EX4550 gibi açar (yarım kalan
+// "install --format" sonrası konsolda görülen sıra): loader çekirdeği
+// bulamaz, yalnız Enter'la durur; durmazsa watchdog yeniden başlatır.
+func (c *fakeDevice) powerOnNoKernel() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.state = "acilis"
+	c.emitLocked("\r\nU-Boot 2010.03 (Oct 21 2012 - 03:06:55)\r\nBoard: EX4550-32F 5.21\r\nDRAM:  Initializing\r\n")
+	c.after(300*time.Millisecond, func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.state = "bootseq"
+		c.emitLocked("FreeBSD/PowerPC U-Boot bootstrap loader, Revision 2.4\r\nbootsequencing is enabled\r\nnew boot device = disk0s2:\r\n|/-\\|can't load '/kernel'\r\ncan't load '/kernel.old'\r\nPress Enter to stop auto bootsequencing and to enter loader prompt.\r\n")
+		c.after(2*time.Second, func() {
+			c.mu.Lock()
+			if c.state != "bootseq" {
+				c.mu.Unlock()
+				return
+			}
+			c.emitLocked("Watchdog timeout\r\n")
+			c.mu.Unlock()
+			c.powerOnNoKernel()
+		})
+	})
+}
+
 // powerOn kapalı cihazı açar: U-Boot geri sayımı kimse durdurmadan
 // geçer, loader'ın kısa penceresi gelir.
 func (c *fakeDevice) powerOn() {
@@ -172,6 +198,12 @@ func (c *fakeDevice) handleByte(b byte) {
 		return
 	case "kuruluyor", "acilis", "kapali-cihaz":
 		return
+	case "bootseq":
+		if b == '\r' {
+			c.state = "loader"
+			c.emitLocked("\r\nType '?' for a list of commands.\r\nloader> ")
+		}
+		return // boşluk bu bekleyişi durdurmaz
 	case "ex-autoboot":
 		if b == 0x03 {
 			c.state = "ex-menu"
@@ -701,6 +733,32 @@ func TestEx2300MenuToLoader(t *testing.T) {
 		orig(stage, message)
 		if strings.Contains(message, "elektrik") {
 			once.Do(func() { go c.powerOn2300() })
+		}
+	}
+	ctx, stop := context.WithTimeout(context.Background(), 40*time.Second)
+	defer stop()
+	if err := a.Install(ctx); err != nil {
+		t.Fatalf("kurulum: %v\nolaylar: %v\nkonsol: %q", err, *events, a.k.Text(0))
+	}
+	if c.installed == "" {
+		t.Errorf("kurulmadı; olaylar: %v", *events)
+	}
+}
+
+// EX4550, diski boşalmış: loader yalnız Enter'la durur.
+func TestNoKernelEnterToLoader(t *testing.T) {
+	c := newFake(t, "kapali-cihaz")
+	c.replySpeed = 9600
+	job := sampleJob
+	job.Configuration = false
+	a, events := newTestFlow(t, c, job)
+	a.manualTimeout = 20 * time.Second
+	var once sync.Once
+	orig := a.notify
+	a.notify = func(stage, message string) {
+		orig(stage, message)
+		if strings.Contains(message, "elektrik") {
+			once.Do(func() { go c.powerOnNoKernel() })
 		}
 	}
 	ctx, stop := context.WithTimeout(context.Background(), 40*time.Second)
